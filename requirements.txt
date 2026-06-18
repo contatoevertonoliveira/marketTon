@@ -1,0 +1,7 @@
+streamlit
+plotly
+pandas
+numpy
+requests==2.32.3
+pytrends==4.9.2
+python-dateutil

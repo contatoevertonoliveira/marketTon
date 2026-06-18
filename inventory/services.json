@@ -1,0 +1,85 @@
+{
+  "updated_at": "2026-06-17T16:39:57.145336",
+  "services": [
+    {
+      "name": "google_trends",
+      "description": "Interest over time and compare by keyword",
+      "tags": [
+        "trends",
+        "interest"
+      ],
+      "invocation": "fetch_keyword_interest(keyword)"
+    },
+    {
+      "name": "marketplace_stub",
+      "description": "Marketplace adapter (fake + shopify stubs)",
+      "tags": [
+        "marketplace",
+        "products",
+        "catalog"
+      ],
+      "invocation": "adapter.fetch_products()"
+    },
+    {
+      "name": "meta_graph",
+      "description": "Meta Marketing API",
+      "tags": [
+        "ads",
+        "facebook"
+      ],
+      "invocation": "ad_account_insights / ads_library_adsearch"
+    }
+  ],
+  "inputs": [
+    {
+      "name": "keywords",
+      "mode": ".env",
+      "location": "/home/everton/marketing-digital/dashboard/config/config.example.env",
+      "required": false
+    },
+    {
+      "name": "marketplace credentials",
+      "mode": "env",
+      "location": "/home/everton/marketing-digital/integrations",
+      "required": true
+    },
+    {
+      "name": "seller_mode",
+      "mode": "env",
+      "location": "/home/everton/marketing-digital/theme/.env.example",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "name": "trend_alerts.csv",
+      "format": "csv",
+      "path": "/home/everton/marketing-digital/data/trend_alerts.csv",
+      "description": "Daily trend signals by keyword"
+    },
+    {
+      "name": "products/product_hunter_latest.csv",
+      "format": "csv",
+      "path": "/home/everton/marketing-digital/data/products/product_hunter_latest.csv",
+      "description": "Top candidate products across marketplaces"
+    },
+    {
+      "name": "copy_variants.csv",
+      "format": "csv",
+      "path": "/home/everton/marketing-digital/data/copy_variants.csv",
+      "description": "Generated copy variants"
+    },
+    {
+      "name": "reports/growth_report_*.csv",
+      "format": "csv",
+      "path": "/home/everton/marketing-digital/data/reports",
+      "description": "Consolidated growth report"
+    },
+    {
+      "name": "reports/marketplace_health_*.csv",
+      "format": "csv",
+      "path": "/home/everton/marketing-digital/data/reports",
+      "description": "Catalog health signals"
+    }
+  ]
+}

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aprovação dos Agentes</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+      color: #333;
+      height: 100%;
+      overflow: hidden;
+    }
+    .app {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e5e5e5;
+      padding: 10px 18px;
+      flex-shrink: 0;
+    }
+    h1 { margin: 0; font-size: 18px; }
+    .subtitle { color: #777; font-size: 12px; margin-top: 2px; }
+    .tabs {
+      display: flex;
+      gap: 6px;
+      margin: 8px 0 10px;
+      flex-shrink: 0;
+    }
+    .tab {
+      border: 1px solid #e5e5e5;
+      background: #fff;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      color: #555;
+      font-size: 13px;
+    }
+    .tab.active {
+      background: #e8f5e9;
+      color: #1b5e20;
+      border-color: #c8e6c9;
+    }
+    .layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 460px;
+      gap: 10px;
+      padding: 0 14px 10px;
+      min-height: 0;
+    }
+    @media (max-width: 1000px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    .grid-wrap {
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 10px;
+      padding: 10px;
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.10);
+    }
+    .card-img {
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: #f5f5f5;
+    }
+    .price {
+      font-size: 18px;
+      font-weight: 700;
+      color: #2e7d32;
+      margin-top: 6px;
+    }
+    .old-price {
+      font-size: 12px;
+      color: #888;
+      text-decoration: line-through;
+      margin-left: 4px;
+    }
+    .discount {
+      font-size: 12px;
+      color: #c62828;
+      font-weight: 600;
+      margin-left: 4px;
+    }
+    .meta {
+      font-size: 11px;
+      color: #777;
+      margin-top: 3px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-top: 4px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      margin-right: 3px;
+    }
+    .tag.blue { background: #e3f2fd; color: #1565c0; }
+    .detail {
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      overflow-y: auto;
+      height: 100%;
+    }
+    .ad-banner {
+      border: 1px solid #d9d9d9;
+      border-radius: 12px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .ad-main-img {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      background: #f5f5f5;
+    }
+    .ad-body {
+      padding: 14px;
+    }
+    .ad-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 6px;
+    }
+    .ad-price {
+      font-size: 26px;
+      font-weight: 700;
+      color: #c62828;
+      margin: 6px 0;
+    }
+    .ad-old {
+      font-size: 13px;
+      color: #888;
+      text-decoration: line-through;
+      margin-left: 6px;
+    }
+    .ad-meta {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+    .ad-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      flex: 1;
+      border: none;
+      padding: 10px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #fff;
+    }
+    .btn-buy { background: #2e7d32; }
+    .btn-cart { background: #1565c0; }
+    .thumbs {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .thumb {
+      width: 54px;
+      height: 54px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 2px solid transparent;
+      cursor: pointer;
+      background: #f5f5f5;
+    }
+    .thumb.active { border-color: #2e7d32; }
+    .section {
+      margin-top: 14px;
+      border-top: 1px solid #e5e5e5;
+      padding-top: 10px;
+    }
+    .empty {
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+      color: #888;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #e8f5e9;
+      color: #1b5e20;
+      margin-right: 6px;
+    }
+    .badge.blue { background: #e3f2fd; color: #0d47a1; }
+    .copy-box {
+      background: #e8f5e9;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #1b5e20;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🧠 Aprovação dos Agentes</h1>
+      <div class="subtitle">Revise, ajuste e autorize os próximos passos do time de Marketing Digital. • Status: <span id="status">em_analise</span></div>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('Selecionados')">Selecionados</button>
+      <button class="tab" onclick="switchTab('Monitorados')">Monitorados</button>
+      <button class="tab" onclick="switchTab('Tendencias')">Próximas Tendências</button>
+    </div>
+
+    <div class="layout">
+      <div class="grid-wrap">
+        <div id="grid" class="grid"></div>
+      </div>
+      <div>
+        <div id="detail" class="empty">Selecione um produto para ver o anúncio e os detalhes.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const produtos = {
+      Selecionados: [
+        { id:"P001", nome:"Mini Prancha Dobrável Pro", modalidade:"Afiliado", receita:3200, margem:55, concorrencia:"Baixa", tendencia:91, fornecedor:"AliExpress (top rated)", comissao:18, justificativa:"Viral em TikTok USA com baixa oferta no Brasil.", preco:89.9, custo:38.0, prazo:"15-22 dias", prob:"Alta", variancia:"Baixa", marketplace:"Shopee + TikTok Shop", copy:"Chegou o acessório que está viralizando nos EUA. Design compacto, preço acessível e avaliação 4.8/5.", oldPrice:134.9, desconto:33, avaliacao:9, reviews:1847, img:"https://images.unsplash.com/photo-1621489672738-5e29e717b1e4?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1621489672738-5e29e717b1e4?w=120&h=120&fit=crop","https://images.unsplash.com/photo-1596495577886-d920f1fb7238?w=120&h=120&fit=crop","https://images.unsplash.com/photo-1606107557195-0e29a8b162b3?w=120&h=120&fit=crop"] },
+        { id:"P002", nome:"Fone ANC Lite 2025", modalidade:"Dropshipping", receita:4100, margem:34, concorrencia:"Média", tendencia:86, fornecedor:"CJDropshipping", comissao:null, justificativa:"Boa procura em Shopee e ML; fornecedor com entrega 7-12 dias.", preco:149.9, custo:92.0, prazo:"7-12 dias", prob:"Média-Alta", variancia:"Média", marketplace:"Mercado Livre + Shopee", copy:"Som agora é outro. Cancelamento de ruído avançado por menos de R$150.", oldPrice:219.9, desconto:32, avaliacao:7, reviews:956, img:"https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=120&h=120&fit=crop","https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=120&h=120&fit=crop"] },
+        { id:"P003", nome:"Kit Ferramentas 112 peças", modalidade:"Revenda", receita:2700, margem:41, concorrencia:"Média", tendencia:79, fornecedor:"Dhgate (Gold Supplier)", comissao:null, justificativa:"Sólido em buscas orgânicas, ticket médio elevado.", preco:199.9, custo:110.0, prazo:"20-30 dias", prob:"Média", variancia:"Baixa-Média", marketplace:"Amazon + Mercado Livre", copy:"Kit completo para não faltar ferramenta na hora do reparo. 112 peças, estoque limitado.", oldPrice:299.9, desconto:33, avaliacao:8, reviews:2341, img:"https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=120&h=120&fit=crop"] },
+        { id:"P004", nome:"Garrafa Térmica 1L LED", modalidade:"Afiliado", receita:2400, margem:62, concorrencia:"Baixa", tendencia:82, fornecedor:"AliExpress (top rated)", comissao:22, justificativa:"Tendência de produtos wellness com alta margem e baixa concorrência.", preco:79.9, custo:27.0, prazo:"18-25 dias", prob:"Média", variancia:"Média", marketplace:"Shopee + TikTok Shop", copy:"Hidratação com estilo. Mantém temperatura por 24h e mostra a temperatura em LED.", oldPrice:119.9, desconto:33, avaliacao:9, reviews:3102, img:"https://images.unsplash.com/photo-1602143407151-011141920032?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1602143407151-011141920032?w=120&h=120&fit=crop","https://images.unsplash.com/photo-1570831739435-6601aa3fa4fb?w=120&h=120&fit=crop"] },
+        { id:"P005", nome:"Luminária Mesa Touch RGB", modalidade:"Dropshipping", receita:2900, margem:38, concorrencia:"Baixa-Média", tendencia:88, fornecedor:"CJDropshipping", comissao:null, justificativa:"Alta procura em buscas de home office e setups gamer.", preco:119.9, custo:68.0, prazo:"7-12 dias", prob:"Alta", variancia:"Baixa", marketplace:"Shopee + Mercado Livre", copy:"Setup dos sonhos começa na mesa. Toque, cor e clima para trabalhar ou jogar.", oldPrice:179.9, desconto:33, avaliacao:8, reviews:1456, img:"https://images.unsplash.com/photo-1507473885765-e6ed057ab6fe?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1507473885765-e6ed057ab6fe?w=120&h=120&fit=crop","https://images.unsplash.com/photo-1513506003011-3b03c2e74a77?w=120&h=120&fit=crop"] },
+        { id:"P006", nome:"Capa Anti-Reflexo Phone", modalidade:"Revenda", receita:1800, margem:47, concorrencia:"Baixa", tendencia:74, fornecedor:"Dhgate (Gold Supplier)", comissao:null, justificativa:"Produto com procura constante e ticket baixo para entrada.", preco:29.9, custo:14.0, prazo:"15-22 dias", prob:"Alta", variancia:"Baixa", marketplace:"Shopee + Amazon", copy:"Proteção real contra brilho e riscos. Aplica em segundos e não compromete a tela.", oldPrice:44.9, desconto:33, avaliacao:7, reviews:520, img:"https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=120&h=120&fit=crop"] },
+        { id:"P007", nome:"Fone Sport Clip Pro", modalidade:"Afiliado", receita:3500, margem:28, concorrencia:"Alta", tendencia:83, fornecedor:"AliExpress (top rated)", comissao:15, justificativa:"Mercado grande; pode ser destaque por posicionamento de copy.", preco:109.9, custo:78.0, prazo:"15-22 dias", prob:"Média", variancia:"Alta", marketplace:"Shopee + Mercado Livre", copy:"Treino sem fio, sem dor. Gancho seguro, resistência a suor e som potente.", oldPrice:159.9, desconto:31, avaliacao:6, reviews:2100, img:"https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=120&h=120&fit=crop","https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=120&h=120&fit=crop"] },
+        { id:"P008", nome:"Forno Elétrico 12L", modalidade:"Revenda", receita:4800, margem:33, concorrencia:"Média", tendencia:77, fornecedor:"Dhgate (Gold Supplier)", comissao:null, justificativa:"Ticket médio alto e demanda estável em busca orgânica.", preco:249.9, custo:158.0, prazo:"20-30 dias", prob:"Média", variancia:"Baixa", marketplace:"Mercado Livre + Amazon", copy:"Mais espaço, mais receitas. Forno 12L para o dia a dia sem ocupar toda a bancada.", oldPrice:349.9, desconto:29, avaliacao:8, reviews:1890, img:"https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?w=120&h=120&fit=crop"] },
+        { id:"P009", nome:"Organizador Carrinho Baby", modalidade:"Dropshipping", receita:2100, margem:52, concorrencia:"Baixa", tendencia:80, fornecedor:"CJDropshipping", comissao:null, justificativa:"Nicho parental forte, baixa concorrência e margem segura.", preco:69.9, custo:31.0, prazo:"7-12 dias", prob:"Alta", variancia:"Baixa", marketplace:"Shopee + Amazon", copy:"Organização no carrinho em 1 clique. Cabem fraldas, brinquedos e acessórios.", oldPrice:99.9, desconto:30, avaliacao:9, reviews:780, img:"https://images.unsplash.com/photo-1544816155-12df9643f363?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1544816155-12df9643f363?w=120&h=120&fit=crop","https://images.unsplash.com/photo-1519689680058-324335c77eba?w=120&h=120&fit=crop"] },
+        { id:"P010", nome:"Suporte Notebook Alumínio", modalidade:"Afiliado", receita:2600, margem:46, concorrencia:"Baixa-Média", tendencia:76, fornecedor:"AliExpress (top rated)", comissao:20, justificativa:"Produto evergreen de escritório/home office.", preco:99.9, custo:49.0, prazo:"15-25 dias", prob:"Média", variancia:"Baixa", marketplace:"Shopee + Mercado Livre", copy:"Postura que acompanha o ritmo. Alumínio leve, ventilado e dobrável para qualquer lugar.", oldPrice:149.9, desconto:33, avaliacao:8, reviews:3200, img:"https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=120&h=120&fit=crop"] }
+      ],
+      Monitorados: [
+        { id:"M001", nome:"Luz Cortina LED 3x2m", modalidade:"Afiliado", receita:1800, margem:60, concorrencia:"Baixa", tendencia:72, fornecedor:"AliExpress (top rated)", comissao:20, justificativa:"Em crescimento desde março; concorrência ainda baixa.", preco:59.9, custo:22.0, prazo:"15-22 dias", prob:"Alta", variancia:"Média", marketplace:"Shopee + TikTok Shop", copy:"Decoração em 1 clique. Fita LED com timers e controle remoto.", oldPrice:89.9, desconto:33, avaliacao:8, reviews:940, img:"https://images.unsplash.com/photo-1543198126-a8ad7e200a40?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1543198126-a8ad7e200a40?w=120&h=120&fit=crop"] },
+        { id:"M002", nome:"Cortador de Legumes Spiral", modalidade:"Revenda", receita:1400, margem:48, concorrencia:"Baixa-Média", tendencia:69, fornecedor:"Dhgate (Gold Supplier)", comissao:null, justificativa:"Busca crescente em receitas saudáveis no Pinterest.", preco:39.9, custo:19.0, prazo:"20-30 dias", prob:"Média", variancia:"Baixa", marketplace:"Amazon + Mercado Livre", copy:"Corte espiralado em segundos. 3 lâminas, fácil de lavar.", oldPrice:59.9, desconto:33, avaliacao:7, reviews:430, img:"https://images.unsplash.com/photo-1596568492456-2b4c5358d5b8?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1596568492456-2b4c5358d5b8?w=120&h=120&fit=crop"] },
+        { id:"M003", nome:"Carregador Solar 25W", modalidade:"Dropshipping", receita:1900, margem:36, concorrencia:"Média", tendencia:81, fornecedor:"CJDropshipping", comissao:null, justificativa:"Alta intenção de compra em buscas de verão e trilha.", preco:69.9, custo:42.0, prazo:"7-12 dias", prob:"Alta", variancia:"Baixa", marketplace:"Shopee + Mercado Livre", copy:"Energia onde você estiver. Painel dobrável com USB duplo.", oldPrice:99.9, desconto:30, avaliacao:8, reviews:1560, img:"https://images.unsplash.com/photo-1611186871348-b1c6962a3d4b?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1611186871348-b1c6962a3d4b?w=120&h=120&fit=crop"] },
+        { id:"M004", nome:"Difusor Aromático Pro", modalidade:"Afiliado", receita:1200, margem:65, concorrencia:"Baixa", tendencia:78, fornecedor:"AliExpress (top rated)", comissao:25, justificativa:"Crescimento em wellness e home office.", preco:89.9, custo:28.0, prazo:"15-25 dias", prob:"Média", variancia:"Baixa", marketplace:"Shopee + Amazon", copy:"Ambiente perfumado em minutos. LED, timer e silencioso.", oldPrice:119.9, desconto:25, avaliacao:9, reviews:680, img:"https://images.unsplash.com/photo-1602928321679-560bb453f190?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1602928321679-560bb453f190?w=120&h=120&fit=crop"] },
+        { id:"M005", nome:"Power Bank 30000mAh", modalidade:"Revenda", receita:2200, margem:32, concorrencia:"Média", tendencia:75, fornecedor:"Dhgate (Gold Supplier)", comissao:null, justificativa:"Demanda constante e fornecedor confiável.", preco:129.9, custo:82.0, prazo:"20-30 dias", prob:"Média-Alta", variancia:"Baixa", marketplace:"Amazon + Mercado Livre", copy:"Carga para todos os dias. Entrada USB-C e display LED.", oldPrice:179.9, desconto:28, avaliacao:7, reviews:4100, img:"https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?w=120&h=120&fit=crop"] },
+        { id:"M006", nome:"Kit Vasos Auto Regagem", modalidade:"Dropshipping", receita:900, margem:58, concorrencia:"Baixa", tendencia:71, fornecedor:"CJDropshipping", comissao:null, justificativa:"Nicho de plantas em casa cresceu pós-pandemia.", preco:49.9, custo:19.0, prazo:"7-12 dias", prob:"Média", variancia:"Baixa", marketplace:"Shopee + Amazon", copy:"Planta sem trabalho. Sistema de regagem automática por capilaridade.", oldPrice:69.9, desconto:29, avaliacao:8, reviews:520, img:"https://images.unsplash.com/photo-1485955900006-10f4d324d411?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1485955900006-10f4d324d411?w=120&h=120&fit=crop"] }
+      ],
+      Tendencias: [
+        { id:"T001", nome:"Clip Oclusão Nariz Ronco", modalidade:"Afiliado", receita:1600, margem:70, concorrencia:"Baixa", tendencia:94, fornecedor:"AliExpress (top rated)", comissao:28, justificativa:"Vídeos virais no TikTok BR sobre saúde do sono.", preco:24.9, custo:6.0, prazo:"18-25 dias", prob:"Alta", variancia:"Média", marketplace:"Shopee + Amazon", copy:"Durma melhor sem ruído. Aparador de silicone reutilizável.", oldPrice:39.9, desconto:38, avaliacao:7, reviews:280, img:"https://images.unsplash.com/photo-1636207848875-08fa6ace31a6?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1636207848875-08fa6ace31a6?w=120&h=120&fit=crop"] },
+        { id:"T002", nome:"Caneta Laser Pointer Gato", modalidade:"Dropshipping", receita:800, margem:75, concorrencia:"Baixa", tendencia:90, fornecedor:"CJDropshipping", comissao:null, justificativa:"Procura crescente em nicho pet com margem altíssima.", preco:9.9, custo:2.0, prazo:"7-12 dias", prob:"Alta", variancia:"Baixa", marketplace:"Shopee + Mercado Livre", copy:"Brincadeira e exercício para o gato. LED trocável de cor.", oldPrice:19.9, desconto:50, avaliacao:8, reviews:190, img:"https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=120&h=120&fit=crop"] },
+        { id:"T003", nome:"Mesa Dobrável para Notebook", modalidade:"Revenda", receita:2600, margem:40, concorrencia:"Baixa-Média", tendencia:88, fornecedor:"Dhgate (Gold Supplier)", comissao:null, justificativa:"Home office híbrido deve seguir em 2026.", preco:149.9, custo:84.0, prazo:"20-30 dias", prob:"Alta", variancia:"Média", marketplace:"Amazon + Mercado Livre", copy:"Escritório na cama ou no sofá. Regulável, com cooler USB.", oldPrice:219.9, desconto:32, avaliacao:8, reviews:980, img:"https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=120&h=120&fit=crop"] },
+        { id:"T004", nome:"Fone Boneca Bluetooth", modalidade:"Afiliado", receita:1000, margem:55, concorrencia:"Baixa", tendencia:85, fornecedor:"AliExpress (top rated)", comissao:20, justificativa:"Moda tech em alta; potencial de viralização visual.", preco:34.9, custo:14.0, prazo:"18-25 dias", prob:"Média", variancia:"Alta", marketplace:"Shopee + TikTok Shop", copy:"Estilo + som. Fone em formato de ursinho com Bluetooth 5.3.", oldPrice:54.9, desconto:36, avaliacao:7, reviews:320, img:"https://images.unsplash.com/photo-1613040809029-b94d5f2fe0df?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1613040809029-b94d5f2fe0df?w=120&h=120&fit=crop"] },
+        { id:"T005", nome:"Luvas Touchscreen Inverno", modalidade:"Revenda", receita:1300, margem:45, concorrencia:"Baixa-Média", tendencia:82, fornecedor:"Dhgate (Gold Supplier)", comissao:null, justificativa:"Sazonalidade forte de maio a agosto.", preco:29.9, custo:15.0, prazo:"20-30 dias", prob:"Média-Alta", variancia:"Baixa", marketplace:"Shopee + Amazon", copy:"Frio sem deixar o celular na mão. Pontos condutivos no dedo.", oldPrice:44.9, desconto:33, avaliacao:8, reviews:870, img:"https://images.unsplash.com/photo-1545594861-3bef43ff22f6?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1545594861-3bef43ff22f6?w=120&h=120&fit=crop"] },
+        { id:"T006", nome:"Kit Plantas Artificiais 3un", modalidade:"Dropshipping", receita:1500, margem:52, concorrencia:"Baixa", tendencia:79, fornecedor:"CJDropshipping", comissao:null, justificativa:"Decoração com apelo visual alto para redes sociais.", preco:49.9, custo:22.0, prazo:"7-12 dias", prob:"Média", variancia:"Baixa", marketplace:"Shopee + Mercado Livre", copy:"De verde sem trabalho. Vaso incluso, realista ao toque.", oldPrice:74.9, desconto:33, avaliacao:8, reviews:610, img:"https://images.unsplash.com/photo-1459411552884-841db9b3cc2b?w=600&h=400&fit=crop", thumbs:["https://images.unsplash.com/photo-1459411552884-841db9b3cc2b?w=120&h=120&fit=crop"] }
+      ]
+    };
+
+    let currentTab = "Selecionados";
+    let selectedId = null;
+    let selectedImg = null;
+
+    function formatCurrency(v) { return "R$ " + v.toFixed(2); }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      selectedId = null;
+      selectedImg = null;
+      document.querySelectorAll(".tab").forEach((el, idx) => {
+        el.classList.toggle("active", ["Selecionados","Monitorados","Tendencias"][idx] === tab);
+      });
+      renderGrid();
+      renderDetail();
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+      produtos[currentTab].forEach(p => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <img class="card-img" src="${p.img}" alt="${p.nome}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22200%22><rect width=%22300%22 height=%22200%22 fill=%22%23e5e5e5%22/><text x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-size=%2214%22 fill=%22%23888%22>Sem imagem</text></svg>'"/>
+          <div style="font-weight:700; margin-top:6px; font-size:14px;">${p.nome}</div>
+          <div class="price">${formatCurrency(p.preco)}<span class="old-price">${formatCurrency(p.oldPrice)}</span><span class="discount">-${p.desconto}%</span></div>
+          <div class="meta">⭐ 4.${p.avaliacao} (${p.reviews})</div>
+          <div class="meta">🚚 Frete grátis</div>
+          <span class="tag">${p.modalidade}</span>
+          <span class="tag blue">${p.marketplace}</span>
+        `;
+        card.onclick = () => selectProduct(p.id, p.img);
+        grid.appendChild(card);
+      });
+    }
+
+    function selectProduct(id, img) {
+      selectedId = id;
+      selectedImg = img;
+      renderDetail();
+    }
+
+    function renderDetail() {
+      const container = document.getElementById("detail");
+      if (!selectedId) {
+        container.className = "empty";
+        container.innerHTML = "Selecione um produto para ver o anúncio e os detalhes.";
+        return;
+      }
+      const source = produtos["Selecionados"].concat(produtos["Monitorados"], produtos["Tendencias"]);
+      const p = source.find(x => x.id === selectedId);
+      if (!p) return;
+      const lucro = p.preco - p.custo;
+      container.className = "detail";
+      container.innerHTML = `
+        <div class="ad-banner">
+          <img class="ad-main-img" src="${selectedImg || p.img}" alt="${p.nome}" onerror="this.src='${p.img}'"/>
+          <div class="ad-body">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <span class="badge">${p.modalidade}</span>
+                <span class="badge blue">${p.marketplace}</span>
+              </div>
+              <div class="ad-meta">⭐ 4.${p.avaliacao} • ${p.reviews} avaliações</div>
+            </div>
+            <h2 class="ad-title">${p.nome}</h2>
+            <div class="ad-price">${formatCurrency(p.preco)}<span class="ad-old">${formatCurrency(p.oldPrice)}</span><span class="ad-old" style="text-decoration:none; color:#c62828; font-weight:700;">-${p.desconto}%</span></div>
+            <div class="ad-meta">🚚 Frete grátis • 🛡️ Garantia de 30 dias</div>
+            <div class="ad-actions">
+              <button class="btn btn-buy" onclick="alert('Redirecionar para compra...')">Comprar agora</button>
+              <button class="btn btn-cart" onclick="alert('Adicionar ao carrinho...')">Adicionar ao carrinho</button>
+            </div>
+            ${p.thumbs && p.thumbs.length ? `
+              <div class="thumbs">
+                ${p.thumbs.map((t,i) => `<img class="thumb ${i===0?'active':''}" src="${t}" onclick="switchThumb(this, '${t.replace(/'/g, "\\'")}')"/>`).join("")}
+              </div>
+            ` : ""}
+          </div>
+        </div>
+
+        <div class="section">
+          <b>Informações do anúncio</b>
+          <div class="copy-box">${p.copy}</div>
+        </div>
+
+        <div class="section">
+          <b>Operacional</b>
+          <ul style="margin:6px 0 0 16px; padding:0; font-size:13px; color:#444;">
+            <li>Fornecedor: <b>${p.fornecedor}</b></li>
+            <li>Prazo: <b>${p.prazo}</b></li>
+            <li>Justificativa: <b>${p.justificativa}</b></li>
+          </ul>
+        </div>
+
+        <div class="section">
+          <b>Prognóstico</b>
+          <ul style="margin:6px 0 0 16px; padding:0; font-size:13px; color:#444;">
+            <li>Probabilidade: <b>${p.prob}</b></li>
+            <li>Variância: <b>${p.variancia}</b></li>
+            <li>Tendência: <b>${p.tendencia}/100</b></li>
+            <li>Concorrência: <b>${p.concorrencia}</b></li>
+          </ul>
+        </div>
+
+        <div class="section">
+          <b>Financeiro</b>
+          <ul style="margin:6px 0 0 16px; padding:0; font-size:13px; color:#444;">
+            <li>Preço: <b>${formatCurrency(p.preco)}</b></li>
+            <li>Custo: <b>${formatCurrency(p.custo)}</b></li>
+            <li>Lucro unitário: <b>${formatCurrency(lucro)}</b></li>
+            <li>Margem: <b>${p.margem}%</b></li>
+            <li>Receita estimada 30d: <b>${formatCurrency(p.receita)}</b></li>
+            ${p.comissao != null ? `<li>Comissão afiliado: <b>${p.comissao}%</b></li>` : ""}
+          </ul>
+        </div>
+
+        <div class="section" style="display:flex; gap:8px;">
+          <button class="btn btn-buy" style="flex:1;" onclick="alert('Aprovado: ${p.nome.replace(/'/g, "\\'")}')">✅ Aprovar</button>
+          <button class="btn btn-cart" style="flex:1; background:#ef6c00;" onclick="alert('Reanálise: ${p.nome.replace(/'/g, "\\'")}')">🔎 Reanalisar</button>
+          <button class="btn" style="flex:1; background:#c62828;" onclick="alert('Cancelado: ${p.nome.replace(/'/g, "\\'")}')">❌ Cancelar</button>
+        </div>
+      `;
+    }
+
+    function switchThumb(el, src) {
+      document.querySelectorAll(".thumb").forEach(t => t.classList.remove("active"));
+      el.classList.add("active");
+      const main = document.querySelector(".ad-main-img");
+      if (main) main.src = src;
+    }
+
+    renderGrid();
+  </script>
+</body>
+</html>
