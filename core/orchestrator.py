@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from queue import Queue
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from core.tasks import Task, TaskResult
 
@@ -21,7 +21,7 @@ class AgentController:
     _running: bool = False
     _paused: bool = False
     _stop_event: threading.Event = field(default_factory=threading.Event)
-    _pause_event: threading.Event = field(default_factory=threading.Event)  # set quando pausado
+    _pause_event: threading.Event = field(default_factory=threading.Event)
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _thread: threading.Thread | None = None
     queue: Queue = field(default_factory=Queue)
@@ -76,7 +76,7 @@ class AgentController:
             if not self._running or not self._paused:
                 return
             self._paused = False
-            self._pause_event.set()  # libera quem estava esperando
+            self._pause_event.set()
             self.memory["status"] = "running"
             self.save_memory()
 
@@ -98,7 +98,6 @@ class AgentController:
 
     def _run_loop(self) -> None:
         while self._running and not self._stop_event.is_set():
-            # Pausa com espera não-bloqueante
             while self._paused and not self._stop_event.is_set():
                 self._pause_event.wait(1.0)
             if self._stop_event.is_set():

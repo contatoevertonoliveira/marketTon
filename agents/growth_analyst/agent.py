@@ -1,4 +1,4 @@
-"""Growth Analyst agent runtime."""
+"""Growth Analyst agent runtime — MCP + weekly cycle decision support."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,6 +8,7 @@ import pandas as pd
 
 from core.orchestrator import Memory
 from core.tasks import TaskResult
+from agents.core.mcp_state import MCPState
 
 DATA = Path(__file__).resolve().parent.parent.parent / "data"
 REPORTS = DATA / "reports"
@@ -15,9 +16,11 @@ REPORTS.mkdir(parents=True, exist_ok=True)
 
 
 def run(memory: Memory) -> TaskResult:
+    mcp = MCPState()
+    plan = mcp.plan
     insights_path = DATA / "meta_ads_insights.csv"
     trends_path = DATA / "trends_interest.csv"
-    report_path = REPORTS / f"growth_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    report_path = REPORTS / f'growth_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
     frames = []
     summary = []
     try:
@@ -44,9 +47,12 @@ def run(memory: Memory) -> TaskResult:
     else:
         combined = pd.DataFrame()
         pd.DataFrame().to_csv(report_path, index=False)
-    return TaskResult(
-        task_id="growth_analyst",
-        ok=True,
-        summary=" | ".join(summary),
-        artifacts={"report_path": str(report_path), "frames": len(frames)},
+    mcp.update_ctx(
+        last_metric_snapshot={
+            "frames": int(len(frames)),
+            "rows": int(len(combined)),
+            "summary": summary,
+            "ts": datetime.now().isoformat(),
+        }
     )
+    return TaskResult(task_id="growth_analyst", ok=True, summary=" | ".join(summary), artifacts={"report_path": str(report_path), "frames": int(len(frames))})

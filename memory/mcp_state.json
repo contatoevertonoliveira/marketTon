@@ -1,0 +1,111 @@
+{
+  "methodology": {
+    "mode": "hybrid_canali_lobos",
+    "active_influencer": "hybrid",
+    "badge": "Canali x Lobos",
+    "niche_focus": "marketing_digital_cristao",
+    "supplier_mode": "national_pronta_entrega",
+    "launch_frequency_days": 7,
+    "min_product_ticket": 97.0,
+    "max_product_ticket": 297.0,
+    "copy_style": "direct_simple_obvious",
+    "require_ready_offer": true,
+    "must_have_case": true,
+    "yt_funnel": true,
+    "multi_renda": true,
+    "price_strategy": "differentiate_not_compete",
+    "daily_sales_target": 1,
+    "affiliate_goal": "R$100k_4_ciclos",
+    "weekly_launch": true,
+    "current_launch_week": 1,
+    "target_ticket_min": 97.0,
+    "target_ticket_max": 297.0
+  },
+  "plan": {
+    "last_launch_date": "2026-06-18",
+    "next_launch_date": "2026-06-25",
+    "current_ladder": [
+      {
+        "name": "Negocio de 4 Rend",
+        "ticket": 97.0,
+        "week": 1
+      }
+    ],
+    "approved_products": [
+      {
+        "title": "Negocio de 4 Rend",
+        "score": 59.9
+      }
+    ],
+    "selected_cases": [
+      "case_social_proof"
+    ],
+    "weekly_calendar": [
+      {
+        "week": 1,
+        "date": "2026-06-18",
+        "action": "launch"
+      }
+    ]
+  },
+  "context": {
+    "last_trend_alert": null,
+    "last_approved_product": null,
+    "last_copy_batch": null,
+    "last_metric_snapshot": null,
+    "actors": [
+      "thiago_lobos",
+      "cassio_canali"
+    ],
+    "governance": "master_only_decides",
+    "selected_trend": {
+      "topic": "perfume importado",
+      "source": "tiktok",
+      "region": "Brasil"
+    },
+    "adapter_names": [
+      "dummy"
+    ],
+    "current_copy": {
+      "headline": "Apenas 12x de R$ 12",
+      "body": "Case real: mãe de família começou do zero com nosso método.",
+      "style": "case_social_proof"
+    },
+    "publish_playbook": [
+      "yt_short",
+      "ig_reel",
+      "tt_lead"
+    ],
+    "published": {
+      "status": "scheduled"
+    },
+    "metrics": {
+      "visits": 1240,
+      "leads": 178,
+      "sales": 14,
+      "revenue_estimated": 1358.0
+    },
+    "master_decision": "go"
+  },
+  "queue": {
+    "trends_pending": [],
+    "products_pending": [],
+    "copy_pending": [],
+    "reports": []
+  },
+  "badges": [
+    {
+      "id": "lobos",
+      "label": "Lobos",
+      "used": true,
+      "last_used": null
+    },
+    {
+      "id": "canali",
+      "label": "Canali",
+      "used": true,
+      "last_used": null
+    }
+  ],
+  "updated_at": "2026-06-18T14:53:03.294081"
+}

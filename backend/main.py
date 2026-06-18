@@ -4,12 +4,15 @@ from pydantic import BaseModel
 from typing import List, Optional
 import sqlite3
 import json
-from datetime import datetime
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "app.sqlite3"
+from agents.core.mcp_state import MCPState
 
 app = FastAPI(title="Marketing Digital API", version="0.1.0")
+
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "app.sqlite3"
 
 
 class FeedbackIn(BaseModel):
@@ -147,9 +150,35 @@ def groups():
 def set_group_status(group_id: int, payload: dict):
     c = conn()
     c.execute(
-        "INSERT INTO groups (group_id, status, reason, updated_by, updated_at) VALUES (?, ?, ?, ?, datetime('now')) ON CONFLICT(group_id) DO UPDATE SET status=excluded.status, reason=excluded.reason, updated_at=datetime('now')",
+        "INSERT INTO groups (group_id, status, reason, updated_by, updated_at) VALUES (?, ?, ?, ?, datetime('now')) ON CONFLICT(group_id) DO UPDATE SET status=excluded.status, reason=excluded.reason, updated_at=excluded.updated_at",
         (group_id, payload.get("status"), payload.get("reason"), payload.get("updated_by")),
     )
     c.commit()
     c.close()
     return {"ok": True}
+
+
+@app.get("/reports/kpis")
+def kpis(days: int = 30):
+    c = conn()
+    start = (datetime.now() - timedelta(days=days)).isoformat()
+    payments_rows = c.execute("SELECT * FROM payments WHERE created_at >= ?", (start,)).fetchall()
+    orders = len(payments_rows)
+    revenue = sum(float(r["amount"] or 0) for r in payments_rows)
+    c.close()
+    return {
+        "period_days": days,
+        "orders": orders,
+        "revenue": round(revenue, 2),
+        "ticket_average": round(revenue / orders, 2) if orders else 0,
+    }
+
+
+@app.get("/methodology/badge")
+def methodology_badge():
+    state = MCPState()
+    return {
+        "badge": state.methodology.get("badge"),
+        "active_influencer": state.methodology.get("active_influencer"),
+        "daily_sales_target": state.methodology.get("daily_sales_target"),
+    }

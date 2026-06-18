@@ -1,0 +1,21 @@
+{
+  "adapter_names": [
+    "dummy"
+  ],
+  "methodology": {
+    "supplier_mode": "national_pronta_entrega",
+    "price_strategy": "differentiate_not_compete",
+    "weekly_launch": true,
+    "must_have_case": true,
+    "current_launch_week": 1,
+    "target_ticket_min": 97.0,
+    "target_ticket_max": 297.0
+  },
+  "selected_trend": {
+    "topic": "perfume importado",
+    "source": "tiktok",
+    "region": "Brasil"
+  },
+  "status": "running",
+  "updated_at": "2026-06-18T13:59:14.226990"
+}

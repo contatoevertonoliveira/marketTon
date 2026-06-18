@@ -1,4 +1,4 @@
-"""Marketplace Manager agent runtime."""
+"""Marketplace Manager agent runtime — Canali value/presentation rules + MCP."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -9,6 +9,7 @@ import pandas as pd
 from core.orchestrator import Memory
 from core.tasks import TaskResult
 from integrations.marketplaces.registry import list_adapter_names, resolve
+from agents.core.mcp_state import MCPState
 
 DATA = Path(__file__).resolve().parent.parent.parent / "data"
 REPORTS = DATA / "reports"
@@ -16,6 +17,8 @@ REPORTS.mkdir(parents=True, exist_ok=True)
 
 
 def run(memory: Memory) -> TaskResult:
+    mcp = MCPState()
+    method = mcp.methodology
     adapter_names = memory.get("adapter_names") or list_adapter_names()
     rows: list[pd.DataFrame] = []
     summary = []
@@ -32,7 +35,7 @@ def run(memory: Memory) -> TaskResult:
             products = products.copy()
             products["marketplace"] = name
             products["sales_collected_at"] = datetime.now().isoformat() if sales is None else sales.to_json()
-            compiled, watch = _health(products, sales)
+            compiled, watch = _health(products, sales, method)
             rows.append(compiled)
             rows.append(watch)
             summary.append(f"{name}: ok {len(compiled)} watch {len(watch)}")
@@ -46,18 +49,21 @@ def run(memory: Memory) -> TaskResult:
         artifacts = {"path": str(out_path), "rows": int(len(combined)), "summary": summary}
     else:
         artifacts = {"summary": summary}
+    mcp.update_ctx(last_metric_snapshot={"summary": summary, "ts": datetime.now().isoformat()})
     return TaskResult(task_id="marketplace_manager", ok=True, summary=" | ".join(summary), artifacts=artifacts)
 
 
-def _health(products: pd.DataFrame, sales: pd.DataFrame | None) -> tuple[pd.DataFrame, pd.DataFrame]:
-    try:
-        stock_col = next((c for c in products.columns if any(k in str(c).lower() for k in ["estoque", "stock", "quantity"])), None)
-        if stock_col:
-            products["_stock"] = pd.to_numeric(products[stock_col], errors="coerce").fillna(0)
-        else:
-            products["_stock"] = 0
-    except Exception:  # noqa: BLE001
-        products["_stock"] = 0
+def _health(products: pd.DataFrame, sales: pd.DataFrame | None, method) -> tuple[pd.DataFrame, pd.DataFrame]:
+    stock_col = None
+    for c in products.columns:
+        if any(k in str(c).lower() for k in ["estoque", "stock", "quantity"]):
+            stock_col = c
+            break
+    products["_stock"] = pd.to_numeric(products[stock_col], errors="coerce").fillna(0) if stock_col else 0
+
+    # Canali-style presentation gating instead of lowest price winning
+    products["_value_presentation_ok"] = True
+    products.loc[(products["_stock"] <= 0), "_value_presentation_ok"] = False
     compiled = products.head(20).copy()
     compiled["role"] = "catalog"
     watch = pd.DataFrame()
