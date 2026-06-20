@@ -57,6 +57,7 @@ const PAGES = [
   { id: "visao-geral", label: "Visão Geral", icon: "🏠" },
   { id: "agentes", label: "Agentes", icon: "🤖" },
   { id: "produtos", label: "Produtos", icon: "📦" },
+  { id: "marketplace", label: "Marketplace", icon: "🛒" },
   { id: "copys", label: "Copys", icon: "✍️" },
   { id: "feedbacks", label: "Feedbacks", icon: "💬" },
   { id: "agenda", label: "Agenda", icon: "📅" },
@@ -113,12 +114,19 @@ export default function App() {
   const [trends, setTrends] = useState([]);
   const [agenda, setAgenda] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [marketProducts, setMarketProducts] = useState([]);
+  const [marketRules, setMarketRules] = useState(null);
+  const [marketConfig, setMarketConfig] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [mlAuthUrl, setMlAuthUrl] = useState("");
+  const [mlCode, setMlCode] = useState("");
+  const [mlState, setMlState] = useState("");
+  const [savingMp, setSavingMp] = useState(false);
 
   async function loadAll(force) {
     if (force) setRefreshing(true);
     try {
-      const [badgeRes, kpiRes, payRes, fbRes, trendRes, agRes, grRes] = await Promise.allSettled([
+      const [badgeRes, kpiRes, payRes, fbRes, trendRes, agRes, grRes, mktProdsRes, mktRulesRes, mktConfigRes] = await Promise.allSettled([
         fetch(`${API}/methodology/badge`).then((r) => r.json()),
         fetch(`${API}/reports/kpis?days=1`).then((r) => r.json()),
         fetch(`${API}/payments?limit=20`).then((r) => r.json()),
@@ -126,6 +134,9 @@ export default function App() {
         fetch(`${API}/alerts/trends?limit=20`).then((r) => r.json()),
         fetch(`${API}/agenda?limit=20`).then((r) => r.json()),
         fetch(`${API}/groups`).then((r) => r.json()),
+        fetch(`${API}/market/products?limit=50`).then((r) => r.json()),
+        fetch(`${API}/market/rules`).then((r) => r.json()),
+        fetch(`${API}/market/config`).then((r) => r.json()),
       ]);
       if (badgeRes.status === "fulfilled") {
         setBadge(badgeRes.value.badge);
@@ -137,6 +148,9 @@ export default function App() {
       if (trendRes.status === "fulfilled") setTrends(Array.isArray(trendRes.value) ? trendRes.value : []);
       if (agRes.status === "fulfilled") setAgenda(Array.isArray(agRes.value) ? agRes.value : []);
       if (grRes.status === "fulfilled") setGroups(Array.isArray(grRes.value) ? grRes.value : []);
+      if (mktProdsRes.status === "fulfilled") setMarketProducts(Array.isArray(mktProdsRes.value) ? mktProdsRes.value : []);
+      if (mktRulesRes.status === "fulfilled") setMarketRules(mktRulesRes.value || null);
+      if (mktConfigRes.status === "fulfilled") setMarketConfig(mktConfigRes.value || {});
     } catch (e) {
       // silent fallback
     } finally {
@@ -385,6 +399,28 @@ export default function App() {
             <p style={{ color: "#525f7f" }}>Conectado ao Product Hunter — utilize o backend para popular registros.</p>
           </div>
         );
+      case "marketplace":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Marketplace</h3>
+            <p style={{ color: "#525f7f" }}>Produtos ranqueados por comissão, ticket e volume.</p>
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              {marketProducts.length === 0 && <span style={{ color: "#8898aa" }}>Nenhum produto ranqueado ainda.</span>}
+              {marketProducts.slice(0, 20).map((p, idx) => (
+                <div key={idx} style={{ background: "#fff", padding: 14, borderRadius: 10, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)", display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, color: "#32325d" }}>{p.title}</div>
+                    <div style={{ fontSize: 12, color: "#8898aa" }}>{p.marketplace}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 700, color: "#32325d" }}>R$ {Number(p.price ?? 0).toFixed(2)}</div>
+                    <div style={{ fontSize: 12, color: "#8898aa" }}>Comissão {p.commission_pct ?? "—"}% • Score {p.score ? p.score.toFixed(2) : "—"}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       case "copys":
         return (
           <div>
@@ -415,15 +451,28 @@ export default function App() {
         );
       case "configuracoes":
         return (
-          <div>
-            <h3 style={{ marginTop: 18, color: "#32325d" }}>Configurações</h3>
-            <div style={{ background: "#fff", padding: 18, borderRadius: 10, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)" }}>
-              <p style={{ color: "#525f7f" }}>
-                Badge atual: <strong>{badge ?? "—"}</strong> • Meta diária: {dailyTarget} venda(s).
-              </p>
-              <p style={{ color: "#525f7f" }}>Atualização automática a cada 15s enquanto o app estiver aberto.</p>
-            </div>
-          </div>
+          <MarketplaceConfigPanel
+            config={marketConfig}
+            mlAuthUrl={mlAuthUrl}
+            onSave={async (payload) => {
+              setSavingMp(true);
+              await fetch(`${API}/market/config`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              }).catch(() => {});
+              setSavingMp(false);
+              await loadAll(false);
+            }}
+            onMlLogin={async () => {
+              const res = await fetch(`${API}/market/ml/auth-url`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ state: mlState || "state" }),
+              }).then((r) => r.json());
+              if (res?.ok) setMlAuthUrl(res.url);
+            }}
+          />
         );
       default:
         return null;
@@ -502,3 +551,144 @@ export default function App() {
     </div>
   );
 }
+
+function MarketplaceConfigPanel({ config = {}, mlAuthUrl = "", onSave, onMlLogin }) {
+  const marketplaces = config.marketplaces || {};
+
+  function setPath(obj, pathParts, value) {
+    const key = pathParts[0];
+    if (!(key in obj)) obj[key] = {};
+    if (pathParts.length === 1) {
+      obj[key] = value;
+      return;
+    }
+    setPath(obj[key], pathParts.slice(1), value);
+  }
+
+  const [form, setForm] = useState(() => {
+    const clone = JSON.parse(JSON.stringify(marketplaces)) || {};
+    // normalize lists -> comma string
+    for (const mp of Object.values(clone)) {
+      if (Array.isArray(mp.scope)) mp.scope = mp.scope.join(",");
+      if (Array.isArray(mp.mode)) mp.mode = mp.mode[0] || "affiliate";
+    }
+    // back-compat for empty config
+    if (!("mercadolivre" in clone)) clone.mercadolivre = { enabled: true, mode: "affiliate", scope: "national,international", values: {} };
+    if (!("shopee" in clone)) clone.shopee = { enabled: true, mode: "affiliate", scope: "national,international", values: {} };
+    if (!("amazon" in clone)) clone.amazon = { enabled: true, mode: "affiliate", scope: "international", values: {} };
+    return clone;
+  });
+
+  const update = (marketplace, pathParts, value) => {
+    const next = JSON.parse(JSON.stringify(form));
+    setPath(next, [marketplace, ...pathParts], value);
+    setForm(next);
+  };
+
+  const submit = async (marketplace) => {
+    const payload = {
+      marketplace,
+      enabled: !!form[marketplace]?.enabled,
+      mode: String(form[marketplace]?.mode || "affiliate"),
+      scope: String(form[marketplace]?.scope || "national,international"),
+      values: { ...(form[marketplace]?.values || {}) },
+    };
+    await onSave(payload);
+  };
+
+  return (
+    <div>
+      <h3 style={{ marginTop: 18, color: "#32325d" }}>Configurações</h3>
+      <div style={{ display: "grid", gap: 18, marginTop: 12, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+        {[
+          { key: "mercadolivre", title: "Mercado Livre", fields: ["api_url","client_id","client_secret","access_token","refresh_token","redirect_uri","country","currency"], ml: true },
+          { key: "shopee", title: "Shopee", fields: ["api_url","partner_id","partner_key","access_token","country","currency"] },
+          { key: "amazon", title: "Amazon", fields: ["api_url","access_key","secret_key","associate_tag","region","country","currency"] },
+        ].map(({ key, title, fields, ml }) => (
+          <div key={key} style={{ background: "#fff", padding: 18, borderRadius: 10, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <strong style={{ color: "#32325d" }}>{title}</strong>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#525f7f", fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={!!form[key]?.enabled}
+                  onChange={(e) => update(key, ["enabled"], e.target.checked)}
+                />
+                ativo
+              </label>
+            </div>
+            <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+              <select
+                value={form[key]?.mode || "affiliate"}
+                onChange={(e) => update(key, ["mode"], e.target.value)}
+              >
+                <option value="affiliate">afiliado</option>
+                <option value="dropshipping">dropshipping</option>
+                <option value="both">ambos</option>
+              </select>
+              <input
+                placeholder="scope: nacional/internacional"
+                value={form[key]?.scope || ""}
+                onChange={(e) => update(key, ["scope"], e.target.value)}
+              />
+              {fields.map((field) => (
+                <input
+                  key={field}
+                  placeholder={field}
+                  value={form[key]?.values?.[field] || ""}
+                  onChange={(e) => {
+                    const values = { ...(form[key]?.values || {}) };
+                    values[field] = e.target.value;
+                    update(key, ["values"], values);
+                  }}
+                />
+              ))}
+              {ml && (
+                <button
+                  onClick={onMlLogin}
+                  style={{
+                    marginTop: 8, background: "#5e72e4", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", cursor: "pointer",
+                  }}
+                >
+                  Abrir login Mercado Livre
+                </button>
+              )}
+              {ml && mlAuthUrl && (
+                <div style={{ fontSize: 12, color: "#525f7f", background: "#f6f9fc", padding: 10, borderRadius: 8 }}>
+                  <a href={mlAuthUrl} target="_blank" rel="noreferrer">{mlAuthUrl}</a>
+                </div>
+              )}
+              <button
+                onClick={() => submit(key)}
+                style={{
+                  marginTop: 4, background: "#2dce89", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", cursor: "pointer",
+                }}
+              >
+                Salvar {title}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const inputStyle = {
+  padding: "8px 10px",
+  border: "1px solid #dee2e6",
+  borderRadius: 8,
+  background: "#f6f9fc",
+  color: "#32325d",
+  fontSize: 14,
+  outline: "none",
+};
+
+const buttonStyle = {
+  padding: "8px 12px",
+  border: "none",
+  borderRadius: 8,
+  color: "#fff",
+  fontSize: 14,
+  cursor: "pointer",
+};
