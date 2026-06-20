@@ -62,24 +62,25 @@ class ShopifyStubAdapter(MarketplaceAdapter):
         return [{"platform": "shopify_stub", "query": query, "notes": "competitor stub"}]
 
 
-register(FakeMarketplaceAdapter())
-register(ShopifyStubAdapter())
-
-
 class DummyAdapter:
-    name = 'dummy'
+    name = "dummy"
 
     def fetch_products(self):
-        import pandas as pd
-        return pd.DataFrame([
-            {'title': 'Lanterna Tática Pro LED', 'price': 39.9, 'orders': 1243, 'rating': 4.6, 'url': 'https://example.com/lanterna', 'collected_at': '2026-06-18'},
-            {'title': 'Fone Bluetooth Mini', 'price': 59.9, 'orders': 980, 'rating': 4.4, 'url': 'https://example.com/fone', 'collected_at': '2026-06-18'},
-            {'title': 'Garrafa Térmica 1L', 'price': 49.9, 'orders': 756, 'rating': 4.7, 'url': 'https://example.com/garrafa', 'collected_at': '2026-06-18'},
-        ])
+        return pd.DataFrame(
+            [
+                {"title": "Lanterna Tática Pro LED", "price": 39.9, "orders": 1243, "commission_pct": 12.0, "url": "https://example.com/lanterna", "collected_at": "2026-06-18"},
+                {"title": "Fone Bluetooth Mini", "price": 59.9, "orders": 980, "commission_pct": 9.5, "url": "https://example.com/fone", "collected_at": "2026-06-18"},
+                {"title": "Garrafa Térmica 1L", "price": 49.9, "orders": 756, "commission_pct": 14.0, "url": "https://example.com/garrafa", "collected_at": "2026-06-18"},
+            ]
+        )
 
     def fetch_sales(self):
-        import pandas as pd
-        return pd.DataFrame(columns=['product', 'sold_last'])
+        return pd.DataFrame()
+
+    def search_competitor(self, query: str) -> list[dict]:
+        return [{"platform": "dummy", "query": query, "results": 0}]
 
 
+register(FakeMarketplaceAdapter())
+register(ShopifyStubAdapter())
 register(DummyAdapter())

@@ -1,0 +1,12 @@
+{
+  "min_commission_pct": 3,
+  "target_ticket_min": 30,
+  "target_ticket_max": 120,
+  "min_orders": 10,
+  "score_weights": {
+    "commission": 0.4,
+    "orders": 0.3,
+    "ticket": 0.2,
+    "competition": 0.1
+  }
+}
