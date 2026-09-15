@@ -1,356 +1,187 @@
-"""Backend FastAPI para Marketing Digital — porta 8000."""
+"""API do Affiliate Intelligence System.
+
+Aplicação FastAPI sobre PostgreSQL, com o domínio organizado em routers por área:
+catálogo, scoring, portfólio, criativos, jobs e operação.
+
+Mudança estrutural em relação à versão anterior: o backend usava `sqlite3` bruto com
+um schema legado de 6 tabelas de suporte e nenhum endpoint de domínio. Agora ele fala
+com os modelos SQLAlchemy da Fase 1, e o schema é responsabilidade exclusiva do
+Alembic — a aplicação **não** cria tabela nenhuma em tempo de execução. Era essa
+criação dupla que produzia três definições incompatíveis das mesmas tabelas.
+
+Os endpoints legados de suporte (feedback, preferências, agenda, grupos, pagamentos)
+foram preservados em `backend/legacy.py` e continuam montados, para não quebrar o
+dashboard durante a transição.
+"""
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import Any, List, Optional
 from fastapi.middleware.cors import CORSMiddleware
-import sqlite3
-import json
-import os
-import sys
-from datetime import datetime, timedelta
-from pathlib import Path
 
-from agents.core.mcp_state import MCPState
-from scanner.scanner import scan_all, load_rules, save_rules, MarketRules
-from integrations.marketplaces.mercado_livre import MercadoLivreAdapter, MLConfig
-from integrations.marketplaces.config_api import apply_config
+from backend.legacy import legacy_router
+from backend.routers import API_ROUTERS
+from config.settings import get_settings
+from core.db.session import get_engine
+from core.services.scoring.engine import load_specs
 
-app = FastAPI(title="Marketing Digital API", version="0.1.0")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Valida a configuração no start e falha rápido se estiver errada.
+
+    Sem isto, uma `DATABASE_URL` apontando para SQLite só apareceria no primeiro
+    request, com um erro de driver confuso.
+    """
+    settings.validate_database_url()
+
+    # Registra as dimensões de score e os adapters de marketplace. Ambos são
+    # registro em processo — falhar aqui é melhor do que falhar no primeiro score.
+    load_specs()
+    from integrations.marketplaces.registry import list_adapter_names, load_adapters
+
+    load_adapters()
+
+    logger.info(
+        "%s v%s starting | adapters: %s | IA: %s | auth: %s",
+        settings.app_name,
+        settings.app_version,
+        ", ".join(sorted(list_adapter_names())) or "nenhum",
+        "ligada" if settings.is_ai_configured else "desligada",
+        "ligada" if settings.auth_enabled else "DESLIGADA",
+    )
+
+    # Problemas que impedem produção são reportados, não escondidos.
+    for problem in settings.validate_production_readiness():
+        logger.warning("prontidão de produção: %s", problem)
+
+    try:
+        with get_engine().connect():
+            logger.info("conexão com o banco estabelecida")
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "não foi possível conectar ao banco: %s. "
+            "Rode `docker compose up -d db` e `alembic upgrade head`.",
+            exc,
+        )
+    else:
+        _bootstrap_admin()
+
+    yield
+
+
+def _bootstrap_admin() -> None:
+    """Cria o administrador inicial quando não existe nenhum usuário.
+
+    Necessário porque a API agora exige autenticação: sem usuário nenhum não há
+    como autenticar para criar o primeiro. Só age com a tabela vazia, e apenas se
+    `BOOTSTRAP_ADMIN_USERNAME`/`PASSWORD` estiverem definidos — do contrário, criar
+    um admin com senha padrão seria pior do que não criar nenhum.
+    """
+    settings = get_settings()
+    if not (settings.bootstrap_admin_username and settings.bootstrap_admin_password):
+        return
+
+    from core.db.session import session_scope
+    from core.services.auth import WeakPassword, ensure_admin
+
+    try:
+        with session_scope() as session:
+            created = ensure_admin(
+                session,
+                username=settings.bootstrap_admin_username,
+                password=settings.bootstrap_admin_password,
+            )
+    except WeakPassword as exc:
+        logger.error("BOOTSTRAP_ADMIN_PASSWORD não atende aos requisitos: %s", exc)
+        return
+
+    if created is not None:
+        logger.warning(
+            "administrador inicial '%s' criado. Remova BOOTSTRAP_ADMIN_PASSWORD do .env "
+            "agora que a conta existe.",
+            created.username,
+        )
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    description=(
+        "Plataforma de inteligência e operação para marketing de afiliados "
+        "multi-marketplace. Descobre oportunidades, pontua produtos de forma "
+        "explicável, controla o pipeline criativo e acompanha vendas e comissões."
+    ),
+    lifespan=lifespan,
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "app.sqlite3"
+for api_router in API_ROUTERS:
+    app.include_router(api_router)
+
+# Endpoints de suporte herdados (feedback, preferências, agenda, grupos, pagamentos).
+app.include_router(legacy_router)
 
 
-class FeedbackIn(BaseModel):
-    channel: str
-    user_id: int
-    username: Optional[str] = None
-    text: str
-    sentiment: Optional[str] = None
-    tags: Optional[str] = None
-
-
-class PreferenceIn(BaseModel):
-    user_id: int
-    chat_id: Optional[int] = None
-    username: Optional[str] = None
-    language: str = "pt-BR"
-    notify_alerts: bool = True
-    notify_daily_report: bool = True
-    notify_opportunities: bool = True
-    muted: bool = False
-    extra: Optional[dict] = None
-
-
-class MarketRulesIn(BaseModel):
-    min_commission_pct: float = 5.0
-    target_ticket_min: float = 97.0
-    target_ticket_max: float = 297.0
-    min_orders: int = 50
-    score_weights: dict[str, float] = {"commission": 0.4, "orders": 0.3, "ticket": 0.2, "competition": 0.1}
-
-
-class MarketplaceConfigIn(BaseModel):
-    marketplace: str
-    enabled: bool = True
-    mode: str = "affiliate"  # affiliate | dropshipping | both
-    scope: str = "national,international"
-    api_url: Optional[str] = None
-    client_id: Optional[str] = None
-    client_secret: Optional[str] = None
-    access_token: Optional[str] = None
-    refresh_token: Optional[str] = None
-    redirect_uri: Optional[str] = None
-    country: Optional[str] = "BR"
-    currency: Optional[str] = "BRL"
-    extra: Optional[dict] = None
-
-
-def conn() -> sqlite3.Connection:
-    c = sqlite3.connect(str(DB_PATH))
-    c.row_factory = sqlite3.Row
-    return c
-
-
-@app.get("/health")
-def health() -> dict[str, Any]:
-    ok = DB_PATH.exists()
-    return {"status": "ok" if ok else "initializing", "db": str(DB_PATH)}
-
-
-@app.get("/feedback")
-def list_feedback(limit: int = 50) -> List[dict[str, Any]]:
-    c = conn()
-    rows = c.execute("SELECT * FROM feedback ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
-    c.close()
-    return [dict(r) for r in rows]
-
-
-@app.post("/feedback")
-def add_feedback(item: FeedbackIn) -> dict[str, int | None]:
-    c = conn()
-    cur = c.execute(
-        "INSERT INTO feedback (channel, user_id, username, text, sentiment, tags) VALUES (?, ?, ?, ?, ?, ?)",
-        (item.channel, item.user_id, item.username, item.text, item.sentiment, item.tags),
-    )
-    c.commit()
-    c.close()
-    return {"id": cur.lastrowid}
-
-
-@app.get("/preferences")
-def get_preferences() -> List[dict[str, Any]]:
-    c = conn()
-    rows = c.execute("SELECT * FROM user_preferences ORDER BY updated_at DESC").fetchall()
-    c.close()
-    out = []
-    for r in rows:
-        row = dict(r)
-        row["extra"] = json.loads(row["extra"]) if row.get("extra") else None
-        out.append(row)
-    return out
-
-
-@app.put("/preferences/{user_id}")
-def upsert_preference(user_id: int, item: PreferenceIn) -> dict[str, bool]:
-    c = conn()
-    c.execute(
-        "INSERT INTO user_preferences (user_id, chat_id, username, language, notify_alerts, notify_daily_report, notify_opportunities, muted, extra, updated_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')) ON CONFLICT(user_id) DO UPDATE SET"
-        " chat_id=excluded.chat_id, username=excluded.username, language=excluded.language, notify_alerts=excluded.notify_alerts,"
-        " notify_daily_report=excluded.notify_daily_report, notify_opportunities=excluded.notify_opportunities, muted=excluded.muted, extra=excluded.extra, updated_at=datetime('now')",
-        (
-            user_id,
-            item.chat_id,
-            item.username,
-            item.language,
-            1 if item.notify_alerts else 0,
-            1 if item.notify_daily_report else 0,
-            1 if item.notify_opportunities else 0,
-            1 if item.muted else 0,
-            json.dumps(item.extra, ensure_ascii=False) if item.extra else None,
-        ),
-    )
-    c.commit()
-    c.close()
-    return {"ok": True}
-
-
-@app.get("/alerts/trends")
-def trend_alerts(limit: int = 20) -> List[dict[str, Any]]:
-    c = conn()
-    rows = c.execute("SELECT * FROM trend_alerts ORDER BY collected_at DESC LIMIT ?", (limit,)).fetchall()
-    c.close()
-    return [dict(r) for r in rows]
-
-
-@app.get("/payments")
-def payments(limit: int = 50) -> List[dict[str, Any]]:
-    c = conn()
-    rows = c.execute("SELECT * FROM payments ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
-    c.close()
-    return [dict(r) for r in rows]
-
-
-@app.get("/agenda")
-def agenda(limit: int = 50) -> List[dict[str, Any]]:
-    c = conn()
-    rows = c.execute("SELECT * FROM agenda ORDER BY when_date DESC LIMIT ?", (limit,)).fetchall()
-    c.close()
-    return [dict(r) for r in rows]
-
-
-@app.get("/groups")
-def groups() -> List[dict[str, Any]]:
-    c = conn()
-    rows = c.execute("SELECT * FROM groups ORDER BY updated_at DESC").fetchall()
-    c.close()
-    return [dict(r) for r in rows]
-
-
-@app.post("/groups/{group_id}/status")
-def set_group_status(group_id: int, payload: dict) -> dict[str, bool]:
-    c = conn()
-    c.execute(
-        "INSERT INTO groups (group_id, status, reason, updated_by, updated_at) VALUES (?, ?, ?, ?, datetime('now')) ON CONFLICT(group_id) DO UPDATE SET status=excluded.status, reason=excluded.reason, updated_at=excluded.updated_at",
-        (group_id, payload.get("status"), payload.get("reason"), payload.get("updated_by")),
-    )
-    c.commit()
-    c.close()
-    return {"ok": True}
-
-
-@app.get("/reports/kpis")
-def kpis(days: int = 30) -> dict[str, Any]:
-    c = conn()
-    start = (datetime.now() - timedelta(days=days)).isoformat()
-    payments_rows = c.execute("SELECT * FROM payments WHERE created_at >= ?", (start,)).fetchall()
-    orders = len(payments_rows)
-    revenue = sum(float(r["amount"] or 0) for r in payments_rows)
-    c.close()
+@app.get("/", tags=["meta"])
+def root() -> dict:
     return {
-        "period_days": days,
-        "orders": orders,
-        "revenue": round(revenue, 2),
-        "ticket_average": round(revenue / orders, 2) if orders else 0,
+        "service": "marketTon — Affiliate Intelligence System",
+        "version": settings.app_version,
+        "docs": "/docs",
+        "health": "/health",
     }
 
 
-@app.get("/methodology/badge")
-def methodology_badge() -> dict[str, Any]:
-    state = MCPState()
-    return {
-        "badge": state.methodology.get("badge"),
-        "active_influencer": state.methodology.get("active_influencer"),
-        "daily_sales_target": state.methodology.get("daily_sales_target"),
-    }
+@app.get("/health", tags=["meta"])
+def health() -> dict:
+    """Verifica banco e configuração — não apenas se o processo subiu.
 
+    A versão anterior respondia "ok" se o *arquivo* do SQLite existisse, o que não
+    dizia nada sobre o schema estar aplicado.
+    """
+    from sqlalchemy import text
 
-@app.get("/market/products")
-def market_products(limit: int = 50, marketplace: Optional[str] = None) -> List[dict[str, Any]]:
-    df = scan_all()
-    if df is None or df.empty:
-        return []
-    if marketplace:
-        df = df[df["marketplace"] == marketplace]
-    out: List[dict[str, Any]] = []
-    for _, row in df.head(limit).iterrows():
-        out.append(
-            {
-                "id": row.get("id"),
-                "title": row.get("title"),
-                "price": row.get("price"),
-                "stock": row.get("stock"),
-                "orders": row.get("orders"),
-                "commission_pct": row.get("commission_pct"),
-                "score": row.get("score"),
-                "marketplace": row.get("marketplace"),
-                "url": row.get("url"),
-                "category": row.get("category"),
-                "collected_at": row.get("collected_at"),
-            }
-        )
-    return out
-
-
-@app.get("/market/rules")
-def market_rules() -> dict[str, Any]:
-    rules = load_rules()
-    return rules.__dict__
-
-
-@app.put("/market/rules")
-def put_market_rules(payload: MarketRulesIn) -> dict[str, Any]:
-    save_rules(MarketRules(**payload.dict()))
-    return {"ok": True, "rules": payload.dict()}
-
-
-@app.get("/market/config")
-def get_market_config() -> dict[str, Any]:
-    data: dict[str, dict[str, Any]] = {}
-    mapping = {
-        "mercado_livre": [
-            "MARKETPLACE_MERCADOLIVRE_CLIENT_ID",
-            "MARKETPLACE_MERCADOLIVRE_CLIENT_SECRET",
-            "MARKETPLACE_MERCADOLIVRE_REDIRECT_URI",
-            "MARKETPLACE_MERCADOLIVRE_ACCESS_TOKEN",
-            "MARKETPLACE_MERCADOLIVRE_REFRESH_TOKEN",
-            "MARKETPLACE_MERCADOLIVRE_COUNTRY",
-            "MARKETPLACE_MERCADOLIVRE_MODE",
-            "MARKETPLACE_MERCADOLIVRE_SCOPE",
-            "MARKETPLACE_MERCADOLIVRE_API_URL",
-        ],
-        "shopee": [
-            "MARKETPLACE_SHOPEE_PARTNER_ID",
-            "MARKETPLACE_SHOPEE_PARTNER_KEY",
-            "MARKETPLACE_SHOPEE_ACCESS_TOKEN",
-            "MARKETPLACE_SHOPEE_COUNTRY",
-            "MARKETPLACE_SHOPEE_MODE",
-            "MARKETPLACE_SHOPEE_SCOPE",
-            "MARKETPLACE_SHOPEE_API_URL",
-        ],
-        "amazon": [
-            "MARKETPLACE_AMAZON_ACCESS_KEY",
-            "MARKETPLACE_AMAZON_SECRET_KEY",
-            "MARKETPLACE_AMAZON_ASSOCIATE_TAG",
-            "MARKETPLACE_AMAZON_REGION",
-            "MARKETPLACE_AMAZON_COUNTRY",
-            "MARKETPLACE_AMAZON_MODE",
-            "MARKETPLACE_AMAZON_SCOPE",
-            "MARKETPLACE_AMAZON_API_URL",
-        ],
-    }
-
-    def env(name: str) -> str:
-        return os.getenv(name, "")
-
-    def mode_for_prefix(prefix: str) -> str:
-        mode_env = os.getenv(f"{prefix.upper()}_MODE", "affiliate")
-        return mode_env if mode_env in {"affiliate", "dropshipping", "both"} else "affiliate"
-
-    for mp, keys in mapping.items():
-        enabled_env = os.getenv(f"{mp.upper()}_ENABLED", "true")
-        data[mp] = {
-            "enabled": str(enabled_env).lower() != "false",
-            "mode": mode_for_prefix(mp),
-            "scope": os.getenv(f"{mp.upper()}_SCOPE", "national,international"),
-            "values": {k.split("_", 1)[1].lower(): env(k) for k in keys},
-        }
-    return data
-
-
-@app.put("/market/config")
-def put_market_config(payload: MarketplaceConfigIn) -> dict[str, Any]:
-    if payload.marketplace not in {"mercado_livre", "shopee", "amazon"}:
-        return {"ok": False, "error": "marketplace_invalid"}
+    database = {"connected": False, "error": None}
     try:
-        result = apply_config({
-            payload.marketplace: {
-                "enabled": payload.enabled,
-                "mode": payload.mode,
-                "scope": payload.scope,
-                "values": payload.values or {},
-            }
-        })
-    except Exception as exc:
-        return {"ok": False, "error": str(exc)}
-    return {"ok": True, "saved": result}
+        with get_engine().connect() as connection:
+            connection.execute(text("SELECT 1"))
+        database["connected"] = True
+    except Exception as exc:  # noqa: BLE001
+        database["error"] = str(exc)
 
+    from core.db.base import Marketplace
 
-@app.post("/market/ml/auth-url")
-def ml_auth_url(payload: dict) -> dict[str, Any]:
-    cid = os.getenv("MARKETPLACE_MERCADOLIVRE_CLIENT_ID", "")
-    redirect = os.getenv("MARKETPLACE_MERCADOLIVRE_REDIRECT_URI", "")
-    if not cid or not redirect:
-        return {"ok": False, "error": "client_id_or_redirect_uri_missing"}
-    state = payload.get("state") or "state"
-    url = (
-        f"https://auth.mercadolivre.com.br/authorization?response_type=code&client_id={cid}"
-        f"&redirect_uri={redirect}&state={state}"
-    )
-    return {"ok": True, "url": url}
+    problems = settings.validate_production_readiness()
 
-
-@app.post("/market/ml/token")
-def ml_exchange_token(payload: dict) -> dict[str, Any]:
-    client_id = os.getenv("MARKETPLACE_MERCADOLIVRE_CLIENT_ID", "")
-    client_secret = os.getenv("MARKETPLACE_MERCADOLIVRE_CLIENT_SECRET", "")
-    redirect_uri = os.getenv("MARKETPLACE_MERCADOLIVRE_REDIRECT_URI", "")
-    code = payload.get("code", "")
-    if not client_id or not client_secret or not redirect_uri or not code:
-        return {"ok": False, "error": "missing_required_fields"}
-    adapter = MercadoLivreAdapter(
-        MLConfig(
-            client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri,
-        )
-    )
-    data = adapter.exchange_code_for_token(code)
-    if not data:
-        return {"ok": False, "error": "exchange_failed"}
-    return {"ok": True, "token": data}
+    return {
+        "status": "ok" if database["connected"] else "degraded",
+        "version": settings.app_version,
+        "database": database,
+        "ai_enabled": settings.is_ai_configured,
+        "auth_enabled": settings.auth_enabled,
+        # Lista o que impediria ir a produção. Exposto porque "quase pronto" sem
+        # dizer o que falta é indistinguível de pronto.
+        "production_blockers": problems,
+        "production_ready": not problems and database["connected"],
+        # Marketplaces que o domínio suporta. O estado de configuração de cada
+        # conector fica em `/operations/connectors`, que é onde é acionável.
+        "marketplace_supported": sorted(marketplace.value for marketplace in Marketplace),
+    }

@@ -12,6 +12,26 @@ from core.orchestrator import AgentController
 DATA = Path(__file__).resolve().parent.parent.parent / "data"
 st.set_page_config(page_title="Oportunidades", layout="wide", page_icon="💡")
 
+
+def _stale(df: pd.DataFrame, time_col: str, *, hours: int) -> list[int]:
+    """Índices das linhas com dado mais velho que `hours`.
+
+    Definida ANTES do uso: o Streamlit executa o módulo de cima para baixo, então
+    uma função usada na linha 27 e definida na 84 levantava NameError — que era
+    engolido pelo `except Exception`, fazendo "Alertas de idade" relatar sempre
+    0/N sem nenhum sinal de erro.
+    """
+    if df.empty or time_col not in df.columns:
+        return []
+    try:
+        now = datetime.now()
+        times = pd.to_datetime(df[time_col], errors="coerce")
+        diff = (now - times).dt.total_seconds().div(3600).fillna(0)
+        return [int(i) for i in diff[diff > hours].index.tolist()]
+    except Exception:  # noqa: BLE001
+        return []
+
+
 st.markdown("# 💡 Oportunidades")
 st.caption("Ideias priorizadas a partir de tendências + produtos + copy.")
 
@@ -79,15 +99,3 @@ st.caption("Itens com dados mais velhos que 24h merecem atualização.")
 st.write(f"Tendências velhas: {len(stale_trends)}/{len(trends)}")
 st.write(f"Produtos velhos: {len(stale_products)}/{len(products)}")
 st.write(f"Copys velhos: {len(stale_copies)}/{len(copies)}")
-
-
-def _stale(df: pd.DataFrame, time_col: str, *, hours: int) -> list[int]:
-    if df.empty or time_col not in df.columns:
-        return []
-    try:
-        now = datetime.now()
-        times = pd.to_datetime(df[time_col], errors="coerce")
-        diff = (now - times).dt.total_seconds().div(3600).fillna(0)
-        return [int(i) for i in diff[diff > hours].index.tolist()]
-    except Exception:  # noqa: BLE001
-        return []

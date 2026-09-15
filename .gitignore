@@ -1,14 +1,52 @@
+# --- Python -------------------------------------------------------------------
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.ruff_cache/
 .venv/
 venv/
+build/
+dist/
+
+# --- Variáveis de ambiente ----------------------------------------------------
+# `.env.example` é versionado de propósito: é o template do setup.
+# Apenas o `.env` real, com segredos, é ignorado.
 .env
 .env.local
 .env.*.local
+
+# --- Banco de dados -----------------------------------------------------------
+# O banco de desenvolvimento agora vive no PostgreSQL (docker compose).
+data/*.sqlite3
+data/*.sqlite3-wal
+data/*.sqlite3-shm
+
+# --- Artefatos de execução ----------------------------------------------------
+# Saídas geradas pelo pipeline: não são fonte, não pertencem ao repositório.
+data/reports/
+data/products/*.csv
+memory/state.json
+memory/mcp_state.json
+inventory/services.json
+.inventory/
+logs/
+*.log
+
+# --- Frontend -----------------------------------------------------------------
+node_modules/
+frontend_app/dist/
+frontend_app/.vite/
+
+# --- Sistema operacional / editor --------------------------------------------
+.DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
 *.swo
+<<<<<<< Updated upstream
 node_modules/
 .DS_Store
 Thumbs.db
@@ -20,3 +58,5 @@ build/
 data/app.sqlite3
 data/intelligence.sqlite3
 .inventory/
+=======
+>>>>>>> Stashed changes

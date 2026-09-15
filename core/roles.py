@@ -1,19 +1,29 @@
-"""Roles e permissões do sistema."""
+"""Permissões por papel, aplicadas pelo backend.
+
+Este módulo existia antes, mas era importado **apenas pelo Streamlit** — ou seja, a
+autorização vivia no frontend. O briefing seção 13 é explícito: regras, scores,
+estados, permissões e decisões operacionais devem permanecer centralizados no
+backend. O frontend pode esconder um botão; quem recusa a requisição é a API.
+
+O que mudou em relação à versão anterior:
+
+* O enum `Role` agora é o de `core/db/auth.py`, persistido no banco. Antes havia um
+  enum em `core/roles.py` e outro papel em JSONL relativo ao diretório de trabalho,
+  além de uma tabela `roles` inútil.
+* As permissões cobrem as operações que a API de fato expõe, não um conjunto
+  genérico herdado.
+* Existe uma permissão por **operação de escrita**, não apenas por área: ler o
+  catálogo e coletar do marketplace são coisas diferentes.
+"""
 from __future__ import annotations
 
-import enum
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
-from integrations.user_preferences import find_by_user, list_preferences, save_preference, UserPref
+from core.db.auth import Role
 
-
-class Role(str, enum.Enum):
-    ADMIN = "admin"
-    MANAGER = "manager"
-    OPERATOR = "operator"
-    VIEWER = "viewer"
-    BOT = "bot"
+# Ordem hierárquica, do mais ao menos privilegiado. Usada para permitir que um
+# papel herde o que os inferiores podem fazer em leitura.
+HIERARCHY: tuple[Role, ...] = (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)
 
 
 @dataclass(frozen=True)
@@ -23,89 +33,168 @@ class Permission:
     allowed_roles: tuple[Role, ...]
 
 
-PERMISSIONS: list[Permission] = [
-    Permission("agents.run", "Permite iniciar/parar agentes", (Role.ADMIN, Role.MANAGER)),
-    Permission("agents.pause", "Permite pausar agentes", (Role.ADMIN, Role.MANAGER)),
-    Permission("reports.view", "Permite ver relatórios", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
-    Permission("reports.edit", "Permite editar relatórios", (Role.ADMIN, Role.MANAGER)),
-    Permission("marketplace.manage", "Permite gerenciar marketplaces", (Role.ADMIN, Role.MANAGER)),
-    Permission("ads.manage", "Permite gerenciar anúncios", (Role.ADMIN, Role.MANAGER)),
-    Permission("feedback.view", "Permite ver feedback", (Role.ADMIN, Role.MANAGER, Role.OPERATOR)),
-    Permission("feedback.manage", "Permite gerenciar feedback", (Role.ADMIN,)),
-    Permission("users.manage", "Permite gerenciar usuários", (Role.ADMIN,)),
-    Permission("roles.manage", "Permite gerenciar roles", (Role.ADMIN,)),
-    Permission("billing.view", "Permite ver billing", (Role.ADMIN, Role.MANAGER)),
-    Permission("billing.manage", "Permite gerenciar billing", (Role.ADMIN,)),
-]
+PERMISSIONS: tuple[Permission, ...] = (
+    # --- Catálogo -------------------------------------------------------------
+    Permission("catalog.view", "Ver produtos e procedência", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
+    Permission("catalog.ingest", "Coletar catálogo dos marketplaces", (Role.ADMIN, Role.MANAGER, Role.OPERATOR)),
+    Permission("catalog.manage", "Inativar produtos e ajustar catálogo", (Role.ADMIN, Role.MANAGER)),
+    # --- Scoring --------------------------------------------------------------
+    Permission("scoring.view", "Ver scores e explicações", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
+    Permission("scoring.compute", "Executar cálculo de score", (Role.ADMIN, Role.MANAGER, Role.OPERATOR)),
+    Permission("scoring.calibrate", "Publicar nova versão de algoritmo", (Role.ADMIN,)),
+    # --- Portfólio ------------------------------------------------------------
+    Permission("portfolio.view", "Ver portfólio e trilha de estados", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
+    Permission("portfolio.manage", "Adicionar produtos e mover estados", (Role.ADMIN, Role.MANAGER, Role.OPERATOR)),
+    Permission("portfolio.affiliate", "Marcar afiliação e remover produto", (Role.ADMIN, Role.MANAGER)),
+    # --- Criativos ------------------------------------------------------------
+    Permission("creatives.view", "Ver materiais criativos", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
+    Permission("creatives.edit", "Criar e mover status de materiais", (Role.ADMIN, Role.MANAGER, Role.OPERATOR)),
+    Permission("creatives.approve", "Aprovar material para publicação", (Role.ADMIN, Role.MANAGER)),
+    # --- Publicação -----------------------------------------------------------
+    Permission("publication.publish", "Publicar material aprovado", (Role.ADMIN, Role.MANAGER)),
+    # --- Operação -------------------------------------------------------------
+    Permission("operations.view", "Ver painel diário e revisão semanal", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
+    Permission("agents.run", "Iniciar e parar agentes", (Role.ADMIN, Role.MANAGER)),
+    Permission("jobs.view", "Ver histórico de execução", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
+    # --- Administração --------------------------------------------------------
+    Permission("connectors.manage", "Configurar credenciais de marketplace", (Role.ADMIN,)),
+    Permission("users.manage", "Criar, desativar e alterar usuários", (Role.ADMIN,)),
+    Permission("audit.view", "Ver trilha de auditoria", (Role.ADMIN,)),
+    Permission("support.view", "Ver feedback e preferências", (Role.ADMIN, Role.MANAGER, Role.OPERATOR)),
+    Permission("support.manage", "Gerenciar feedback e grupos", (Role.ADMIN, Role.MANAGER)),
+    Permission("billing.view", "Ver pagamentos", (Role.ADMIN, Role.MANAGER)),
+)
+
+PERMISSIONS_BY_NAME: dict[str, Permission] = {permission.name: permission for permission in PERMISSIONS}
 
 
-@dataclass
-class UserRole:
-    user_id: int
-    role: Role
-    granted_by: int | None = None
-    granted_at: str = field(default_factory=lambda: __import__("datetime").datetime.now().isoformat())
+class PermissionDenied(PermissionError):
+    """Papel sem a permissão exigida. Distinto de não autenticado (401 vs 403)."""
+
+
+def has_permission(role: Role | str, permission_name: str) -> bool:
+    """True se o papel satisfaz a permissão.
+
+    Permissão desconhecida devolve `False`: negar por padrão é a escolha segura.
+    Se um endpoint exigir uma permissão que não existe aqui, ele fica inacessível —
+    o que é um erro visível e corrigível, em vez de um buraco silencioso.
+    """
+    if isinstance(role, str):
+        try:
+            role = Role(role)
+        except ValueError:
+            return False
+
+    permission = PERMISSIONS_BY_NAME.get(permission_name)
+    if permission is None:
+        return False
+    return role in permission.allowed_roles
+
+
+def require_permission(role: Role | str, permission_name: str) -> None:
+    """Levanta `PermissionDenied` quando falta permissão."""
+    if not has_permission(role, permission_name):
+        raise PermissionDenied(
+            f"o papel '{role.value if isinstance(role, Role) else role}' não tem a permissão "
+            f"'{permission_name}'"
+        )
+
+
+def permissions_for(role: Role) -> list[str]:
+    """Lista de permissões do papel. Serve para o frontend saber o que exibir.
+
+    Expor a lista é diferente de confiar nela: o frontend usa para esconder botão,
+    a API continua recusando a requisição.
+    """
+    return sorted(
+        permission.name
+        for permission in PERMISSIONS
+        if role in permission.allowed_roles
+    )
+
+
+def role_matrix() -> dict[str, list[str]]:
+    """Matriz completa papel → permissões, para documentação e auditoria."""
+    return {role.value: permissions_for(role) for role in Role}
+
+
+# --- Compatibilidade com o dashboard legado -----------------------------------
 
 
 class RoleManager:
-    def __init__(self, path: str | None = None):
-        self.path = path or "data/user_roles.jsonl"
-        self._cache: dict[int, Role] = {}
-        self._load()
+    """Compatibilidade: gerencia papéis pelo banco, com a interface antiga.
 
-    def _load(self) -> None:
-        from pathlib import Path
-        p = Path(self.path)
-        if not p.exists():
-            return
-        for line in p.read_text(encoding="utf-8").strip().splitlines():
-            try:
-                obj = __import__("json").loads(line)
-                user_id = int(obj.get("user_id"))
-                role = Role(obj.get("role", Role.VIEWER.value))
-                self._cache[user_id] = role
-            except Exception:
-                continue
+    A versão anterior guardava papéis em `data/user_roles.jsonl`, relativo ao
+    diretório de trabalho — o que significa que o arquivo ia parar em lugares
+    diferentes conforme de onde o processo fosse iniciado, além de duplicar o
+    conceito de papel que já existia no banco.
 
-    def _save(self, user_id: int, role: Role, granted_by: int | None = None) -> None:
-        from pathlib import Path
-        p = Path(self.path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        record = {
-            "user_id": user_id,
-            "role": role.value,
-            "granted_by": granted_by,
-            "granted_at": __import__("datetime").datetime.now().isoformat(),
-        }
-        with p.open("a", encoding="utf-8") as f:
-            f.write(__import__("json").dumps(record, ensure_ascii=False) + "\n")
-        self._cache[user_id] = role
+    Esta implementação mantém os métodos que o dashboard chama, mas lê e escreve
+    na tabela `users`. O dashboard está em processo de aposentadoria; o shim existe
+    para não deixá-lo quebrado durante a transição.
+    """
+
+    def __init__(self, path: str | None = None):  # noqa: ARG002 - assinatura legada
+        self._session_factory = None
+
+    def _session(self):
+        from core.db.session import get_session_factory
+
+        return get_session_factory()()
 
     def get_role(self, user_id: int) -> Role:
-        return self._cache.get(user_id, Role.VIEWER)
+        from core.db.auth import User
 
-    def set_role(self, user_id: int, role: Role, granted_by: int | None = None) -> None:
-        self._save(user_id, role, granted_by)
+        session = self._session()
+        try:
+            user = session.get(User, user_id)
+            return user.role if user else Role.VIEWER
+        finally:
+            session.close()
+
+    def set_role(self, user_id: int, role: Role, granted_by: int | None = None) -> None:  # noqa: ARG002
+        from core.db.auth import User
+
+        session = self._session()
+        try:
+            user = session.get(User, user_id)
+            if user is not None:
+                user.role = role
+                session.commit()
+        finally:
+            session.close()
 
     def has_permission(self, user_id: int, permission: str) -> bool:
-        role = self.get_role(user_id)
-        for perm in PERMISSIONS:
-            if perm.name == permission:
-                return role in perm.allowed_roles
-        return False
+        return has_permission(self.get_role(user_id), permission)
 
-    def list_users(self) -> list[dict[str, Any]]:
-        items = list_preferences(limit=5000)
-        users = []
-        seen = set()
-        for item in items:
-            uid = int(item.get("user_id"))
-            if uid in seen:
-                continue
-            seen.add(uid)
-            users.append({
-                "user_id": uid,
-                "username": item.get("username"),
-                "role": self.get_role(uid).value,
-            })
-        return users
+    def list_users(self) -> list[dict]:
+        from core.db.auth import User
+
+        session = self._session()
+        try:
+            users = session.query(User).all()
+            return [
+                {
+                    "user_id": user.id,
+                    "username": user.username,
+                    "role": user.role.value,
+                    "is_active": user.is_active,
+                }
+                for user in users
+            ]
+        finally:
+            session.close()
+
+
+__all__ = [
+    "HIERARCHY",
+    "PERMISSIONS",
+    "PERMISSIONS_BY_NAME",
+    "Permission",
+    "PermissionDenied",
+    "RoleManager",
+    "has_permission",
+    "permissions_for",
+    "require_permission",
+    "role_matrix",
+]

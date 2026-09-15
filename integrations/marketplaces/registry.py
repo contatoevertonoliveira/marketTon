@@ -1,20 +1,27 @@
-"""Marketplace adapter registry and stubs."""
+"""Marketplace adapter registry.
+
+Adapters self-register through `register`. A missing adapter must fail loudly
+instead of silently falling back to fabricated data (briefing section 2: data
+that does not exist may not be invented).
+"""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-import pandas as pd
+import logging
 
 from integrations.marketplaces.base import MarketplaceAdapter
 
-if TYPE_CHECKING:
-    pass
+logger = logging.getLogger(__name__)
 
 _REGISTRY: dict[str, MarketplaceAdapter] = {}
 
 
-def register(adapter: MarketplaceAdapter) -> None:
+def register(adapter: MarketplaceAdapter) -> MarketplaceAdapter:
+    """Register an adapter instance by its `name`."""
+    if not getattr(adapter, "name", None):
+        raise ValueError(f"{type(adapter).__name__} must define a non-empty `name`")
     _REGISTRY[adapter.name] = adapter
+    logger.debug("registered marketplace adapter: %s", adapter.name)
+    return adapter
 
 
 def resolve(name: str) -> MarketplaceAdapter | None:
@@ -25,62 +32,25 @@ def list_adapter_names() -> list[str]:
     return list(_REGISTRY.keys())
 
 
-class FakeMarketplaceAdapter(MarketplaceAdapter):
-    name = "fake_local"
-
-    def fetch_products(self) -> pd.DataFrame:
-        return pd.DataFrame(
-            [
-                {"id": "F1", "title": "Camiseta Dry Fit Premium", "price": 79.9, "stock": 120, "category": "Moda"},
-                {"id": "F2", "title": "Garrafa Térmica 1L", "price": 59.9, "stock": 5, "category": "Casa"},
-                {"id": "F3", "title": "Luminária Mesa Touch RGB", "price": 129.9, "stock": 0, "category": "Casa"},
-            ]
-        )
-
-    def fetch_sales(self) -> pd.DataFrame:
-        return pd.DataFrame()
-
-    def search_competitor(self, query: str) -> list[dict]:
-        return [{"platform": "fake", "query": query, "notes": "competitor stub"}]
+def registered_adapters() -> list[MarketplaceAdapter]:
+    return list(_REGISTRY.values())
 
 
-class ShopifyStubAdapter(MarketplaceAdapter):
-    name = "shopify_stub"
+def load_adapters() -> None:
+    """Importa os adapters reais para que se registrem.
 
-    def fetch_products(self) -> pd.DataFrame:
-        return pd.DataFrame(
-            [
-                {"id": "S1", "title": "Tênis Runner Pro", "price": 299.9, "stock": 40, "category": "Calçados"},
-                {"id": "S2", "title": "Fone ANC Lite 2025", "price": 189.9, "stock": 80, "category": "Eletrônicos"},
-            ]
-        )
+    Chamado uma vez na inicialização da aplicação. Explícito em vez de depender de
+    efeito de importação, para que os testes controlem o registro.
+    """
+    from integrations.marketplaces.amazon import AmazonAdapter
+    from integrations.marketplaces.mercado_livre import MercadoLivreAdapter
+    from integrations.marketplaces.shopee import ShopeeAdapter
+    from integrations.marketplaces.tiktok_shop import TikTokShopAdapter
 
-    def fetch_sales(self) -> pd.DataFrame:
-        return pd.DataFrame()
-
-    def search_competitor(self, query: str) -> list[dict]:
-        return [{"platform": "shopify_stub", "query": query, "notes": "competitor stub"}]
-
-
-class DummyAdapter:
-    name = "dummy"
-
-    def fetch_products(self):
-        return pd.DataFrame(
-            [
-                {"title": "Lanterna Tática Pro LED", "price": 39.9, "orders": 1243, "commission_pct": 12.0, "url": "https://example.com/lanterna", "collected_at": "2026-06-18"},
-                {"title": "Fone Bluetooth Mini", "price": 59.9, "orders": 980, "commission_pct": 9.5, "url": "https://example.com/fone", "collected_at": "2026-06-18"},
-                {"title": "Garrafa Térmica 1L", "price": 49.9, "orders": 756, "commission_pct": 14.0, "url": "https://example.com/garrafa", "collected_at": "2026-06-18"},
-            ]
-        )
-
-    def fetch_sales(self):
-        return pd.DataFrame()
-
-    def search_competitor(self, query: str) -> list[dict]:
-        return [{"platform": "dummy", "query": query, "results": 0}]
-
-
-register(FakeMarketplaceAdapter())
-register(ShopifyStubAdapter())
-register(DummyAdapter())
+    for adapter_cls in (MercadoLivreAdapter, ShopeeAdapter, AmazonAdapter, TikTokShopAdapter):
+        if adapter_cls.name in _REGISTRY:
+            continue
+        try:
+            register(adapter_cls())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("could not register %s: %s", adapter_cls.name, exc)

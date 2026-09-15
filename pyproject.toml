@@ -1,0 +1,42 @@
+[project]
+name = "marketton"
+version = "0.3.0"
+description = "marketTon — Affiliate Intelligence System: plataforma de inteligência e operação para marketing de afiliados multi-marketplace."
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".venv", "frontend_app/node_modules", "alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = [
+    # Construtores de modelo longos ficam mais legíveis em uma linha por campo.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/env.py" = ["E402"]
+"backend/main.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# DeprecationWarning como erro vale para o NOSSO código. Dependências (anyio via
+# starlette/httpx, pytest-asyncio) emitem avisos de terceiros que não controlamos
+# e que não devem quebrar a suíte.
+filterwarnings = [
+    "error::DeprecationWarning",
+    "ignore::DeprecationWarning:anyio.*",
+    "ignore::DeprecationWarning:starlette.*",
+    "ignore::DeprecationWarning:httpx.*",
+    "ignore::DeprecationWarning:pytest_asyncio.*",
+]
+
+[tool.alembic]
+script_location = "alembic"
+prepend_sys_path = "."

@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
+from config.settings import get_settings
 from core.orchestrator import AgentController
 from core.tasks import Task
-from integrations.marketplaces.registry import list_adapter_names
+from integrations.marketplaces.registry import list_adapter_names, load_adapters
 from agents.trend_hunter.agent import run as trend_hunter_run
 from agents.product_hunter.agent import run as product_hunter_run
 from agents.copy_chief.agent import run as copy_chief_run
@@ -16,13 +18,17 @@ from agents.marketplace_manager.agent import run as marketplace_manager_run
 from agents.growth_analyst.agent import run as growth_analyst_run
 from agents.master.agent import run as master_run
 
+load_adapters()
+
 st.set_page_config(page_title="Controle da Operação", layout="wide", page_icon="🎮")
 
 st.markdown("# 🎮 Controle da Operação")
 st.caption("Inicie, pause ou pare a execução dos agentes de marketing digital.")
 
 if "controller" not in st.session_state:
-    st.session_state.controller = AgentController()
+    st.session_state.controller = AgentController(
+        cycle_interval_seconds=float(get_settings().agent_cycle_interval_seconds)
+    )
 controller: AgentController = st.session_state.controller
 controller.load_memory()
 
@@ -86,7 +92,13 @@ with st.sidebar:
             controller.stop()
             st.rerun()
 
-    st.caption("O pipeline roda trend_hunter → product_hunter → marketplace_manager → growth_analyst → copy_chief → master.")
+    st.caption(
+        "O pipeline roda trend_hunter → product_hunter → marketplace_manager → "
+        "growth_analyst → copy_chief → master, e recicla a cada "
+        f"{controller.cycle_interval_seconds:.0f}s."
+        if controller.cycle_interval_seconds
+        else "O pipeline roda uma única vez por execução."
+    )
 
 if status == "stopped":
     for task in controller.tasks:
@@ -100,7 +112,10 @@ else:
     else:
         st.write(last)
 
-    history_path = Path(__file__).resolve().parent.parent / "data" / "reports"
+    # `__file__` é dashboard/pages/controle_operacao.py, então o diretório do
+    # projeto está TRÊS níveis acima. Com dois níveis isto apontava para
+    # dashboard/data/reports, que não existe.
+    history_path = Path(__file__).resolve().parents[2] / "data" / "reports"
     if history_path.exists():
         csvs = sorted(history_path.glob("growth_report_*.csv"))
         if csvs:
