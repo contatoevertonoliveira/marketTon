@@ -46,17 +46,3 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
-<<<<<<< Updated upstream
-node_modules/
-.DS_Store
-Thumbs.db
-*.log
-dist/
-build/
-*.egg-info/
-.eggs/
-data/app.sqlite3
-data/intelligence.sqlite3
-.inventory/
-=======
->>>>>>> Stashed changes
