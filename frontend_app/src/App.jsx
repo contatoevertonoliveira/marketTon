@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import DailyOps from "./pages/DailyOps";
+import Portfolio from "./pages/Portfolio";
+import Integrations from "./pages/Integrations";
 
 const API = "http://127.0.0.1:8000";
 
@@ -55,6 +58,8 @@ const AGENTS = [
 
 const PAGES = [
   { id: "visao-geral", label: "Visão Geral", icon: "🏠" },
+  { id: "daily-ops", label: "Daily Ops", icon: "🎯" },
+  { id: "portfolio", label: "Portfólio", icon: "🗂️" },
   { id: "agentes", label: "Agentes", icon: "🤖" },
   { id: "produtos", label: "Produtos", icon: "📦" },
   { id: "marketplace", label: "Marketplace", icon: "🛒" },
@@ -62,6 +67,7 @@ const PAGES = [
   { id: "feedbacks", label: "Feedbacks", icon: "💬" },
   { id: "agenda", label: "Agenda", icon: "📅" },
   { id: "grupos", label: "Grupos", icon: "👥" },
+  { id: "integracoes", label: "Integrações", icon: "🔌" },
   { id: "configuracoes", label: "Configurações", icon: "⚙️" },
 ];
 
@@ -367,6 +373,20 @@ export default function App() {
             {renderGroups()}
           </div>
         );
+      case "daily-ops":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Daily Ops</h3>
+            <DailyOps />
+          </div>
+        );
+      case "portfolio":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Portfólio</h3>
+            <Portfolio />
+          </div>
+        );
       case "agentes":
         return (
           <div>
@@ -447,6 +467,13 @@ export default function App() {
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Grupos</h3>
             {renderGroups()}
+          </div>
+        );
+      case "integracoes":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Integrações</h3>
+            <Integrations />
           </div>
         );
       case "configuracoes":
