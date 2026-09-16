@@ -1,109 +1,113 @@
 import React, { useEffect, useState } from "react";
-import { getJSON, postJSON } from "../lib/intelApi";
+import { getJSON, postJSON } from "../lib/apiClient";
 import { CreativeChecklist } from "./Creative";
 
 const SCORE_LABELS = {
-  heat: "Heat Score",
-  opportunity: "Opportunity Score",
-  producer_momentum: "Producer Momentum Score",
-  creative_saturation: "Creative Saturation Score",
-  portfolio: "Portfolio Score",
-  creative: "Creative Score",
+  HEAT: "Heat Score",
+  OPPORTUNITY: "Opportunity Score",
+  PRODUCER_MOMENTUM: "Producer Momentum Score",
+  CREATIVE_SATURATION: "Creative Saturation Score",
+  PORTFOLIO: "Portfolio Score",
+  CREATIVE: "Creative Score",
 };
+const DIMENSIONS = Object.keys(SCORE_LABELS);
 
-const ALL_SCORE_TYPES = Object.keys(SCORE_LABELS);
-
-function ScoreBar({ scoreType, record }) {
-  const label = SCORE_LABELS[scoreType];
-  if (!record) {
+function ScoreBlock({ dimension, explanation, onCompute, busy }) {
+  const label = SCORE_LABELS[dimension];
+  if (!explanation) {
     return (
       <div style={{ padding: "8px 0", borderBottom: "1px solid #f6f9fc" }}>
-        <div style={{ fontSize: 12, color: "#8898aa" }}>{label}</div>
-        <div style={{ fontSize: 12, color: "#adb5bd" }}>ainda não calculado — dado insuficiente</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "#8898aa" }}>{label}</span>
+          <button
+            onClick={() => onCompute(dimension)}
+            disabled={busy}
+            style={{ fontSize: 11, border: "1px solid #5e72e4", color: "#5e72e4", background: "#fff", borderRadius: 6, padding: "2px 8px", cursor: "pointer" }}
+          >
+            Calcular
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: "#adb5bd" }}>ainda não calculado</div>
       </div>
     );
   }
+  const higherIsBetter = explanation.higher_score_is_better !== false;
+  const good = higherIsBetter ? explanation.score >= 70 : explanation.score <= 30;
+  const bad = higherIsBetter ? explanation.score < 40 : explanation.score > 60;
+  const color = good ? "#2dce89" : bad ? "#f5365c" : "#f6c944";
   return (
     <div style={{ padding: "8px 0", borderBottom: "1px solid #f6f9fc" }}>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <span style={{ fontSize: 12, color: "#525f7f" }}>{label}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#32325d" }}>{record.result.toFixed(1)}/100</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#32325d" }}>{explanation.score.toFixed(1)}/100</span>
       </div>
       <div style={{ background: "#f0f0f0", borderRadius: 4, height: 6, marginTop: 4 }}>
-        <div
-          style={{
-            width: `${Math.min(100, record.result)}%`,
-            background: record.result >= 70 ? "#2dce89" : record.result >= 40 ? "#f6c944" : "#f5365c",
-            height: 6,
-            borderRadius: 4,
-          }}
-        />
+        <div style={{ width: `${Math.min(100, explanation.score)}%`, background: color, height: 6, borderRadius: 4 }} />
       </div>
       <div style={{ fontSize: 11, color: "#adb5bd", marginTop: 2 }}>
-        confiabilidade: {record.reliability} · {record.version}
+        {explanation.status === "INSUFFICIENT_DATA" ? "dado insuficiente" : "ok"} · confiança{" "}
+        {explanation.confidence != null ? `${(explanation.confidence * 100).toFixed(0)}%` : "—"} ·{" "}
+        {explanation.algorithm_version}
       </div>
+      {explanation.reasons?.length > 0 && (
+        <ul style={{ margin: "4px 0 0", paddingLeft: 16, fontSize: 12 }}>
+          {explanation.reasons.map((r, i) => (
+            <li key={i} style={{ color: r.startsWith("+") ? "#2dce89" : "#f5365c" }}>
+              {r}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
-  );
-}
-
-function Explanation({ record }) {
-  if (!record || !record.reasons?.length) return null;
-  return (
-    <ul style={{ margin: "4px 0 10px", paddingLeft: 16, fontSize: 12 }}>
-      {record.reasons.map((r, i) => (
-        <li key={i} style={{ color: r.polarity === "+" ? "#2dce89" : "#f5365c" }}>
-          {r.polarity} {r.text}
-        </li>
-      ))}
-    </ul>
   );
 }
 
 export default function ProductDetailDrawer({ portfolioItem, onClose, onChanged }) {
   const [product, setProduct] = useState(null);
-  const [scores, setScores] = useState({});
-  const [busy, setBusy] = useState(false);
+  const [item, setItem] = useState(portfolioItem);
+  const [busyDimension, setBusyDimension] = useState("");
+  const [busyTransition, setBusyTransition] = useState(false);
   const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!portfolioItem) return;
-    getJSON(`/products/${portfolioItem.product}/`).then(setProduct);
-    getJSON(`/products/${portfolioItem.product}/scores/`).then((list) => {
-      const map = {};
-      list.forEach((r) => {
-        map[r.score_type] = r;
-      });
-      setScores(map);
-    });
-  }, [portfolioItem]);
+  function load() {
+    getJSON(`/catalog/products/${portfolioItem.product_id}`).then(setProduct);
+    getJSON(`/portfolio/items/${portfolioItem.id}`).then(setItem);
+  }
+
+  useEffect(load, [portfolioItem.id]);
 
   if (!portfolioItem) return null;
 
-  async function recompute() {
-    setBusy(true);
+  const explanationsByDim = {};
+  (product?.score_explanations || []).forEach((e) => {
+    explanationsByDim[e.dimension] = e;
+  });
+
+  async function computeScore(dimension) {
+    setBusyDimension(dimension);
+    setError("");
     try {
-      const list = await postJSON(`/products/${portfolioItem.product}/recompute-scores/`);
-      const map = {};
-      list.forEach((r) => {
-        map[r.score_type] = r;
-      });
-      setScores(map);
+      await postJSON("/scoring/compute", { dimension, target_type: "product", target_id: portfolioItem.product_id });
+      load();
+    } catch (e) {
+      setError(e.message);
     } finally {
-      setBusy(false);
+      setBusyDimension("");
     }
   }
 
   async function doTransition(toState) {
-    setBusy(true);
+    setBusyTransition(true);
+    setError("");
     try {
-      await postJSON(`/portfolio/${portfolioItem.id}/transition/`, { to_state: toState, reason });
+      await postJSON(`/portfolio/items/${item.id}/transition`, { to_state: toState, actor: "operator", reason });
       setReason("");
       onChanged();
     } catch (e) {
-      // eslint-disable-next-line no-alert
-      alert(`Transição inválida: ${e.message}`);
+      setError(e.message);
     } finally {
-      setBusy(false);
+      setBusyTransition(false);
     }
   }
 
@@ -124,8 +128,8 @@ export default function ProductDetailDrawer({ portfolioItem, onClose, onChanged 
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div style={{ fontSize: 11, color: "#8898aa", textTransform: "uppercase" }}>{portfolioItem.marketplace}</div>
-          <h5 style={{ margin: "2px 0 0", color: "#32325d" }}>{portfolioItem.product_title}</h5>
+          <div style={{ fontSize: 11, color: "#8898aa", textTransform: "uppercase" }}>{item.marketplace}</div>
+          <h5 style={{ margin: "2px 0 0", color: "#32325d" }}>{product?.title || `Produto #${item.product_id}`}</h5>
         </div>
         <button onClick={onClose} style={{ border: "none", background: "transparent", fontSize: 20, cursor: "pointer" }}>
           ×
@@ -134,61 +138,50 @@ export default function ProductDetailDrawer({ portfolioItem, onClose, onChanged 
 
       {product && (
         <div style={{ marginTop: 10, fontSize: 13, color: "#525f7f" }}>
-          R$ {Number(product.price ?? 0).toFixed(2)} · comissão {product.commission_pct ?? "—"}% · fonte {product.source} (
-          {product.reliability})
+          {product.currency || "R$"} {Number(product.price ?? 0).toFixed(2)} · comissão{" "}
+          {product.affiliate_commission_pct != null ? `${product.affiliate_commission_pct}%` : "—"} · rating{" "}
+          {product.rating ?? "—"}
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
-        <h6 style={{ color: "#32325d", margin: 0 }}>Scores</h6>
-        <button
-          onClick={recompute}
-          disabled={busy}
-          style={{ fontSize: 12, border: "1px solid #5e72e4", color: "#5e72e4", background: "#fff", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}
-        >
-          Recalcular
-        </button>
-      </div>
-      {ALL_SCORE_TYPES.map((t) => (
-        <React.Fragment key={t}>
-          <ScoreBar scoreType={t} record={scores[t]} />
-          <Explanation record={scores[t]} />
-        </React.Fragment>
+      <h6 style={{ color: "#32325d", marginTop: 16 }}>Scores</h6>
+      {DIMENSIONS.map((d) => (
+        <ScoreBlock
+          key={d}
+          dimension={d}
+          explanation={explanationsByDim[d]}
+          onCompute={computeScore}
+          busy={busyDimension === d}
+        />
       ))}
 
       <h6 style={{ color: "#32325d", marginTop: 16 }}>Estado do portfólio</h6>
-      <div style={{ fontSize: 13, color: "#32325d", fontWeight: 700 }}>{portfolioItem.state}</div>
+      <div style={{ fontSize: 13, color: "#32325d", fontWeight: 700 }}>{item.state}</div>
       <input
         placeholder="motivo da transição (opcional)"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        style={{ width: "100%", marginTop: 8, padding: "6px 8px", border: "1px solid #dee2e6", borderRadius: 6, fontSize: 12 }}
+        style={{ width: "100%", marginTop: 8, padding: "6px 8px", border: "1px solid #dee2e6", borderRadius: 6, fontSize: 12, boxSizing: "border-box" }}
       />
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-        {portfolioItem.allowed_next_states.map((s) => (
+        {(item.allowed_transitions || []).map((s) => (
           <button
             key={s}
-            disabled={busy}
+            disabled={busyTransition}
             onClick={() => doTransition(s)}
-            style={{
-              fontSize: 11,
-              border: "1px solid #5e72e4",
-              color: "#5e72e4",
-              background: "#fff",
-              borderRadius: 999,
-              padding: "4px 10px",
-              cursor: "pointer",
-            }}
+            style={{ fontSize: 11, border: "1px solid #5e72e4", color: "#5e72e4", background: "#fff", borderRadius: 999, padding: "4px 10px", cursor: "pointer" }}
           >
             → {s}
           </button>
         ))}
-        {portfolioItem.allowed_next_states.length === 0 && (
+        {(item.allowed_transitions || []).length === 0 && (
           <span style={{ fontSize: 12, color: "#8898aa" }}>estado terminal, sem transições disponíveis</span>
         )}
       </div>
 
-      <CreativeChecklist portfolioItemId={portfolioItem.id} />
+      {error && <div style={{ fontSize: 12, color: "#f5365c", marginTop: 8 }}>{error}</div>}
+
+      <CreativeChecklist portfolioItemId={item.id} productId={item.product_id} />
     </div>
   );
 }

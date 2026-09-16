@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import DailyOps from "./pages/DailyOps";
 import Portfolio from "./pages/Portfolio";
 import Integrations from "./pages/Integrations";
+import Login from "./pages/Login";
+import { API_BASE, isLoggedIn, logout, setAuthExpiredHandler } from "./lib/apiClient";
 
 const API = "http://127.0.0.1:8000";
 
@@ -111,7 +113,8 @@ function rowHover() {
 }
 
 export default function App() {
-  const [page, setPage] = useState("visao-geral");
+  const [authed, setAuthed] = useState(isLoggedIn());
+  const [page, setPage] = useState("daily-ops");
   const [badge, setBadge] = useState(null);
   const [dailyTarget, setDailyTarget] = useState(1);
   const [kpi, setKpi] = useState(null);
@@ -168,6 +171,10 @@ export default function App() {
     loadAll(true);
     const id = setInterval(() => loadAll(false), 15000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    setAuthExpiredHandler(() => setAuthed(false));
   }, []);
 
   const todaySales = kpi?.orders ?? 0;
@@ -506,6 +513,10 @@ export default function App() {
     }
   };
 
+  if (!authed) {
+    return <Login onLoggedIn={() => setAuthed(true)} />;
+  }
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#f8f9fe" }}>
       <aside
@@ -537,8 +548,26 @@ export default function App() {
           {PAGES.map(sidebarItem)}
         </nav>
 
-        <div style={{ marginTop: "auto", padding: "0 10px", color: "#829ab1", fontSize: 12 }}>
-          Backend online • {API}
+        <div style={{ marginTop: "auto", padding: "0 10px" }}>
+          <div style={{ color: "#829ab1", fontSize: 12, marginBottom: 8 }}>Backend: {API_BASE}</div>
+          <button
+            onClick={() => {
+              logout();
+              setAuthed(false);
+            }}
+            style={{
+              width: "100%",
+              background: "rgba(255,255,255,0.08)",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "8px 10px",
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            Sair
+          </button>
         </div>
       </aside>
 

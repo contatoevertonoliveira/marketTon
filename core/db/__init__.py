@@ -31,6 +31,7 @@ from core.db.catalog import (
 from core.db.creative import CreativeAsset, CreativeAssetEvent, Publication
 from core.db.jobs import Job, JobEvent
 from core.db.learning import PredictionOutcome, ScoreCalibration
+from core.db.marketplace_credentials import MarketplaceCredential
 from core.db.portfolio import (
     PortfolioItem,
     PortfolioTransition,
@@ -96,6 +97,8 @@ __all__ = [
     # learning
     "PredictionOutcome",
     "ScoreCalibration",
+    # credenciais de marketplace
+    "MarketplaceCredential",
     # ai
     "AIInterpretation",
     "AIInterpretationKind",

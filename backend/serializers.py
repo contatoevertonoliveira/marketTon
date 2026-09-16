@@ -314,6 +314,8 @@ def product_detail(
 def creative_asset_out(asset: CreativeAsset) -> CreativeAssetOut:
     return CreativeAssetOut(
         id=asset.id,
+        portfolio_item_id=asset.portfolio_item_id,
+        product_id=asset.product_id,
         asset_type=enum_value(asset.asset_type),
         status=enum_value(asset.status),
         version=asset.version,

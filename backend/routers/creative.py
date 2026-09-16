@@ -147,9 +147,17 @@ def create_asset(
             ),
         ) from None
 
+    if payload.portfolio_item_id is not None:
+        if session.get(PortfolioItem, payload.portfolio_item_id) is None:
+            raise HTTPException(
+                status_code=404, detail=f"item de portfólio {payload.portfolio_item_id} não encontrado"
+            )
+
     now = datetime.now(UTC)
     asset = CreativeAsset(
         asset_type=asset_type,
+        portfolio_item_id=payload.portfolio_item_id,
+        product_id=payload.product_id,
         status=CreativeStatus.PENDING,
         status_changed_at=now,
         version=1,

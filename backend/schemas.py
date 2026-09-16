@@ -206,6 +206,8 @@ class ProductDetail(ProductSummary):
 
 class CreativeAssetOut(BaseModel):
     id: int
+    portfolio_item_id: int | None = None
+    product_id: int | None = None
     asset_type: str
     status: str
     version: int
@@ -310,6 +312,11 @@ class CreativeStatusUpdate(BaseModel):
 
 class CreativeAssetCreate(BaseModel):
     asset_type: str
+    # Ao menos um dos dois deveria ser informado na prática — sem isso o
+    # material fica órfão e nunca aparece em `GET /creatives/assets?portfolio_item_id=`
+    # nem no portão de publicação (briefing §8).
+    portfolio_item_id: int | None = None
+    product_id: int | None = None
     title: str | None = None
     content_text: str | None = None
     content_url: str | None = None

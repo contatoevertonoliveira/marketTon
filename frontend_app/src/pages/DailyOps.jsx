@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getJSON } from "../lib/intelApi";
+import { getJSON } from "../lib/apiClient";
 
 const card = {
   background: "#fff",
@@ -7,6 +7,16 @@ const card = {
   padding: 16,
   boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)",
 };
+
+function fmtMoney(v) {
+  if (v === null || v === undefined) return "—";
+  return Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function fmtPct(v) {
+  if (v === null || v === undefined) return "—";
+  return `${(Number(v) * 100).toFixed(1)}%`;
+}
 
 function StatCard({ label, value, note, color = "#5e72e4" }) {
   return (
@@ -20,80 +30,99 @@ function StatCard({ label, value, note, color = "#5e72e4" }) {
   );
 }
 
-function UnavailableCard({ label, reason }) {
+function CategoryRow({ label, items }) {
   return (
-    <div className="col-xl-3 col-lg-6" style={{ marginBottom: 14 }}>
-      <div style={{ ...card, borderLeft: "4px solid #8898aa", opacity: 0.75 }}>
-        <div style={{ fontSize: 12, color: "#8898aa", textTransform: "uppercase", letterSpacing: 1 }}>{label}</div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: "#8898aa", marginTop: 4 }}>Sem fonte de dados</div>
-        <div style={{ fontSize: 12, color: "#adb5bd", marginTop: 6 }}>{reason}</div>
-      </div>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f6f9fc" }}>
+      <span style={{ fontSize: 13, color: "#525f7f" }}>{label}</span>
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          color: "#fff",
+          background: items.length ? "#5e72e4" : "#8898aa",
+          borderRadius: 999,
+          padding: "3px 10px",
+        }}
+      >
+        {items.length}
+      </span>
     </div>
   );
 }
 
 export default function DailyOps() {
-  const [ops, setOps] = useState(null);
+  const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    getJSON("/dashboard/daily-ops")
-      .then((data) => !cancelled && setOps(data))
+    getJSON("/operations/daily")
+      .then((res) => !cancelled && setData(res))
       .catch((e) => !cancelled && setError(e.message));
     return () => {
       cancelled = true;
     };
   }, []);
 
-  if (error) {
-    return <p style={{ color: "#f5365c" }}>Não foi possível carregar o Daily Ops: {error}</p>;
-  }
-  if (!ops) {
-    return <p style={{ color: "#8898aa" }}>Carregando...</p>;
-  }
+  if (error) return <p style={{ color: "#f5365c" }}>Não foi possível carregar o Daily Ops: {error}</p>;
+  if (!data) return <p style={{ color: "#8898aa" }}>Carregando...</p>;
+
+  const { kpis } = data;
 
   return (
     <div>
       <p style={{ color: "#525f7f" }}>
-        Estado real da operação (briefing §9) — o que existe hoje é dado real; o que não tem fonte ainda aparece
-        marcado como tal, em vez de mostrar zero.
+        Estado real da operação (briefing §9) — o que existe hoje é dado real; quando algo não pode ser calculado, a
+        nota abaixo explica o porquê em vez de mostrar um número inventado.
       </p>
+
       <div className="row" style={{ marginTop: 8 }}>
-        <StatCard label="Oportunidades hoje" value={ops.opportunities_today.count} color="#2dce89" />
-        <StatCard label="Em forte crescimento" value={ops.trending_up.count} color="#11cdef" note="heat score ≥ 70" />
-        <StatCard label="Esfriando" value={ops.cooling_down.count} color="#fb6340" note="heat score < 30" />
-        <StatCard label="Recomendados" value={ops.recommended.count} color="#5e72e4" />
-        <StatCard label="Aguardando decisão" value={ops.awaiting_decision.count} color="#f6c944" />
-        <StatCard label="Afiliação pendente" value={ops.affiliation_pending.count} color="#f5365c" />
-        <StatCard label="Criativos pendentes" value={ops.creative_pending.count} color="#fb6340" />
-        <StatCard label="Criativos concluídos" value={ops.creative_ready.count} color="#2dce89" />
-        <StatCard label="Prontos p/ publicar" value={ops.ready_to_publish.count} color="#11cdef" />
-        <StatCard label="Publicados" value={ops.published.count} color="#2dce89" />
-        <UnavailableCard label="Alertas" reason={ops.alerts.reason} />
-        <UnavailableCard label="Vendas e comissões" reason={ops.sales_and_commissions.reason} />
+        <StatCard label="Vendas no período" value={kpis.sales_count} color="#2dce89" note={`${kpis.days} dia(s)`} />
+        <StatCard label="Receita bruta" value={fmtMoney(kpis.gross_revenue)} color="#5e72e4" />
+        <StatCard label="Comissão estimada" value={fmtMoney(kpis.commission_estimated)} color="#11cdef" />
+        <StatCard label="Ticket médio" value={fmtMoney(kpis.average_ticket)} color="#fb6340" />
+        <StatCard label="Produtos ativos" value={kpis.active_products} color="#5e72e4" />
+        <StatCard label="Com venda" value={kpis.products_with_sales} color="#2dce89" />
+        <StatCard label="Sem venda" value={kpis.products_without_sales} color="#f5365c" />
+        <StatCard label="CTR" value={fmtPct(kpis.ctr)} color="#11cdef" />
+        <StatCard label="Conversão" value={fmtPct(kpis.conversion_rate)} color="#11cdef" />
+        <StatCard label="ROAS" value={kpis.roas ?? "—"} color="#fb6340" />
       </div>
 
       <div style={{ ...card, marginTop: 8 }}>
-        <h6 style={{ color: "#32325d" }}>Portfólio por estado</h6>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-          {Object.entries(ops.portfolio_performance.by_state).map(([state, count]) => (
-            <span
-              key={state}
-              style={{
-                background: "#f6f9fc",
-                border: "1px solid #e9ecef",
-                borderRadius: 8,
-                padding: "6px 10px",
-                fontSize: 12,
-                color: "#525f7f",
-              }}
-            >
-              {state}: <strong>{count}</strong>
-            </span>
-          ))}
-        </div>
+        <h6 style={{ color: "#32325d", marginTop: 0 }}>Categorias de decisão</h6>
+        <CategoryRow label="Oportunidades hoje" items={data.opportunities_today} />
+        <CategoryRow label="Recomendados" items={data.recommended} />
+        <CategoryRow label="Aguardando decisão" items={data.awaiting_decision} />
+        <CategoryRow label="Afiliação pendente" items={data.affiliation_pending} />
+        <CategoryRow label="Criativos pendentes" items={data.creatives_pending} />
+        <CategoryRow label="Criativos prontos" items={data.creatives_ready} />
+        <CategoryRow label="Prontos p/ publicar" items={data.ready_to_publish} />
+        <CategoryRow label="Publicados" items={data.published} />
+        <CategoryRow label="Precisam otimização" items={data.optimization_required} />
       </div>
+
+      {kpis.notes?.length > 0 && (
+        <div style={{ ...card, marginTop: 16, background: "#f6f9fc" }}>
+          <h6 style={{ color: "#32325d", marginTop: 0 }}>Notas do cálculo</h6>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#8898aa" }}>
+            {kpis.notes.map((n, i) => (
+              <li key={i}>{n}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.alerts?.length > 0 && (
+        <div style={{ ...card, marginTop: 16 }}>
+          <h6 style={{ color: "#32325d", marginTop: 0 }}>Alertas</h6>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#f5365c" }}>
+            {data.alerts.map((a, i) => (
+              <li key={i}>{a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

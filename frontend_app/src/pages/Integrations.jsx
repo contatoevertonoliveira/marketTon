@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { INTEL_API, getJSON } from "../lib/intelApi";
+import { API_BASE, getJSON, getTokens, putJSON } from "../lib/apiClient";
 
 const card = {
   background: "#fff",
@@ -17,20 +17,15 @@ const input = {
   fontSize: 13,
 };
 
-async function putJSON(path, body) {
-  const res = await fetch(`${INTEL_API}${path}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail || res.statusText);
-  return res.json();
-}
+const NAMES = {
+  mercado_livre: "Mercado Livre",
+  shopee: "Shopee",
+  amazon: "Amazon",
+  tiktok_shop: "TikTok Shop",
+};
 
-function MarketplaceCard({ marketplace, onSaved }) {
-  const [enabled, setEnabled] = useState(marketplace.credential_enabled);
-  const [mode, setMode] = useState(marketplace.credential_mode);
-  const [scope, setScope] = useState(marketplace.credential_scope);
+function MarketplaceCard({ credential, onSaved }) {
+  const [enabled, setEnabled] = useState(credential.enabled);
   const [values, setValues] = useState({});
   const [saving, setSaving] = useState(false);
   const [mlAuthUrl, setMlAuthUrl] = useState("");
@@ -40,7 +35,7 @@ function MarketplaceCard({ marketplace, onSaved }) {
     setSaving(true);
     setError("");
     try {
-      const data = await putJSON(`/marketplaces/${marketplace.slug}/credentials/`, { enabled, mode, scope, values });
+      const data = await putJSON(`/marketplaces/${credential.marketplace}/credentials`, { enabled, values });
       setValues({});
       onSaved(data);
     } catch (e) {
@@ -53,9 +48,14 @@ function MarketplaceCard({ marketplace, onSaved }) {
   async function connectMercadoLivre() {
     setError("");
     try {
-      const data = await (await fetch(`${INTEL_API}/marketplaces/mercado_livre/oauth/start/`, { method: "POST" })).json();
-      if (!data.ok) {
-        setError(data.error || "falha ao iniciar login");
+      const { access } = getTokens();
+      const res = await fetch(`${API_BASE}/marketplaces/mercado_livre/oauth/start`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${access}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.detail || "falha ao iniciar login");
         return;
       }
       setMlAuthUrl(data.url);
@@ -65,25 +65,20 @@ function MarketplaceCard({ marketplace, onSaved }) {
     }
   }
 
-  const accessTokenConfigured = marketplace.credential_status?.access_token;
-
   return (
     <div style={{ ...card, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <strong style={{ color: "#32325d" }}>{marketplace.name}</strong>
+          <strong style={{ color: "#32325d" }}>{NAMES[credential.marketplace] || credential.marketplace}</strong>
           <div style={{ fontSize: 11, color: "#8898aa" }}>
-            {marketplace.slug === "mercado_livre" && (
-              <span style={{ color: accessTokenConfigured ? "#2dce89" : "#f5365c" }}>
-                {accessTokenConfigured ? "conectado (access token presente)" : "não conectado"}
+            {credential.configured === null ? (
+              "sem diagnóstico de conector"
+            ) : (
+              <span style={{ color: credential.configured ? "#2dce89" : "#f5365c" }}>
+                {credential.configured ? "conectado" : "não configurado"}
               </span>
             )}
-            {marketplace.slug !== "mercado_livre" && marketplace.credential_schema.length === 0 && "sem integração implementada ainda"}
-            {marketplace.slug !== "mercado_livre" &&
-              marketplace.credential_schema.length > 0 &&
-              (Object.values(marketplace.credential_status || {}).every(Boolean)
-                ? "credenciais configuradas"
-                : "credenciais incompletas")}
+            {credential.reliability != null && ` · confiabilidade ${credential.reliability}`}
           </div>
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#525f7f" }}>
@@ -93,36 +88,21 @@ function MarketplaceCard({ marketplace, onSaved }) {
       </div>
 
       <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <select style={{ ...input, flex: 1 }} value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="affiliate">afiliado</option>
-            <option value="dropshipping">dropshipping</option>
-            <option value="both">ambos</option>
-          </select>
+        {credential.fields.map((field) => (
           <input
-            style={{ ...input, flex: 1 }}
-            placeholder="scope"
-            value={scope}
-            onChange={(e) => setScope(e.target.value)}
+            key={field.name}
+            style={{ ...input, width: "100%" }}
+            type={field.secret ? "password" : "text"}
+            placeholder={`${field.label}${credential.values_set?.[field.name] ? " (configurado — deixe em branco para manter)" : ""}`}
+            value={values[field.name] || ""}
+            onChange={(e) => setValues({ ...values, [field.name]: e.target.value })}
           />
-        </div>
-
-        {marketplace.credential_schema.map((field) => (
-          <div key={field.name}>
-            <input
-              style={{ ...input, width: "100%" }}
-              type={field.secret ? "password" : "text"}
-              placeholder={`${field.label}${marketplace.credential_status?.[field.name] ? " (configurado — deixe em branco para manter)" : ""}`}
-              value={values[field.name] || ""}
-              onChange={(e) => setValues({ ...values, [field.name]: e.target.value })}
-            />
-          </div>
         ))}
 
-        {marketplace.slug === "mercado_livre" && (
+        {credential.marketplace === "mercado_livre" && (
           <div style={{ fontSize: 11, color: "#8898aa", background: "#f6f9fc", padding: 8, borderRadius: 6 }}>
             Cadastre esta Redirect URI no app da Mercado Livre:{" "}
-            <code>http://127.0.0.1:8001/api/marketplaces/mercado_livre/oauth/callback/</code>
+            <code>{API_BASE}/marketplaces/mercado_livre/oauth/callback</code>
           </div>
         )}
 
@@ -136,7 +116,7 @@ function MarketplaceCard({ marketplace, onSaved }) {
           >
             Salvar
           </button>
-          {marketplace.slug === "mercado_livre" && (
+          {credential.marketplace === "mercado_livre" && (
             <button
               onClick={connectMercadoLivre}
               style={{ background: "#5e72e4", color: "#fff", border: "none", borderRadius: 6, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}
@@ -147,7 +127,10 @@ function MarketplaceCard({ marketplace, onSaved }) {
         </div>
         {mlAuthUrl && (
           <div style={{ fontSize: 11, color: "#525f7f" }}>
-            Se a aba não abriu: <a href={mlAuthUrl} target="_blank" rel="noreferrer">{mlAuthUrl}</a>
+            Se a aba não abriu:{" "}
+            <a href={mlAuthUrl} target="_blank" rel="noreferrer">
+              {mlAuthUrl}
+            </a>
           </div>
         )}
       </div>
@@ -156,13 +139,13 @@ function MarketplaceCard({ marketplace, onSaved }) {
 }
 
 export default function Integrations() {
-  const [marketplaces, setMarketplaces] = useState([]);
+  const [credentials, setCredentials] = useState([]);
   const [error, setError] = useState(null);
 
   function load() {
-    getJSON("/marketplaces/")
+    getJSON("/marketplaces/credentials")
       .then((data) => {
-        setMarketplaces(data.results || []);
+        setCredentials(data);
         setError(null);
       })
       .catch((e) => setError(e.message));
@@ -171,17 +154,17 @@ export default function Integrations() {
   useEffect(load, []);
 
   if (error) {
-    return <p style={{ color: "#f5365c" }}>Não foi possível falar com o backend de inteligência (porta 8001): {error}</p>;
+    return <p style={{ color: "#f5365c" }}>Não foi possível falar com o backend: {error}</p>;
   }
 
   return (
     <div>
       <p style={{ color: "#525f7f" }}>
-        Credenciais ficam salvas no banco (não em <code>.env</code>) — cada marketplace tem seu próprio esquema de
+        Credenciais ficam salvas no Postgres (não em <code>.env</code>) — cada marketplace tem seu próprio esquema de
         autenticação. Segredos nunca voltam preenchidos aqui; o campo mostra se já está configurado.
       </p>
-      {marketplaces.map((m) => (
-        <MarketplaceCard key={m.slug} marketplace={m} onSaved={load} />
+      {credentials.map((c) => (
+        <MarketplaceCard key={c.marketplace} credential={c} onSaved={load} />
       ))}
     </div>
   );

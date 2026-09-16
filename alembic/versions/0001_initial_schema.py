@@ -296,34 +296,9 @@ def upgrade() -> None:
     op.create_index("ix_score_contributions_run_id", "score_contributions", ["run_id"])
 
     # --- Portfólio ------------------------------------------------------------
-    op.create_table(
-        "recommendations",
-        sa.Column("id", BIGINT, primary_key=True),
-        sa.Column("portfolio_item_id", sa.Integer(), sa.ForeignKey("portfolio_items.id", ondelete="CASCADE")),
-        sa.Column("product_id", sa.Integer(), sa.ForeignKey("products.id", ondelete="CASCADE")),
-        sa.Column("kind", _enum("recommendation_kind", RECOMMENDATION_KIND), nullable=False),
-        sa.Column("dimension", _enum("score_dimension", SCORE_DIMENSION)),
-        sa.Column("title", sa.String(255), nullable=False),
-        sa.Column("rationale", sa.Text()),
-        sa.Column("positive_factors", sa.JSON()),
-        sa.Column("negative_factors", sa.JSON()),
-        sa.Column("priority", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("confidence", sa.Float()),
-        sa.Column("score_run_id", BIGINT, sa.ForeignKey("score_runs.id", ondelete="SET NULL")),
-        sa.Column("is_actioned", sa.Boolean(), nullable=False, server_default=sa.false()),
-        sa.Column("actioned_at", sa.DateTime(timezone=True)),
-        sa.Column("actioned_by", sa.String(128)),
-        sa.Column("outcome", sa.Text()),
-        sa.Column("expires_at", sa.DateTime(timezone=True)),
-        *_timestamps(),
-    )
-    op.create_index("ix_recommendations_portfolio_item_id", "recommendations", ["portfolio_item_id"])
-    op.create_index("ix_recommendations_product_id", "recommendations", ["product_id"])
-    op.create_index("ix_recommendations_kind", "recommendations", ["kind"])
-    op.create_index("ix_recommendations_score_run_id", "recommendations", ["score_run_id"])
-    op.create_index("ix_recommendations_open", "recommendations", ["is_actioned", "priority"])
-    op.create_index("ix_recommendations_kind_created", "recommendations", ["kind", "created_at"])
-
+    # `portfolio_items` precisa existir antes de `recommendations`, que tem FK
+    # para ela — Postgres, ao contrário do SQLite usado nos testes, valida isso
+    # na hora do CREATE TABLE.
     op.create_table(
         "portfolio_items",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -352,6 +327,34 @@ def upgrade() -> None:
     op.create_index("ix_portfolio_items_state", "portfolio_items", ["state"])
     op.create_index("ix_portfolio_items_entry_score_run_id", "portfolio_items", ["entry_score_run_id"])
     op.create_index("ix_portfolio_items_state_changed", "portfolio_items", ["state", "state_changed_at"])
+
+    op.create_table(
+        "recommendations",
+        sa.Column("id", BIGINT, primary_key=True),
+        sa.Column("portfolio_item_id", sa.Integer(), sa.ForeignKey("portfolio_items.id", ondelete="CASCADE")),
+        sa.Column("product_id", sa.Integer(), sa.ForeignKey("products.id", ondelete="CASCADE")),
+        sa.Column("kind", _enum("recommendation_kind", RECOMMENDATION_KIND), nullable=False),
+        sa.Column("dimension", _enum("score_dimension", SCORE_DIMENSION)),
+        sa.Column("title", sa.String(255), nullable=False),
+        sa.Column("rationale", sa.Text()),
+        sa.Column("positive_factors", sa.JSON()),
+        sa.Column("negative_factors", sa.JSON()),
+        sa.Column("priority", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("confidence", sa.Float()),
+        sa.Column("score_run_id", BIGINT, sa.ForeignKey("score_runs.id", ondelete="SET NULL")),
+        sa.Column("is_actioned", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column("actioned_at", sa.DateTime(timezone=True)),
+        sa.Column("actioned_by", sa.String(128)),
+        sa.Column("outcome", sa.Text()),
+        sa.Column("expires_at", sa.DateTime(timezone=True)),
+        *_timestamps(),
+    )
+    op.create_index("ix_recommendations_portfolio_item_id", "recommendations", ["portfolio_item_id"])
+    op.create_index("ix_recommendations_product_id", "recommendations", ["product_id"])
+    op.create_index("ix_recommendations_kind", "recommendations", ["kind"])
+    op.create_index("ix_recommendations_score_run_id", "recommendations", ["score_run_id"])
+    op.create_index("ix_recommendations_open", "recommendations", ["is_actioned", "priority"])
+    op.create_index("ix_recommendations_kind_created", "recommendations", ["kind", "created_at"])
 
     op.create_table(
         "portfolio_transitions",
@@ -687,8 +690,8 @@ def downgrade() -> None:
         "creative_asset_events",
         "creative_assets",
         "portfolio_transitions",
-        "portfolio_items",
         "recommendations",
+        "portfolio_items",
         "score_contributions",
         "score_runs",
         "score_algorithms",

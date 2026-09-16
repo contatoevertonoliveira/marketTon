@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getJSON, postJSON } from "../lib/intelApi";
+import { getJSON, postJSON } from "../lib/apiClient";
 import ProductDetailDrawer from "./ProductDetail";
 
 const STATE_ORDER = [
@@ -27,10 +27,10 @@ export default function Portfolio() {
   const [error, setError] = useState(null);
 
   function load() {
-    Promise.all([getJSON("/products/?"), getJSON("/portfolio/")])
+    Promise.all([getJSON("/catalog/products?limit=200"), getJSON("/portfolio/items?limit=500")])
       .then(([p, i]) => {
-        setProducts(p.results || []);
-        setItems(i.results || []);
+        setProducts(Array.isArray(p) ? p : p.items || []);
+        setItems(Array.isArray(i) ? i : i.items || []);
         setError(null);
       })
       .catch((e) => setError(e.message));
@@ -39,22 +39,20 @@ export default function Portfolio() {
   useEffect(load, []);
 
   async function addToPortfolio(productId) {
-    await postJSON("/portfolio/", { product: productId });
+    await postJSON("/portfolio/items", { product_id: productId });
     load();
   }
 
-  const catalogOnly = products.filter((p) => !p.portfolio_state);
+  const inPortfolioIds = new Set(items.map((i) => i.product_id));
+  const catalogOnly = products.filter((p) => !inPortfolioIds.has(p.id));
+  const productById = Object.fromEntries(products.map((p) => [p.id, p]));
   const byState = STATE_ORDER.reduce((acc, s) => {
     acc[s] = items.filter((i) => i.state === s);
     return acc;
   }, {});
 
   if (error) {
-    return (
-      <p style={{ color: "#f5365c" }}>
-        Não foi possível falar com o backend de inteligência (porta 8001): {error}
-      </p>
-    );
+    return <p style={{ color: "#f5365c" }}>Não foi possível falar com o backend ({error}). Confira se você está logado e se a API está no ar.</p>;
   }
 
   return (
@@ -64,8 +62,7 @@ export default function Portfolio() {
         <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
           {catalogOnly.length === 0 && (
             <span style={{ fontSize: 12, color: "#8898aa" }}>
-              Nenhum produto no catálogo ainda. Rode <code>manage.py ingest_mercadolivre</code> com credenciais
-              configuradas para popular.
+              Nenhum produto no catálogo ainda. Configure credenciais em Integrações e ingira produtos reais.
             </span>
           )}
           {catalogOnly.map((p) => (
@@ -76,8 +73,8 @@ export default function Portfolio() {
               <div>
                 <div style={{ fontSize: 13, color: "#32325d" }}>{p.title}</div>
                 <div style={{ fontSize: 11, color: "#8898aa" }}>
-                  {p.marketplace} · R$ {Number(p.price ?? 0).toFixed(2)} · opportunity{" "}
-                  {p.latest_opportunity_score != null ? p.latest_opportunity_score.toFixed(0) : "—"}
+                  {p.marketplace} · {p.currency || "R$"} {Number(p.price ?? 0).toFixed(2)} · opportunity{" "}
+                  {p.scores?.OPPORTUNITY != null ? p.scores.OPPORTUNITY.toFixed(0) : "—"}
                 </div>
               </div>
               <button
@@ -112,7 +109,7 @@ export default function Portfolio() {
                     color: "#32325d",
                   }}
                 >
-                  {item.product_title}
+                  {item.label || productById[item.product_id]?.title || `Produto #${item.product_id}`}
                 </div>
               ))}
             </div>

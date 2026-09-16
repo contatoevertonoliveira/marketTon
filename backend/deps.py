@@ -34,11 +34,48 @@ def get_ai_client() -> AIClient:
 
 
 def get_adapters() -> dict:
-    """Adapters registrados, com os reais já carregados."""
+    """Adapters registrados, com os reais já carregados.
+
+    Os adapters são singletons no `registry` — construídos uma vez, na primeira
+    chamada, com a config de `.env`/`config/settings.py`. Antes de devolvê-los,
+    sobrepomos qualquer credencial salva em `marketplace_credentials` (tela de
+    Integrações). Como isso roda a cada chamada, editar uma credencial passa a
+    valer no próximo request, sem reiniciar o processo — sem essa sobreposição
+    o `.env` venceria sempre, e a tela de Integrações não serviria pra nada.
+    """
     from integrations.marketplaces.registry import list_adapter_names, load_adapters, resolve
 
     load_adapters()
-    return {name: resolve(name) for name in list_adapter_names()}
+    adapters = {name: resolve(name) for name in list_adapter_names()}
+    _apply_credential_overrides(adapters)
+    return adapters
+
+
+def _apply_credential_overrides(adapters: dict) -> None:
+    from sqlalchemy import select
+
+    from core.db.marketplace_credentials import MarketplaceCredential
+    from core.db.session import session_scope
+
+    try:
+        with session_scope() as session:
+            rows = session.scalars(
+                select(MarketplaceCredential).where(MarketplaceCredential.enabled.is_(True))
+            ).all()
+            overrides = {row.marketplace.value: dict(row.values or {}) for row in rows}
+    except Exception:  # noqa: BLE001 - banco fora do ar não pode derrubar o registro de adapters
+        return
+
+    for name, values in overrides.items():
+        adapter = adapters.get(name)
+        cfg = getattr(adapter, "cfg", None)
+        if cfg is None:
+            continue
+        for key, value in values.items():
+            # Só sobrescreve campos que o dataclass de config realmente declara,
+            # e só quando um valor foi de fato salvo (string vazia não apaga).
+            if value and hasattr(cfg, key):
+                setattr(cfg, key, value)
 
 
 __all__ = ["get_adapters", "get_ai_client", "get_session"]
