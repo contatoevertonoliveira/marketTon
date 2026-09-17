@@ -44,6 +44,11 @@ class MarketplaceCredential(Base, TimestampMixin):
     # login, para validar o `state` no callback e não persistir o access_token
     # de um redirect forjado.
     oauth_state: Mapped[str | None] = mapped_column(String(64))
+    # PKCE (RFC 7636): a Mercado Livre exige `code_verifier` na troca do código
+    # por token quando o app tem PKCE habilitado — descoberto ao vivo via
+    # `invalid_request: code_verifier is a required parameter`. Gerado junto
+    # com `oauth_state` no início do fluxo, consumido no callback.
+    oauth_code_verifier: Mapped[str | None] = mapped_column(String(128))
 
     __table_args__ = (UniqueConstraint("marketplace", name="uq_marketplace_credentials_marketplace"),)
 

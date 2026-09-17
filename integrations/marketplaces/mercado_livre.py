@@ -203,27 +203,36 @@ class MercadoLivreAdapter(MarketplaceAdapter):
 
     # --- OAuth ----------------------------------------------------------------
 
-    def build_authorization_url(self, state: str) -> str:
+    def build_authorization_url(self, state: str, *, code_challenge: str | None = None) -> str:
         if not self.cfg.client_id:
             raise MercadoLivreNotConfigured("MARKETPLACE_MERCADOLIVRE_CLIENT_ID não configurado.")
-        return (
+        url = (
             f"{self.cfg.auth_url}?response_type=code&client_id={self.cfg.client_id}"
             f"&redirect_uri={self.cfg.redirect_uri}&state={state}"
         )
+        if code_challenge:
+            # PKCE (RFC 7636): alguns apps da Mercado Livre exigem isso — descoberto
+            # ao vivo pela troca de token falhando com "code_verifier is a required
+            # parameter" quando a autorização não carregava o challenge.
+            url += f"&code_challenge={code_challenge}&code_challenge_method=S256"
+        return url
 
-    def exchange_code_for_token(self, code: str) -> TokenSet:
+    def exchange_code_for_token(self, code: str, *, code_verifier: str | None = None) -> TokenSet:
         if not (self.cfg.client_id and self.cfg.client_secret):
             raise MercadoLivreNotConfigured("client_id e client_secret são obrigatórios.")
+        data = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "client_id": self.cfg.client_id,
+            "client_secret": self.cfg.client_secret,
+            "redirect_uri": self.cfg.redirect_uri,
+        }
+        if code_verifier:
+            data["code_verifier"] = code_verifier
         try:
             response = requests.post(
                 self.cfg.token_url,
-                data={
-                    "grant_type": "authorization_code",
-                    "code": code,
-                    "client_id": self.cfg.client_id,
-                    "client_secret": self.cfg.client_secret,
-                    "redirect_uri": self.cfg.redirect_uri,
-                },
+                data=data,
                 timeout=self.cfg.timeout,
             )
         except requests.RequestException as exc:

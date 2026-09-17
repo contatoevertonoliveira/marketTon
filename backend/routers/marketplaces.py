@@ -15,6 +15,8 @@ segredo atual.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
 import secrets
 
@@ -154,14 +156,20 @@ def start_mercado_livre_oauth(session: Session = Depends(get_session)) -> dict:
             status_code=400, detail="configure client_id e redirect_uri antes de conectar"
         )
     state = secrets.token_urlsafe(16)
+    # PKCE (RFC 7636): alguns apps da Mercado Livre exigem `code_verifier` na
+    # troca do código por token. Gerado aqui, guardado até o callback, nunca
+    # exposto ao navegador — só o hash (`code_challenge`) vai na URL.
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()).rstrip(b"=").decode()
     row.oauth_state = state
+    row.oauth_code_verifier = code_verifier
     session.commit()
 
     adapters = get_adapters()
     adapter = adapters.get("mercado_livre")
     if adapter is None:
         raise HTTPException(status_code=500, detail="adapter mercado_livre não registrado")
-    url = adapter.build_authorization_url(state)
+    url = adapter.build_authorization_url(state, code_challenge=code_challenge)
     return {"ok": True, "url": url, "redirect_uri": row.values.get("redirect_uri")}
 
 
@@ -191,11 +199,12 @@ def mercado_livre_oauth_callback(
         return _oauth_page("Falha: adapter mercado_livre não registrado.")
 
     try:
-        adapter.exchange_code_for_token(code)
+        adapter.exchange_code_for_token(code, code_verifier=row.oauth_code_verifier)
     except Exception as exc:  # noqa: BLE001 - reportar na página, não estourar 500 pro navegador
         logger.warning("troca de token da Mercado Livre falhou: %s", exc)
         return _oauth_page(f"Falha ao trocar o código por token: {exc}")
 
     row.oauth_state = None
+    row.oauth_code_verifier = None
     session.commit()
     return _oauth_page("Conectado com sucesso! Pode fechar esta aba e voltar ao painel.")
