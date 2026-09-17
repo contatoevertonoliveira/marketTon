@@ -38,11 +38,8 @@ from integrations.marketplaces.shopee import (
 )
 from integrations.marketplaces.signing import (
     SignatureError,
-    aws_authorization_header,
-    aws_canonical_request,
-    aws_signing_key,
-    encode_uri_component,
-    shopee_sign,
+    shopee_affiliate_auth_header,
+    shopee_affiliate_sign,
 )
 from integrations.marketplaces.tiktok_shop import (
     TikTokShopAdapter,
@@ -52,47 +49,34 @@ from integrations.marketplaces.tiktok_shop import (
 )
 
 
-def headers_signed_list(canonical: str) -> list[str]:
-    """Extrai a lista de headers assinados de uma requisição canônica SigV4.
+class TestShopeeAffiliateSignature:
+    def test_signature_is_plain_sha256_of_the_declared_base(self) -> None:
+        """Reproduz o cálculo de forma independente e compara.
 
-    Estrutura: método, URI, query, headers canônicos, lista de headers, hash.
-    A lista de headers é a penúltima linha.
-    """
-    return canonical.split("\n")[-2].split(";")
+        Diferente da Open Platform (HMAC), a Affiliate Open API usa um hash
+        SHA256 comum com o `secret` dentro da string, não como chave.
+        """
+        app_id, secret, timestamp, payload = "1234", "secret", 1700000000, '{"query":"{}"}'
 
+        expected = hashlib.sha256(f"{app_id}{timestamp}{payload}{secret}".encode()).hexdigest()
 
-class TestShopeeSignature:
-    def test_signature_is_hmac_sha256_of_the_declared_base(self) -> None:
-        """Reproduz o cálculo de forma independente e compara."""
-        partner_id, partner_key, path, timestamp = "1234", "secret", "/api/v2/product/get_item_list", 1700000000
-
-        expected_base = f"{partner_id}{path}{timestamp}"
-        expected = hmac.new(
-            partner_key.encode(), expected_base.encode(), hashlib.sha256
-        ).hexdigest()
-
-        assert shopee_sign(partner_id, partner_key, path, timestamp) == expected
-
-    def test_access_token_and_shop_id_enter_the_base(self) -> None:
-        """A ordem de concatenação é parte do contrato da API."""
-        partner_id, partner_key, path, timestamp = "1", "k", "/p", 100
-        token, shop = "tok", "999"
-        expected = hmac.new(
-            partner_key.encode(),
-            f"{partner_id}{path}{timestamp}{token}{shop}".encode(),
-            hashlib.sha256,
-        ).hexdigest()
-        assert shopee_sign(partner_id, partner_key, path, timestamp, token, shop) == expected
+        assert shopee_affiliate_sign(app_id, secret, timestamp, payload) == expected
 
     def test_signature_changes_with_timestamp(self) -> None:
-        """Sem timestamp variável a assinatura seria reutilizável e expiraria."""
-        assert shopee_sign("1", "k", "/p", 100) != shopee_sign("1", "k", "/p", 101)
+        assert shopee_affiliate_sign("1", "s", 100, "{}") != shopee_affiliate_sign("1", "s", 101, "{}")
+
+    def test_signature_changes_with_payload(self) -> None:
+        assert shopee_affiliate_sign("1", "s", 100, '{"a":1}') != shopee_affiliate_sign("1", "s", 100, '{"a":2}')
 
     def test_missing_credentials_fail_loudly(self) -> None:
-        with pytest.raises(SignatureError, match="partner_id"):
-            shopee_sign("", "k", "/p", 100)
-        with pytest.raises(SignatureError, match="partner_key"):
-            shopee_sign("1", "", "/p", 100)
+        with pytest.raises(SignatureError, match="app_id"):
+            shopee_affiliate_sign("", "s", 100, "{}")
+        with pytest.raises(SignatureError, match="secret"):
+            shopee_affiliate_sign("1", "", 100, "{}")
+
+    def test_auth_header_shape(self) -> None:
+        header = shopee_affiliate_auth_header("1234", "secret", 1700000000, "{}")
+        assert header.startswith("SHA256 Credential=1234, Timestamp=1700000000, Signature=")
 
 
 class TestTikTokShopSignature:
@@ -107,60 +91,6 @@ class TestTikTokShopSignature:
         base = tiktok_shop_sign("k", "s", "/p", 1)
         assert tiktok_shop_sign("k", "s", "/p", 1, query="app_keyk") != base
         assert tiktok_shop_sign("k", "s", "/p", 1, body='{"a":1}') != base
-
-
-class TestAwsSigV4:
-    def test_signing_key_is_deterministic_and_key_dependent(self) -> None:
-        a = aws_signing_key("secret", "20260101", "us-east-1")
-        b = aws_signing_key("secret", "20260101", "us-east-1")
-        c = aws_signing_key("outro", "20260101", "us-east-1")
-        d = aws_signing_key("secret", "20260102", "us-east-1")
-        e = aws_signing_key("secret", "20260101", "eu-west-1")
-        assert a == b
-        assert len({a, c, d, e}) == 4, "chave deve variar com segredo, data e região"
-
-    def test_missing_secret_fails_loudly(self) -> None:
-        with pytest.raises(SignatureError, match="secret_key"):
-            aws_signing_key("", "20260101", "us-east-1")
-
-    def test_canonical_request_has_sorted_headers(self) -> None:
-        canonical, headers = aws_canonical_request(
-            host="webservices.amazon.com.br", path="/paapi5/searchitems", payload='{"a":1}'
-        )
-        lines = canonical.split("\n")
-        assert lines[0] == "POST"
-        assert lines[1] == "/paapi5/searchitems"
-        # A query string vai no corpo, então a linha dela é vazia — é uma linha
-        # própria na requisição canônica, e esquecê-la desloca tudo.
-        assert lines[2] == ""
-
-        # Headers em ordem alfabética é exigência da SigV4.
-        signed_headers = headers_signed_list(canonical)
-        assert signed_headers == sorted(signed_headers)
-        assert signed_headers == sorted(headers)
-        assert len(headers) == 4
-
-    def test_authorization_header_shape(self) -> None:
-        canonical, headers = aws_canonical_request(
-            host="h", path="/p", payload="{}"
-        )
-        header = aws_authorization_header(
-            access_key="AKIA",
-            secret_key="s",
-            region="us-east-1",
-            host="h",
-            canonical_request=canonical,
-            signed_headers=";".join(sorted(headers)),
-        )
-        assert header.startswith("AWS4-HMAC-SHA256 Credential=AKIA/")
-        assert "SignedHeaders=" in header
-        assert "Signature=" in header
-        assert "us-east-1/ProductAdvertisingAPI/aws4_request" in header
-
-    def test_uri_encoding_follows_sigv4(self) -> None:
-        """A SigV4 exige `%20` para espaço; `+` seria rejeitado."""
-        assert encode_uri_component("fone bluetooth") == "fone%20bluetooth"
-        assert encode_uri_component("a/b") == "a%2Fb"
 
 
 class TestUnconfiguredAdaptersFailLoudly:
@@ -185,8 +115,8 @@ class TestUnconfiguredAdaptersFailLoudly:
             adapter.fetch_products(options=AmazonAdapterOptions(keyword="fone"))
 
     def test_amazon_requires_a_search_keyword(self) -> None:
-        """A PA-API não lista o catálogo do associado: sem termo não há coleta."""
-        adapter = AmazonAdapter(cfg=AmazonConfig(access_key="a", secret_key="s", partner_tag="t"))
+        """A Creators API não lista o catálogo do associado: sem termo não há coleta."""
+        adapter = AmazonAdapter(cfg=AmazonConfig(client_id="a", client_secret="s", partner_tag="t"))
         assert adapter.is_configured()
         with pytest.raises(AmazonError, match="termo de busca"):
             adapter.fetch_products(options=AmazonAdapterOptions(keyword=""))

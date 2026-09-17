@@ -1,23 +1,39 @@
-"""Adapter da Amazon (Product Advertising API 5.0).
+"""Adapter da Amazon — Creators API.
 
-Documentação: https://webservices.amazon.com/paapi5/documentation/
+Documentação: https://affiliate-program.amazon.com/creatorsapi/docs/
 
-Notas de honestidade dos dados, que definem o que este adapter **não** devolve:
+Isto substitui a Product Advertising API 5.0 (AWS Signature V4): confirmado ao
+vivo que a PA-API está aposentada — uma chamada real devolveu HTTP 403 com
+`"Product Advertising API is deprecated. Please migrate to Creators API."`
+(abril/maio de 2026 é a janela de desativação oficial da Amazon). Não é um bug
+para corrigir: a API inteira que o adapter anterior usava não existe mais.
 
-* A PA-API 5.0 não expõe a **comissão** de associado. As taxas por categoria ficam
-  na tabela pública de fees do Amazon Associates, não na API. O campo fica `None` e
-  o Opportunity Score reduz a confiança — em vez de estimar um percentual.
-* **Vendas** não são expostas ao associado. `fetch_sales` devolve vazio.
-* A PA-API exige **1 venda a cada 30 dias** por conta de associado para permanecer
-  ativa; sem isso ela devolve `TooManyRequests`. Esse é um modo de falha real e
-  está tratado com mensagem explícita, não silenciado.
+A Creators API troca a assinatura AWS SigV4 por OAuth2 `client_credentials`
+(Bearer token) — mais simples, sem `Access Key`/`Secret Key` de IAM, só
+`Client ID`/`Client Secret` do app cadastrado em Associates Central. O token
+é cacheado e renovado via o mesmo `TokenStore` (Postgres) que Mercado Livre e
+TikTok Shop já usam.
+
+Notas de honestidade dos dados:
+
+* **Comissão de associado** continua não exposta pela API: é definida por
+  categoria no programa, não por item. Fica `None`.
+* **Vendas** não são expostas ao associado; ficam no painel do programa.
+* **Elegibilidade**: a Creators API exige conta de Associado aprovada com
+  histórico de vendas — inicialmente 3 vendas qualificadas em 180 dias, e para
+  manter acesso contínuo, 10 vendas qualificadas nos últimos 30 dias. Sem
+  vendas recentes o acesso é suspenso temporariamente (não é erro de
+  configuração, é a regra do programa).
+* Confiança moderada no path exato de `SearchItems` (`/catalog/v1/searchItems`)
+  e no formato de resposta: montados a partir de fragmentos de documentação
+  de terceiros, já que a doc oficial completa não abre para scraping — validar
+  contra uma chamada real assim que houver credenciais da Creators API.
 """
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
@@ -29,28 +45,22 @@ from integrations.marketplaces.base import (
     MarketplaceAdapter,
     SalesRecord,
 )
-from integrations.marketplaces.signing import (
-    SignatureError,
-    aws_authorization_header,
-    aws_canonical_request,
-)
+from integrations.marketplaces.token_store import TokenSet, TokenStore
 
 logger = logging.getLogger(__name__)
 
-API_PATH = "/paapi5/searchitems"
-DEFAULT_HOST = "webservices.amazon.com.br"
+DEFAULT_TOKEN_URL = "https://api.amazon.com/auth/o2/token"
+DEFAULT_API_URL = "https://creatorsapi.amazon"
+SEARCH_ITEMS_PATH = "/catalog/v1/searchItems"
+SCOPE = "creatorsapi::default"
 RESOURCES = [
-    "ItemInfo.Title",
-    "ItemInfo.ByLineInfo",
-    "ItemInfo.ExternalIds",
-    "ItemInfo.Features",
-    "ItemInfo.ProductInfo",
-    "Offers.Listings.Price",
-    "Offers.Listings.Availability.Message",
-    "Offers.Listings.SavingBasis",
-    "Offers.Summaries.LowestPrice",
-    "Images.Primary.Large",
-    "BrowseNodeInfo.BrowseNodes",
+    "itemInfo.title",
+    "itemInfo.byLineInfo",
+    "itemInfo.features",
+    "offersV2.listings.price",
+    "offersV2.listings.availability",
+    "images.primary.large",
+    "browseNodeInfo.browseNodes",
 ]
 
 
@@ -63,37 +73,34 @@ class AmazonNotConfigured(AmazonError):
 
 
 class AmazonThrottled(AmazonError):
-    """Rate limit ou conta inativa.
+    """Acesso negado ou limitado.
 
-    A PA-API devolve `TooManyRequests` também quando a conta de associado não
-    registrou venda nos últimos 30 dias — motivo frequente e pouco óbvio.
+    A Creators API suspende o acesso quando a conta de associado não tem 10
+    vendas qualificadas nos últimos 30 dias — motivo frequente e pouco óbvio
+    por trás de um 401/403 aparentemente de credencial.
     """
 
 
 @dataclass
 class AmazonConfig:
-    access_key: str = ""
-    secret_key: str = ""
+    client_id: str = ""
+    client_secret: str = ""
     partner_tag: str = ""
-    region: str = "us-east-1"
-    host: str = DEFAULT_HOST
     marketplace: str = "www.amazon.com.br"
+    token_url: str = DEFAULT_TOKEN_URL
+    api_url: str = DEFAULT_API_URL
+    access_token: str = ""
+    token_expires_at: datetime | None = None
     timeout: float = 20.0
 
 
 @dataclass
 class AmazonAdapterOptions:
-    """Opções de coleta da PA-API.
-
-    `keyword` é obrigatório e não tem default: a PA-API não expõe "meu catálogo",
-    apenas busca por termo. Um default silencioso faria a coleta devolver produtos
-    arbitrários sem que ninguém percebesse.
-    """
+    """Opções de coleta. `keyword` é obrigatório: a Creators API busca por
+    termo (ou marca/autor/ator), não lista o catálogo do associado."""
 
     keyword: str = ""
-    max_items: int = 10  # a PA-API limita a 10 itens por página
-    search_index: str = "All"
-    item_page: int = 1
+    max_items: int = 10  # tamanho de página observado na documentação
     warnings: list[str] = field(default_factory=list)
 
 
@@ -101,236 +108,221 @@ class AmazonAdapter(MarketplaceAdapter):
     name = "amazon"
     reliability = 1.0  # API oficial
 
-    def __init__(self, cfg: AmazonConfig | None = None):
+    def __init__(self, cfg: AmazonConfig | None = None, token_store: TokenStore | None = None):
         self.cfg = cfg or self._load_config()
+        self.tokens = token_store or TokenStore()
+        self._load_persisted_token()
 
     @staticmethod
     def _load_config() -> AmazonConfig:
         settings = get_settings()
         return AmazonConfig(
-            access_key=settings.amazon_access_key,
-            secret_key=settings.amazon_secret_key,
+            client_id=settings.amazon_client_id,
+            client_secret=settings.amazon_client_secret,
             partner_tag=settings.amazon_partner_tag,
-            region=settings.amazon_region,
-            host=settings.amazon_host,
             marketplace=settings.amazon_marketplace,
+            token_url=settings.amazon_token_url,
+            api_url=settings.amazon_api_url,
             timeout=settings.connector_timeout_seconds,
         )
 
+    def _load_persisted_token(self) -> None:
+        stored = self.tokens.load(self.name)
+        if stored is None:
+            return
+        if stored.access_token:
+            self.cfg.access_token = stored.access_token
+        self.cfg.token_expires_at = stored.expires_at
+
+    def _persist_token(self) -> None:
+        self.tokens.save(
+            self.name,
+            TokenSet(access_token=self.cfg.access_token, expires_at=self.cfg.token_expires_at),
+        )
+
     def is_configured(self) -> bool:
-        return bool(self.cfg.access_key and self.cfg.secret_key and self.cfg.partner_tag)
+        return bool(self.cfg.client_id and self.cfg.client_secret and self.cfg.partner_tag)
 
     def get_status(self) -> dict[str, Any]:
         return {
             "connector": self.name,
             "configured": self.is_configured(),
-            "region": self.cfg.region,
-            "host": self.cfg.host,
+            "has_access_token": bool(self.cfg.access_token),
+            "token_expires_at": self.cfg.token_expires_at.isoformat() if self.cfg.token_expires_at else None,
             "marketplace": self.cfg.marketplace,
             "reliability": self.reliability,
             "note": (
-                "A PA-API 5.0 exige ao menos uma venda a cada 30 dias por conta de "
-                "associado; sem isso ela responde TooManyRequests. Comissão por "
-                "categoria não é exposta pela API."
+                "Creators API exige conta de Associado com pelo menos 10 vendas qualificadas "
+                "nos últimos 30 dias para manter o acesso ativo; comissão por categoria não é "
+                "exposta pela API."
             ),
         }
 
-    # --- HTTP -----------------------------------------------------------------
+    # --- OAuth2 client_credentials ----------------------------------------------
 
-    def _call(self, operation: str, payload: dict[str, Any]) -> dict[str, Any]:
-        if not self.is_configured():
+    def _ensure_access_token(self) -> str:
+        if self.cfg.access_token and self.cfg.token_expires_at:
+            if datetime.now(UTC) < self.cfg.token_expires_at - timedelta(minutes=2):
+                return self.cfg.access_token
+
+        if not (self.cfg.client_id and self.cfg.client_secret):
             raise AmazonNotConfigured(
-                "Credenciais da Amazon incompletas. São necessários access_key, secret_key e "
-                "partner_tag (MARKETPLACE_AMAZON_* no .env)."
+                "Credenciais da Amazon incompletas. São necessários client_id, client_secret e "
+                "partner_tag (MARKETPLACE_AMAZON_* no .env, ou salvos em Integrações)."
             )
-
-        body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
-        target = f"com.amazon.paapi5.v1.ProductAdvertisingAPIv1.{operation}"
-        path = f"/paapi5/{operation.lower()}"
-
-        try:
-            canonical, headers = aws_canonical_request(
-                host=self.cfg.host, path=path, payload=body, target=target
-            )
-            signed_headers = ";".join(sorted(headers))
-            authorization = aws_authorization_header(
-                access_key=self.cfg.access_key,
-                secret_key=self.cfg.secret_key,
-                region=self.cfg.region,
-                host=self.cfg.host,
-                canonical_request=canonical,
-                signed_headers=signed_headers,
-            )
-        except SignatureError as exc:
-            raise AmazonNotConfigured(str(exc)) from exc
-
-        request_headers = {
-            "content-encoding": headers["content-encoding"],
-            "content-type": headers["content-type"],
-            "host": headers["host"],
-            "x-amz-target": headers["x-amz-target"],
-            "authorization": authorization,
-            "x-amz-date": datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"),
-        }
 
         try:
             response = requests.post(
-                f"https://{self.cfg.host}{path}",
-                headers=request_headers,
-                data=body.encode("utf-8"),
+                self.cfg.token_url,
+                json={
+                    "grant_type": "client_credentials",
+                    "client_id": self.cfg.client_id,
+                    "client_secret": self.cfg.client_secret,
+                    "scope": SCOPE,
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=self.cfg.timeout,
+            )
+        except requests.RequestException as exc:
+            raise AmazonError(f"falha de rede ao obter token em {self.cfg.token_url}: {exc}") from exc
+
+        if response.status_code != 200:
+            raise AmazonError(
+                f"obtenção de token falhou: HTTP {response.status_code} — {response.text[:500]}"
+            )
+
+        data = response.json()
+        access_token = data.get("access_token", "")
+        expires_in = data.get("expires_in")
+        self.cfg.access_token = access_token
+        self.cfg.token_expires_at = (
+            datetime.now(UTC) + timedelta(seconds=int(expires_in)) if expires_in else None
+        )
+        self._persist_token()
+        return access_token
+
+    # --- HTTP ---------------------------------------------------------------------
+
+    def _call(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if not self.is_configured():
+            raise AmazonNotConfigured(
+                "Credenciais da Amazon incompletas. São necessários client_id, client_secret e "
+                "partner_tag (MARKETPLACE_AMAZON_* no .env, ou salvos em Integrações)."
+            )
+        token = self._ensure_access_token()
+
+        try:
+            response = requests.post(
+                f"{self.cfg.api_url}{path}",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                    "x-marketplace": self.cfg.marketplace,
+                },
                 timeout=self.cfg.timeout,
             )
         except requests.RequestException as exc:
             raise AmazonError(f"falha de rede em {path}: {exc}") from exc
 
-        if response.status_code == 429:
+        if response.status_code in (401, 403):
             raise AmazonThrottled(
-                "Amazon respondeu 429 (TooManyRequests). Causas comuns: limite de requisições "
-                "por segundo, ou conta de associado sem venda nos últimos 30 dias."
+                f"Amazon respondeu {response.status_code}. Causas comuns: token expirado, ou "
+                "conta de associado sem 10 vendas qualificadas nos últimos 30 dias. "
+                f"Corpo: {response.text[:300]}"
             )
+        if response.status_code == 429:
+            raise AmazonThrottled("Amazon respondeu 429 (limite de requisições por segundo).")
         if response.status_code != 200:
             raise AmazonError(f"HTTP {response.status_code} em {path}: {response.text[:400]}")
 
-        data = response.json()
-        errors = (data.get("Errors") or [])
-        if errors:
-            first = errors[0]
-            code = first.get("Code", "Unknown")
-            if code in {"TooManyRequests", "RequestThrottled"}:
-                raise AmazonThrottled(f"{code}: {first.get('Message')}")
-            raise AmazonError(f"{code}: {first.get('Message')}")
-        return data
+        return response.json()
 
-    # --- Coleta ---------------------------------------------------------------
+    # --- Coleta ---------------------------------------------------------------------
 
     def fetch_products(
         self, *, limit: int | None = None, options: AmazonAdapterOptions | None = None
     ) -> ConnectorBatch:
-        """A PA-API não lista "meu catálogo": ela busca por termo.
-
-        Por isso a coleta da Amazon exige um termo de busca. `limit` acima de 10
-        requer paginação, que é feita aqui sequencialmente.
-        """
+        """Busca por termo — a Creators API não lista o catálogo do associado."""
         options = options or AmazonAdapterOptions()
+        if limit is not None:
+            options.max_items = limit
+        if not options.keyword:
+            raise AmazonError(
+                "a Creators API não expõe o catálogo do associado; informe um termo de busca "
+                "(AmazonAdapterOptions.keyword) para coletar."
+            )
+
         collected_at = datetime.now(UTC)
-        warnings = list(options.warnings)
+        payload = {
+            "partnerTag": self.cfg.partner_tag,
+            "keywords": options.keyword,
+            "itemCount": min(options.max_items, 10),
+            "resources": RESOURCES,
+        }
+        data = self._call(SEARCH_ITEMS_PATH, payload)
 
-        keyword = self._search_keyword(options)
-        products: list[ConnectorProduct] = []
-        page = options.item_page
-
-        while len(products) < options.max_items:
-            payload = {
-                "Keywords": keyword,
-                "SearchIndex": options.search_index,
-                "ItemCount": min(10, options.max_items - len(products)),
-                "ItemPage": page,
-                "PartnerTag": self.cfg.partner_tag,
-                "PartnerType": "Associates",
-                "Marketplace": self.cfg.marketplace,
-                "Resources": RESOURCES,
-            }
-            data = self._call("SearchItems", payload)
-
-            results = data.get("SearchResult") or {}
-            items = results.get("Items") or []
-            if not items:
-                break
-            for item in items:
-                products.append(self._normalize_item(item))
-
-            total_results = _to_int(results.get("TotalResultCount")) or 0
-            # Última página alcançada, ou já temos o suficiente.
-            if len(products) >= options.max_items:
-                break
-            if page * 10 >= total_results:
-                break
-            page += 1
-            if page > 10:
-                warnings.append("paginação limitada a 10 páginas (limite da PA-API)")
-                break
+        result = data.get("searchResult") or {}
+        items = result.get("items") or []
+        products = [self._normalize_item(item) for item in items]
 
         return ConnectorBatch(
             connector=self.name,
             products=products[: options.max_items],
             collected_at=collected_at,
-            endpoint=f"https://{self.cfg.host}{API_PATH}",
+            endpoint=f"{self.cfg.api_url}{SEARCH_ITEMS_PATH}",
             reliability=self.reliability,
-            warnings=warnings,
-            raw={"keyword": keyword, "marketplace": self.cfg.marketplace},
+            warnings=list(options.warnings),
+            raw={"keyword": options.keyword, "marketplace": self.cfg.marketplace},
         )
 
-    def _search_keyword(self, options: AmazonAdapterOptions) -> str:
-        if not options.keyword:
-            raise AmazonError(
-                "A PA-API não expõe o catálogo do associado; informe um termo de busca "
-                "(AmazonAdapterOptions.keyword) para coletar."
-            )
-        return options.keyword
-
     def _normalize_item(self, item: dict[str, Any]) -> ConnectorProduct:
-        item_info = item.get("ItemInfo") or {}
-        title = (item_info.get("Title") or {}).get("DisplayValue")
-        by_line = (item_info.get("ByLineInfo") or {})
-        brand = (by_line.get("Brand") or {}).get("DisplayValue")
-        manufacturer = (by_line.get("Manufacturer") or {}).get("DisplayValue")
+        item_info = item.get("itemInfo") or {}
+        title = (item_info.get("title") or {}).get("displayValue")
+        by_line = item_info.get("byLineInfo") or {}
+        brand = (by_line.get("brand") or {}).get("displayValue")
 
-        product_info = (item_info.get("ProductInfo") or {})
-        model = (product_info.get("Model") or {}).get("DisplayValue")
-
-        listings = ((item.get("Offers") or {}).get("Listings")) or []
+        listings = ((item.get("offersV2") or {}).get("listings")) or []
         listing = listings[0] if listings else {}
-        price_info = listing.get("Price") or {}
-        saving_basis = listing.get("SavingBasis") or {}
+        price_money = ((listing.get("price") or {}).get("money")) or {}
+        price = _to_float(price_money.get("amount"))
+        currency = price_money.get("currency")
 
-        price = _to_float(price_info.get("Amount"))
-        original_price = _to_float(saving_basis.get("Amount"))
-        currency = price_info.get("Currency") or saving_basis.get("Currency")
+        availability = (listing.get("availability") or {}).get("type")
 
-        discount_pct = None
-        if price and original_price and original_price > 0:
-            discount_pct = round((1 - price / original_price) * 100, 2)
+        images = item.get("images") or {}
+        primary = ((images.get("primary") or {}).get("large") or {}).get("url")
 
-        availability = (listing.get("Availability") or {}).get("Message")
-        images = item.get("Images") or {}
-        primary = ((images.get("Primary") or {}).get("Large") or {}).get("URL")
-
-        browse_nodes = ((item.get("BrowseNodeInfo") or {}).get("BrowseNodes")) or []
-        category_id = str(browse_nodes[0].get("Id")) if browse_nodes else None
+        browse_nodes = ((item.get("browseNodeInfo") or {}).get("browseNodes")) or []
+        category_id = str(browse_nodes[0].get("id")) if browse_nodes else None
 
         return ConnectorProduct(
-            external_id=str(item.get("ASIN")),
+            external_id=str(item.get("asin")),
             title=str(title or "").strip(),
             category_id=category_id,
-            brand=brand or manufacturer,
-            model=model,
-            condition=None,
+            brand=brand,
             currency=currency,
             price=price,
-            original_price=original_price,
-            discount_pct=discount_pct,
-            # A PA-API não expõe comissão de associado.
+            # A Creators API não expõe comissão de associado (é por categoria,
+            # definida pelo programa — não por item).
             affiliate_commission_pct=None,
-            available_quantity=None,
-            sold_quantity=None,
-            is_available=availability is not None or price is not None,
-            rating=None,
-            review_count=None,
-            has_promotion=bool(discount_pct) or None,
-            product_url=item.get("DetailPageURL"),
+            is_available=availability == "IN_STOCK" if availability else None,
+            product_url=item.get("detailPageURL"),
             images=[primary] if primary else None,
             attributes={"availability": availability} if availability else None,
         )
 
     def fetch_sales(self, *, since: datetime | None = None) -> list[SalesRecord]:
-        """A PA-API não expõe vendas ao associado; elas ficam no painel do programa."""
-        logger.info("fetch_sales da Amazon não implementado: a PA-API não expõe vendas")
+        """Vendas de associado ficam no painel do programa, não na API."""
+        logger.info("fetch_sales da Amazon não implementado: a Creators API não expõe vendas")
         return []
 
     def search_competitor(self, query: str, *, limit: int = 10) -> list[dict[str, Any]]:
         """Busca por termo. Serve de proxy para saturação de oferta."""
-        options = AmazonAdapterOptions(keyword=query, max_items=min(limit, 10))
-        batch = self.fetch_products(options=options)
+        try:
+            batch = self.fetch_products(options=AmazonAdapterOptions(keyword=query, max_items=min(limit, 10)))
+        except AmazonError:
+            return []
         return [
             {
                 "platform": self.name,

@@ -95,20 +95,22 @@ class Settings(BaseSettings):
     mercadolivre_country: str = "BR"
 
     # --- Shopee ---------------------------------------------------------------
-    # https://open.shopee.com/ — a API de afiliado exige aprovação de parceiro.
-    shopee_partner_id: str = ""
-    shopee_partner_key: str = ""
-    shopee_access_token: str = ""
-    shopee_refresh_token: str = ""
-    shopee_shop_id: str = ""
+    # https://open-api.affiliate.shopee.com.br/ — Affiliate Open API (GraphQL).
+    # Exige aprovação como parceiro afiliado. app_id/secret assinam cada
+    # requisição; não há OAuth por loja (diferente da Open Platform anterior).
+    shopee_app_id: str = ""
+    shopee_secret: str = ""
 
     # --- Amazon ---------------------------------------------------------------
-    # https://webservices.amazon.com/paapi5/documentation/ — SigV4.
-    amazon_access_key: str = ""
-    amazon_secret_key: str = ""
+    # https://affiliate-program.amazon.com/creatorsapi/ — Creators API.
+    # A PA-API 5.0 (AWS SigV4) foi aposentada pela Amazon (confirmado ao vivo:
+    # HTTP 403 "deprecated" desde abril/maio de 2026). A Creators API usa
+    # OAuth2 client_credentials (Bearer token), não assinatura AWS.
+    amazon_client_id: str = ""
+    amazon_client_secret: str = ""
     amazon_partner_tag: str = ""
-    amazon_region: str = "us-east-1"
-    amazon_host: str = "webservices.amazon.com.br"
+    amazon_token_url: str = "https://api.amazon.com/auth/o2/token"
+    amazon_api_url: str = "https://creatorsapi.amazon"
     amazon_marketplace: str = "www.amazon.com.br"
 
     # --- TikTok Shop ----------------------------------------------------------

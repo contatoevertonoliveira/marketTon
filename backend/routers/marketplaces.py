@@ -41,16 +41,13 @@ CREDENTIAL_FIELDS: dict[str, list[dict[str, str | bool]]] = {
         {"name": "redirect_uri", "label": "Redirect URI", "secret": False},
     ],
     "shopee": [
-        {"name": "partner_id", "label": "Partner ID", "secret": False},
-        {"name": "partner_key", "label": "Partner Key", "secret": True},
-        {"name": "shop_id", "label": "Shop ID", "secret": False},
+        {"name": "app_id", "label": "App ID", "secret": False},
+        {"name": "secret", "label": "Secret", "secret": True},
     ],
     "amazon": [
-        {"name": "access_key", "label": "Access Key", "secret": False},
-        {"name": "secret_key", "label": "Secret Key", "secret": True},
+        {"name": "client_id", "label": "Client ID", "secret": False},
+        {"name": "client_secret", "label": "Client Secret", "secret": True},
         {"name": "partner_tag", "label": "Partner Tag (Associate Tag)", "secret": False},
-        {"name": "region", "label": "Região AWS (ex.: us-east-1)", "secret": False},
-        {"name": "host", "label": "Host da API (ex.: webservices.amazon.com.br)", "secret": False},
         {"name": "marketplace", "label": "Domínio da loja (ex.: www.amazon.com.br)", "secret": False},
     ],
     "tiktok_shop": [
