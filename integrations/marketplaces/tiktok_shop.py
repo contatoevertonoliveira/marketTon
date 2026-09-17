@@ -158,7 +158,12 @@ class TikTokShopAdapter(MarketplaceAdapter):
             params["shop_cipher"] = self.cfg.shop_cipher
 
         body_text = _json.dumps(body, separators=(",", ":"), ensure_ascii=False) if body else ""
-        query = "".join(f"{key}{params[key]}" for key in sorted(params) if key != "sign")
+        # `sign` e `access_token` entram na requisição mas ficam de fora da base
+        # assinada — é assim que a documentação da TikTok Shop define a assinatura;
+        # incluir `access_token` aqui produz uma assinatura que o servidor rejeita.
+        query = "".join(
+            f"{key}{params[key]}" for key in sorted(params) if key not in ("sign", "access_token")
+        )
 
         try:
             params["sign"] = tiktok_shop_sign(

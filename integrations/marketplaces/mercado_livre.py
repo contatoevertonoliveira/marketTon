@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_API_URL = "https://api.mercadolibre.com"
 AUTH_URL = "https://auth.mercadolivre.com.br/authorization"
-TOKEN_URL = "https://api.mercadolivre.com.br/oauth/token"
+TOKEN_URL = "https://api.mercadolibre.com/oauth/token"
 
 
 class MercadoLivreError(RuntimeError):
