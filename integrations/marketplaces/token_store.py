@@ -1,26 +1,34 @@
-"""Armazenamento de tokens OAuth de marketplace.
+"""Armazenamento de tokens OAuth de marketplace, no Postgres.
 
-Necessidade concreta: o adapter do Mercado Livre renova o `access_token` quando
-recebe 401, mas gravava o token novo apenas em memória — a cada reinício da API o
-token voltava a ser o do `.env`, já expirado, e o ciclo começava de novo com um
-401. O refresh precisa sobreviver ao processo.
+Antes os tokens viviam em `data/marketplace_tokens.json`, um arquivo fora do
+banco — enquanto o resto da credencial (client_id/secret/redirect_uri) já
+vivia em `marketplace_credentials` desde a Fase 2. Isso quebrava o princípio
+de que o banco é a fonte única de verdade: o token de acesso real de uma
+integração conectada não aparecia em lugar nenhum da tela de Integrações, não
+sobrevivia a um ambiente sem esse arquivo, e não era visível a quem
+inspecionasse o banco para saber o estado de uma credencial.
 
-Segredos ficam em arquivo separado do `.env` (que é editado à mão) e fora do
-controle de versão. Permissão restrita quando a plataforma permite.
+Agora tudo sobre uma credencial de marketplace — estática (client_id, secret,
+redirect_uri) e dinâmica (access_token, refresh_token, validade) — vive na
+mesma linha de `MarketplaceCredential.values`. A chave da validade
+(`token_expires_at_iso`) é deliberadamente diferente do atributo
+`MLConfig.token_expires_at` (que é `datetime`, não `str`): assim
+`backend/deps.py::_apply_credential_overrides`, que sobrepõe qualquer chave de
+`values` que bata com um atributo do `cfg`, nunca tenta atribuir uma string
+onde o adapter espera um `datetime`. `access_token`/`refresh_token` já são
+`str` nos três configs, então a sobreposição genérica funciona sem ajuste — e
+como bônus, um token renovado por `save()` passa a valer no próximo
+`get_adapters()` de qualquer processo, não só no que fez a renovação.
 """
 from __future__ import annotations
 
-import json
 import logging
-import os
-import stat
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "marketplace_tokens.json"
 
 
 @dataclass
@@ -44,54 +52,81 @@ class TokenSet:
 
 
 class TokenStore:
-    """Leitura e escrita de tokens por marketplace."""
-
-    def __init__(self, path: Path | None = None):
-        self.path = path or DEFAULT_PATH
-
-    def _read_all(self) -> dict:
-        if not self.path.exists():
-            return {}
-        try:
-            return json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            logger.warning("não foi possível ler %s: %s", self.path, exc)
-            return {}
+    """Leitura e escrita de tokens OAuth por marketplace, no Postgres."""
 
     def load(self, marketplace: str) -> TokenSet | None:
-        data = self._read_all().get(marketplace)
-        if not data:
+        from core.db.base import Marketplace
+        from core.db.marketplace_credentials import MarketplaceCredential
+        from core.db.session import session_scope
+
+        try:
+            enum_value = Marketplace(marketplace)
+        except ValueError:
             return None
-        expires_at = data.get("expires_at")
-        return TokenSet(
-            access_token=data.get("access_token", ""),
-            refresh_token=data.get("refresh_token", ""),
-            expires_at=datetime.fromisoformat(expires_at) if expires_at else None,
-        )
+
+        try:
+            with session_scope() as session:
+                row = session.scalar(
+                    select(MarketplaceCredential).where(
+                        MarketplaceCredential.marketplace == enum_value
+                    )
+                )
+                if row is None or not row.values.get("access_token"):
+                    return None
+                expires_at_iso = row.values.get("token_expires_at_iso")
+                return TokenSet(
+                    access_token=row.values.get("access_token", ""),
+                    refresh_token=row.values.get("refresh_token", ""),
+                    expires_at=datetime.fromisoformat(expires_at_iso) if expires_at_iso else None,
+                )
+        except Exception as exc:  # noqa: BLE001 - banco fora do ar não pode derrubar o adapter
+            logger.warning("não foi possível ler token de '%s': %s", marketplace, exc)
+            return None
 
     def save(self, marketplace: str, tokens: TokenSet) -> None:
-        data = self._read_all()
-        data[marketplace] = {
-            "access_token": tokens.access_token,
-            "refresh_token": tokens.refresh_token,
-            "expires_at": tokens.expires_at.isoformat() if tokens.expires_at else None,
-            "updated_at": datetime.now(UTC).isoformat(),
-        }
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        self._restrict_permissions()
+        from core.db.base import Marketplace
+        from core.db.marketplace_credentials import MarketplaceCredential
+        from core.db.session import session_scope
 
-    def _restrict_permissions(self) -> None:
-        """Tenta restringir a permissão. Em Windows isso é majoritariamente no-op."""
-        try:
-            os.chmod(self.path, stat.S_IRUSR | stat.S_IWUSR)
-        except OSError as exc:
-            logger.debug("não foi possível restringir permissão de %s: %s", self.path, exc)
+        enum_value = Marketplace(marketplace)
+        with session_scope() as session:
+            row = session.scalar(
+                select(MarketplaceCredential).where(
+                    MarketplaceCredential.marketplace == enum_value
+                )
+            )
+            if row is None:
+                row = MarketplaceCredential(marketplace=enum_value, enabled=True, values={})
+                session.add(row)
+                session.flush()
+            merged = dict(row.values)
+            merged["access_token"] = tokens.access_token
+            merged["refresh_token"] = tokens.refresh_token
+            merged["token_expires_at_iso"] = tokens.expires_at.isoformat() if tokens.expires_at else None
+            row.values = merged
 
     def clear(self, marketplace: str) -> None:
-        data = self._read_all()
-        if data.pop(marketplace, None) is not None:
-            self.path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        from core.db.base import Marketplace
+        from core.db.marketplace_credentials import MarketplaceCredential
+        from core.db.session import session_scope
+
+        try:
+            enum_value = Marketplace(marketplace)
+        except ValueError:
+            return
+        with session_scope() as session:
+            row = session.scalar(
+                select(MarketplaceCredential).where(
+                    MarketplaceCredential.marketplace == enum_value
+                )
+            )
+            if row is None:
+                return
+            merged = dict(row.values)
+            merged.pop("access_token", None)
+            merged.pop("refresh_token", None)
+            merged.pop("token_expires_at_iso", None)
+            row.values = merged
 
 
-__all__ = ["DEFAULT_PATH", "TokenSet", "TokenStore"]
+__all__ = ["TokenSet", "TokenStore"]
