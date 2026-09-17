@@ -594,6 +594,29 @@ class TestCreativePipeline:
         assert len(history) == 1
         assert history[0]["to_status"] == "PENDING"
 
+    def test_asset_created_without_portfolio_item_id_is_orphaned_and_invisible(
+        self, client, item
+    ) -> None:
+        """Regressão: `CreativeAssetCreate`/`create_asset` não recebiam
+        `portfolio_item_id`, então todo material criado por `POST /creatives/assets`
+        ficava órfão — nunca aparecia em `?portfolio_item_id=` nem no portão de
+        publicação (briefing §8). Este teste fixa o comportamento correto."""
+        asset = client.post(
+            "/creatives/assets",
+            json={
+                "asset_type": "COPY",
+                "portfolio_item_id": item["id"],
+                "title": "Copy do produto",
+            },
+        ).json()
+        assert asset["portfolio_item_id"] == item["id"]
+
+        listed = client.get(f"/creatives/assets?portfolio_item_id={item['id']}").json()
+        assert [a["id"] for a in listed] == [asset["id"]]
+
+        detail = client.get(f"/portfolio/items/{item['id']}").json()
+        assert [c["id"] for c in detail["creatives"]] == [asset["id"]]
+
     def test_status_transition_is_validated(self, client, item) -> None:
         asset = self._create(client, item)
 
