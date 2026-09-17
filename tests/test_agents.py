@@ -206,7 +206,7 @@ class _StubAdapter:
     def is_configured(self) -> bool:
         return self._configured
 
-    def fetch_products(self, *, limit=None) -> ConnectorBatch:
+    def fetch_products(self, *, limit=None, options=None) -> ConnectorBatch:
         if self._batch is None:
             return ConnectorBatch(connector=self.name, collected_at=NOW)
         return self._batch

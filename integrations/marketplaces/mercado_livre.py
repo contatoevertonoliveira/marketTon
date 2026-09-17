@@ -68,6 +68,9 @@ class MLConfig:
 class MLAdapterOptions:
     """Opções de coleta. Padrões conservadores para respeitar rate limit."""
 
+    # Termos de descoberta pública (`/sites/{site}/search`). Obrigatório: a API
+    # de itens não expõe "meu catálogo de afiliado", só busca por termo.
+    keywords: list[str] = field(default_factory=list)
     max_items: int = 50
     # Buscar avaliação de cada item custa uma chamada por item.
     fetch_reviews: bool = True
@@ -267,7 +270,16 @@ class MercadoLivreAdapter(MarketplaceAdapter):
     def fetch_products(
         self, *, limit: int | None = None, options: MLAdapterOptions | None = None
     ) -> ConnectorBatch:
-        """Coleta o catálogo do vendedor autenticado."""
+        """Descoberta pública por palavra-chave.
+
+        Antes buscava `/users/{id}/items/search` — o catálogo da própria conta
+        conectada. Isso é o oposto do que o sistema precisa: achar produtos de
+        QUALQUER vendedor para promover como afiliado, não gerenciar o próprio
+        estoque. Descoberto ao vivo: uma conta sem vendas ativas trazia 0
+        produtos, mesmo com OAuth funcionando perfeitamente. Agora usa
+        `/sites/{site}/search`, a mesma busca pública que `search_competitor`
+        já usava só para o Creative Saturation Score.
+        """
         options = options or MLAdapterOptions()
         if limit is not None:
             options.max_items = limit
@@ -278,20 +290,21 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 "Sem access_token do Mercado Livre. Autorize o app em /marketplaces/mercadolivre/auth "
                 "ou preencha MARKETPLACE_MERCADOLIVRE_ACCESS_TOKEN no .env."
             )
+        if not options.keywords:
+            raise MercadoLivreError(
+                "informe ao menos uma palavra-chave em MLAdapterOptions.keywords: a descoberta é "
+                "busca pública por termo, não existe 'meu catálogo' para afiliação."
+            )
 
-        me = self._api_get("/users/me")
-        if not me:
-            raise MercadoLivreError("não foi possível identificar o usuário autenticado (/users/me)")
-        user_id = me.get("id")
-        site_id = me.get("site_id") or self.cfg.site_id
-
-        item_ids = self._search_seller_items(user_id, options)
+        site_id = self.cfg.site_id
+        item_ids = self._search_public_items(options, site_id)
         products: list[ConnectorProduct] = []
         warnings = list(options.warnings)
 
         if len(item_ids) >= options.max_items:
             warnings.append(
-                f"coleta limitada a {options.max_items} anúncios; o vendedor pode ter mais"
+                f"coleta limitada a {options.max_items} anúncios; pode haver mais resultados "
+                "para essas palavras-chave"
             )
 
         review_lookups = 0
@@ -324,33 +337,53 @@ class MercadoLivreAdapter(MarketplaceAdapter):
             connector=self.name,
             products=products,
             collected_at=collected_at,
-            endpoint=f"{self.cfg.api_url}/items/{{id}} (seller {user_id})",
+            endpoint=f"{self.cfg.api_url}/sites/{site_id}/search (keywords: {', '.join(options.keywords)})",
             reliability=self.reliability,
             warnings=warnings,
-            raw={"user_id": user_id, "site_id": site_id, "item_ids": item_ids[:200]},
+            raw={"site_id": site_id, "keywords": options.keywords, "item_ids": item_ids[:200]},
         )
 
-    def _search_seller_items(self, user_id: Any, options: MLAdapterOptions) -> list[str]:
-        """Percorre a busca paginada de anúncios do vendedor."""
+    def _search_public_items(self, options: MLAdapterOptions, site_id: str) -> list[str]:
+        """Busca pública por palavra-chave em `/sites/{site}/search`, uma ou mais.
+
+        O orçamento de itens é dividido entre as palavras-chave; resultados
+        repetidos (o mesmo anúncio para duas buscas) são deduplicados.
+        """
         item_ids: list[str] = []
-        offset = 0
-        while len(item_ids) < options.max_items:
-            page_size = min(options.page_size, options.max_items - len(item_ids))
-            try:
-                page = self._api_get(
-                    f"/users/{user_id}/items/search",
-                    {"status": "active", "limit": page_size, "offset": offset},
+        seen: set[str] = set()
+        budget_per_keyword = max(1, options.max_items // max(1, len(options.keywords)))
+
+        for keyword in options.keywords:
+            if len(item_ids) >= options.max_items:
+                break
+            offset = 0
+            collected_for_keyword = 0
+            while collected_for_keyword < budget_per_keyword and len(item_ids) < options.max_items:
+                page_size = min(
+                    options.page_size,
+                    budget_per_keyword - collected_for_keyword,
+                    options.max_items - len(item_ids),
                 )
-            except MercadoLivreError as exc:
-                options.warnings.append(f"busca de anúncios interrompida em offset {offset}: {exc}")
-                break
-            if not page or not page.get("results"):
-                break
-            item_ids.extend(str(item) for item in page["results"])
-            offset += page_size
-            total = page.get("paging", {}).get("total")
-            if total is not None and offset >= int(total):
-                break
+                try:
+                    page = self._api_get(
+                        f"/sites/{site_id}/search",
+                        {"q": keyword, "limit": page_size, "offset": offset},
+                    )
+                except MercadoLivreError as exc:
+                    options.warnings.append(f"busca por '{keyword}' interrompida em offset {offset}: {exc}")
+                    break
+                if not page or not page.get("results"):
+                    break
+                for item in page["results"]:
+                    item_id = str(item.get("id")) if item.get("id") is not None else None
+                    if item_id and item_id not in seen:
+                        seen.add(item_id)
+                        item_ids.append(item_id)
+                collected_for_keyword += page_size
+                offset += page_size
+                total = page.get("paging", {}).get("total")
+                if total is not None and offset >= int(total):
+                    break
         return item_ids[: options.max_items]
 
     def _normalize_item(

@@ -70,6 +70,29 @@ class HunterOptions:
     use_ai: bool = True
 
 
+def _adapter_fetch_options(name: str, options: HunterOptions) -> Any | None:
+    """Monta as opções de coleta específicas do adapter a partir das keywords
+    genéricas do agente.
+
+    Cada marketplace tem seu próprio dataclass de opções (`MLAdapterOptions`,
+    `AmazonAdapterOptions`, ...) porque cada API expõe uma forma diferente de
+    busca. `None` significa "chamar `fetch_products` sem `options`" — o caso
+    dos adapters que ainda coletam o catálogo da própria conta (Shopee,
+    TikTok Shop), não descoberta por termo.
+    """
+    if name == "mercado_livre":
+        from integrations.marketplaces.mercado_livre import MLAdapterOptions
+
+        return MLAdapterOptions(keywords=list(options.keywords), max_items=options.max_items_per_adapter)
+    if name == "amazon":
+        from integrations.marketplaces.amazon import AmazonAdapterOptions
+
+        # A PA-API aceita um termo por chamada; usa o primeiro da lista.
+        keyword = options.keywords[0] if options.keywords else ""
+        return AmazonAdapterOptions(keyword=keyword, max_items=min(options.max_items_per_adapter, 10))
+    return None
+
+
 def _collect_batches(
     adapters: dict[str, MarketplaceAdapter],
     options: HunterOptions,
@@ -97,8 +120,13 @@ def _collect_batches(
                 )
             continue
 
+        adapter_options = _adapter_fetch_options(name, options)
+
         try:
-            batch = adapter.fetch_products(limit=options.max_items_per_adapter)
+            if adapter_options is not None:
+                batch = adapter.fetch_products(limit=options.max_items_per_adapter, options=adapter_options)
+            else:
+                batch = adapter.fetch_products(limit=options.max_items_per_adapter)
         except Exception as exc:  # noqa: BLE001
             errors.append(f"adapter '{name}' falhou: {exc}")
             if handle:
@@ -391,6 +419,10 @@ def run(
                 "scored": scored[: options.score_limit],
                 "evaluations": evaluations,
                 "collect_errors": errors,
+                # Avisos por lote (paginação interrompida, item ignorado, etc.) —
+                # antes só apareciam nos eventos do job, invisíveis para quem só olha
+                # o resultado da chamada (ex.: scripts/ingest.py).
+                "collect_warnings": [warning for batch in batches for warning in batch.warnings],
             },
         )
 

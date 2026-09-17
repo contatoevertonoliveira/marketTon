@@ -88,6 +88,8 @@ def main() -> int:
         print(result.summary)
         for error in result.artifacts.get("collect_errors", []):
             print(f"  - {error}")
+        for warning in result.artifacts.get("collect_warnings", []):
+            print(f"  (aviso) {warning}")
 
     return 0 if result.ok else 1
 
