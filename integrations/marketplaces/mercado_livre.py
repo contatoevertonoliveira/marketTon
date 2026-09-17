@@ -181,9 +181,14 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 },
                 timeout=self.cfg.timeout,
             )
-            response.raise_for_status()
         except requests.RequestException as exc:
             logger.warning("renovação de token falhou: %s", exc)
+            return False
+
+        if response.status_code != 200:
+            logger.warning(
+                "renovação de token falhou: HTTP %s — %s", response.status_code, response.text[:500]
+            )
             return False
 
         data = response.json()
@@ -221,9 +226,15 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 },
                 timeout=self.cfg.timeout,
             )
-            response.raise_for_status()
         except requests.RequestException as exc:
             raise MercadoLivreError(f"troca de código por token falhou: {exc}") from exc
+
+        if response.status_code != 200:
+            # `raise_for_status()` descarta o corpo da resposta — e é nele que a ML
+            # explica o motivo real (`invalid_grant`, redirect_uri divergente, etc.).
+            raise MercadoLivreError(
+                f"troca de código por token falhou: HTTP {response.status_code} — {response.text[:500]}"
+            )
 
         data = response.json()
         expires_in = data.get("expires_in")
