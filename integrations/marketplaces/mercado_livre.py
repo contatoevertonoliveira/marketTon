@@ -68,9 +68,9 @@ class MLConfig:
 class MLAdapterOptions:
     """Opções de coleta. Padrões conservadores para respeitar rate limit."""
 
-    # Termos de descoberta pública (`/sites/{site}/search`). Obrigatório: a API
-    # de itens não expõe "meu catálogo de afiliado", só busca por termo.
-    keywords: list[str] = field(default_factory=list)
+    # Categorias cujos mais vendidos serão coletados. Vazio = todas as
+    # categorias de topo do site (`/sites/{site}/categories`).
+    category_ids: list[str] = field(default_factory=list)
     max_items: int = 50
     # Buscar avaliação de cada item custa uma chamada por item.
     fetch_reviews: bool = True
@@ -270,15 +270,16 @@ class MercadoLivreAdapter(MarketplaceAdapter):
     def fetch_products(
         self, *, limit: int | None = None, options: MLAdapterOptions | None = None
     ) -> ConnectorBatch:
-        """Descoberta pública por palavra-chave.
+        """Descoberta pelos mais vendidos de cada categoria (`/highlights`).
 
-        Antes buscava `/users/{id}/items/search` — o catálogo da própria conta
-        conectada. Isso é o oposto do que o sistema precisa: achar produtos de
-        QUALQUER vendedor para promover como afiliado, não gerenciar o próprio
-        estoque. Descoberto ao vivo: uma conta sem vendas ativas trazia 0
-        produtos, mesmo com OAuth funcionando perfeitamente. Agora usa
-        `/sites/{site}/search`, a mesma busca pública que `search_competitor`
-        já usava só para o Creative Saturation Score.
+        A busca pública `/sites/{site}/search` devolve 403 para apps comuns
+        (bloqueio da própria ML, sem aviso oficial), e o catálogo da conta
+        conectada (`/users/{id}/items/search`) não serve à afiliação. Os
+        `highlights` respondem com o mesmo token, já vêm ranqueados por venda
+        (a `position` vira `ranking_position`) e cobrem qualquer vendedor.
+        Os IDs são de produto de catálogo: nome/fotos/marca vêm de
+        `/products/{id}` e preço/vendedor da oferta mais barata em
+        `/products/{id}/items`.
         """
         options = options or MLAdapterOptions()
         if limit is not None:
@@ -290,101 +291,127 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 "Sem access_token do Mercado Livre. Autorize o app em /marketplaces/mercadolivre/auth "
                 "ou preencha MARKETPLACE_MERCADOLIVRE_ACCESS_TOKEN no .env."
             )
-        if not options.keywords:
-            raise MercadoLivreError(
-                "informe ao menos uma palavra-chave em MLAdapterOptions.keywords: a descoberta é "
-                "busca pública por termo, não existe 'meu catálogo' para afiliação."
-            )
 
         site_id = self.cfg.site_id
-        item_ids = self._search_public_items(options, site_id)
-        products: list[ConnectorProduct] = []
+        category_ids = options.category_ids or self._top_level_categories(site_id)
         warnings = list(options.warnings)
+        if not category_ids:
+            warnings.append("nenhuma categoria disponível para consultar os mais vendidos")
 
-        if len(item_ids) >= options.max_items:
-            warnings.append(
-                f"coleta limitada a {options.max_items} anúncios; pode haver mais resultados "
-                "para essas palavras-chave"
-            )
-
-        review_lookups = 0
+        budget = max(1, options.max_items // max(1, len(category_ids)))
+        products: list[ConnectorProduct] = []
+        seen: set[str] = set()
         seller_cache: dict[str, dict[str, Any]] = {}
 
-        for item_id in item_ids:
+        for category_id in category_ids:
+            if len(products) >= options.max_items:
+                break
             try:
-                detail = self._api_get(f"/items/{item_id}")
+                highlights = self._api_get(f"/highlights/{site_id}/category/{category_id}")
             except MercadoLivreError as exc:
-                warnings.append(f"item {item_id} ignorado: {exc}")
+                warnings.append(f"mais vendidos de {category_id} indisponíveis: {exc}")
                 continue
-            if not detail:
-                continue
+            entries = [e for e in (highlights or {}).get("content", []) if e.get("type") == "PRODUCT"]
 
-            product = self._normalize_item(
-                detail,
-                site_id=site_id,
-                options=options,
-                warnings=warnings,
-                seller_cache=seller_cache,
-            )
-
-            if options.fetch_reviews and review_lookups < options.max_review_lookups:
-                review_lookups += 1
-                self._attach_reviews(product, item_id, warnings)
-
-            products.append(product)
+            taken = 0
+            for entry in entries:
+                if taken >= budget or len(products) >= options.max_items:
+                    break
+                product_id = str(entry.get("id"))
+                if product_id in seen:
+                    continue
+                try:
+                    product = self._product_from_catalog(
+                        product_id, entry.get("position"), category_id, options, warnings, seller_cache
+                    )
+                except MercadoLivreError as exc:
+                    warnings.append(f"produto {product_id} ignorado: {exc}")
+                    continue
+                if product is None:
+                    continue
+                seen.add(product_id)
+                products.append(product)
+                taken += 1
 
         return ConnectorBatch(
             connector=self.name,
             products=products,
             collected_at=collected_at,
-            endpoint=f"{self.cfg.api_url}/sites/{site_id}/search (keywords: {', '.join(options.keywords)})",
+            endpoint=f"{self.cfg.api_url}/highlights/{site_id}/category/{{id}} (BEST_SELLER)",
             reliability=self.reliability,
             warnings=warnings,
-            raw={"site_id": site_id, "keywords": options.keywords, "item_ids": item_ids[:200]},
+            raw={"site_id": site_id, "category_ids": category_ids, "product_ids": sorted(seen)[:200]},
         )
 
-    def _search_public_items(self, options: MLAdapterOptions, site_id: str) -> list[str]:
-        """Busca pública por palavra-chave em `/sites/{site}/search`, uma ou mais.
+    def _top_level_categories(self, site_id: str) -> list[str]:
+        try:
+            categories = self._api_get(f"/sites/{site_id}/categories")
+        except MercadoLivreError as exc:
+            logger.warning("categorias de %s indisponíveis: %s", site_id, exc)
+            return []
+        return [str(c["id"]) for c in (categories or []) if c.get("id")]
 
-        O orçamento de itens é dividido entre as palavras-chave; resultados
-        repetidos (o mesmo anúncio para duas buscas) são deduplicados.
-        """
-        item_ids: list[str] = []
-        seen: set[str] = set()
-        budget_per_keyword = max(1, options.max_items // max(1, len(options.keywords)))
+    def _product_from_catalog(
+        self,
+        product_id: str,
+        position: int | None,
+        category_id: str,
+        options: MLAdapterOptions,
+        warnings: list[str],
+        seller_cache: dict[str, dict[str, Any]],
+    ) -> ConnectorProduct | None:
+        detail = self._api_get(f"/products/{product_id}")
+        if not detail:
+            return None
+        listings = (self._api_get(f"/products/{product_id}/items") or {}).get("results") or []
+        priced = [l for l in listings if l.get("price") is not None]
+        offer = min(priced, key=lambda l: l["price"]) if priced else {}
 
-        for keyword in options.keywords:
-            if len(item_ids) >= options.max_items:
-                break
-            offset = 0
-            collected_for_keyword = 0
-            while collected_for_keyword < budget_per_keyword and len(item_ids) < options.max_items:
-                page_size = min(
-                    options.page_size,
-                    budget_per_keyword - collected_for_keyword,
-                    options.max_items - len(item_ids),
-                )
-                try:
-                    page = self._api_get(
-                        f"/sites/{site_id}/search",
-                        {"q": keyword, "limit": page_size, "offset": offset},
-                    )
-                except MercadoLivreError as exc:
-                    options.warnings.append(f"busca por '{keyword}' interrompida em offset {offset}: {exc}")
-                    break
-                if not page or not page.get("results"):
-                    break
-                for item in page["results"]:
-                    item_id = str(item.get("id")) if item.get("id") is not None else None
-                    if item_id and item_id not in seen:
-                        seen.add(item_id)
-                        item_ids.append(item_id)
-                collected_for_keyword += page_size
-                offset += page_size
-                total = page.get("paging", {}).get("total")
-                if total is not None and offset >= int(total):
-                    break
-        return item_ids[: options.max_items]
+        attributes = {
+            attr.get("id"): attr.get("value_name")
+            for attr in (detail.get("attributes") or [])
+            if attr.get("id")
+        }
+        seller_id = str(offer.get("seller_id") or "") or None
+        profile = self._seller_profile(seller_id, options, warnings, seller_cache)
+        price = offer.get("price")
+        original_price = offer.get("original_price")
+        discount_pct = None
+        if price and original_price and float(original_price) > 0:
+            discount_pct = round((1 - float(price) / float(original_price)) * 100, 2)
+
+        images = [p.get("url") for p in (detail.get("pictures") or []) if p.get("url")]
+        item_id = offer.get("item_id")
+        return ConnectorProduct(
+            external_id=product_id,
+            title=str(detail.get("name") or "").strip(),
+            category_id=offer.get("category_id") or category_id,
+            brand=attributes.get("BRAND"),
+            model=attributes.get("MODEL"),
+            condition={"new": "novo", "used": "usado"}.get(offer.get("condition"), None),
+            seller_external_id=seller_id,
+            seller_nickname=profile.get("nickname"),
+            seller_reputation_level=profile.get("reputation_level"),
+            seller_reputation_score=profile.get("reputation_score"),
+            seller_total_sales=profile.get("total_sales"),
+            seller_positive_rating_pct=profile.get("positive_rating_pct"),
+            seller_feedback_count=profile.get("feedback_count"),
+            seller_is_official_store=bool(offer.get("official_store_id")) if offer else None,
+            seller_power_seller_status=profile.get("power_seller_status"),
+            currency=offer.get("currency_id"),
+            price=float(price) if price is not None else None,
+            original_price=float(original_price) if original_price is not None else None,
+            discount_pct=discount_pct,
+            # Comissão de afiliado não é exposta pela API (briefing seção 2).
+            affiliate_commission_pct=None,
+            is_available=bool(offer) or None,
+            # Posição no ranking de mais vendidos: sinal de demanda comparável.
+            ranking_position=position,
+            has_promotion=bool(discount_pct) or None,
+            product_url=f"https://www.mercadolivre.com.br/p/{product_id}",
+            images=images or None,
+            attributes={"catalog_product_id": product_id, "item_id": item_id, **attributes} or None,
+        )
 
     def _normalize_item(
         self,

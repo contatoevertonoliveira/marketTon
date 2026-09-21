@@ -83,7 +83,8 @@ def _adapter_fetch_options(name: str, options: HunterOptions) -> Any | None:
     if name == "mercado_livre":
         from integrations.marketplaces.mercado_livre import MLAdapterOptions
 
-        return MLAdapterOptions(keywords=list(options.keywords), max_items=options.max_items_per_adapter)
+        # Descoberta por mais vendidos de categoria: palavras-chave não se aplicam.
+        return MLAdapterOptions(max_items=options.max_items_per_adapter)
     if name == "shopee":
         from integrations.marketplaces.shopee import ShopeeAdapterOptions
 
