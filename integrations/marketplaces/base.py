@@ -166,6 +166,9 @@ class MarketplaceAdapter(ABC):
     name: str = "base"
     # Confiabilidade da fonte, gravada em `source_records`. 1.0 = API oficial.
     reliability: float = 1.0
+    # Comissão por categoria informada pelo operador (`commission_rates`). Vazio =
+    # sem estimativa; nunca há valor embutido.
+    commission_rates: dict[str, float] = {}
 
     @abstractmethod
     def fetch_products(self, *, limit: int | None = None) -> ConnectorBatch:

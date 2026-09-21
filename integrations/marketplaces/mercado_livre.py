@@ -402,15 +402,21 @@ class MercadoLivreAdapter(MarketplaceAdapter):
             price=float(price) if price is not None else None,
             original_price=float(original_price) if original_price is not None else None,
             discount_pct=discount_pct,
-            # Comissão de afiliado não é exposta pela API (briefing seção 2).
-            affiliate_commission_pct=None,
+            # A API não expõe comissão. Só há valor quando o operador cadastrou a
+            # taxa da categoria — estimativa declarada em `commission_source`.
+            affiliate_commission_pct=self.commission_rates.get(category_id),
             is_available=bool(offer) or None,
             # Posição no ranking de mais vendidos: sinal de demanda comparável.
             ranking_position=position,
             has_promotion=bool(discount_pct) or None,
             product_url=f"https://www.mercadolivre.com.br/p/{product_id}",
             images=images or None,
-            attributes={"catalog_product_id": product_id, "item_id": item_id, **attributes} or None,
+            attributes={
+                "catalog_product_id": product_id,
+                "item_id": item_id,
+                **({"commission_source": "operator_table"} if category_id in self.commission_rates else {}),
+                **attributes,
+            },
         )
 
     def _normalize_item(

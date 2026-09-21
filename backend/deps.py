@@ -48,6 +48,7 @@ def get_adapters() -> dict:
     load_adapters()
     adapters = {name: resolve(name) for name in list_adapter_names()}
     _apply_credential_overrides(adapters)
+    _apply_commission_rates(adapters)
     return adapters
 
 
@@ -76,6 +77,26 @@ def _apply_credential_overrides(adapters: dict) -> None:
             # e só quando um valor foi de fato salvo (string vazia não apaga).
             if value and hasattr(cfg, key):
                 setattr(cfg, key, value)
+
+
+def _apply_commission_rates(adapters: dict) -> None:
+    """Entrega a cada adapter a tabela de comissão por categoria do operador."""
+    from sqlalchemy import select
+
+    from core.db.commission_rates import CommissionRate
+    from core.db.session import session_scope
+
+    try:
+        with session_scope() as session:
+            rows = session.scalars(select(CommissionRate)).all()
+            by_marketplace: dict[str, dict[str, float]] = {}
+            for row in rows:
+                by_marketplace.setdefault(row.marketplace.value, {})[row.category_id] = row.rate_pct
+    except Exception:  # noqa: BLE001 - banco fora do ar não pode derrubar o registro de adapters
+        return
+
+    for name, adapter in adapters.items():
+        adapter.commission_rates = by_marketplace.get(name, {})
 
 
 __all__ = ["get_adapters", "get_ai_client", "get_session"]

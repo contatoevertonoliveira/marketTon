@@ -234,3 +234,34 @@ class TestContractCompliance:
     def test_batch_reports_emptiness(self) -> None:
         assert ConnectorBatch(connector="x").is_empty
         assert not ConnectorBatch(connector="x", products=[ConnectorProduct("1", "t", price=1.0)]).is_empty
+
+
+class TestMercadoLivreCommissionTable:
+    """A API não informa comissão: só há valor se o operador cadastrou a categoria."""
+
+    def _adapter(self, rates):
+        adapter = MercadoLivreAdapter()
+        adapter.commission_rates = rates
+
+        def fake_get(path, params=None):
+            if path.endswith("/items"):
+                return {"results": [{"item_id": "MLB9", "price": 50, "seller_id": 7, "condition": "new"}]}
+            return {"name": "Produto", "pictures": [], "attributes": []}
+
+        adapter._api_get = fake_get
+        return adapter
+
+    def _product(self, adapter):
+        options = type("O", (), {"fetch_seller_profile": False, "warnings": [], "max_seller_lookups": 0})()
+        return adapter._product_from_catalog("MLB1", 1, "MLB1000", options, [], {})
+
+    def test_rate_comes_only_from_the_operator_table(self) -> None:
+        product = self._product(self._adapter({"MLB1000": 7.5}))
+        assert product.affiliate_commission_pct == 7.5
+        assert product.attributes["commission_source"] == "operator_table"
+
+    def test_no_row_means_no_estimate(self) -> None:
+        product = self._product(self._adapter({}))
+        assert product.affiliate_commission_pct is None
+        assert "commission_source" not in product.attributes
+        assert product.ranking_position == 1

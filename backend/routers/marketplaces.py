@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from backend.deps import get_adapters, get_session
 from backend.security import require
 from core.db.base import Marketplace
+from core.db.commission_rates import CommissionRate
 from core.db.marketplace_credentials import MarketplaceCredential
 
 logger = logging.getLogger(__name__)
@@ -205,3 +206,68 @@ def mercado_livre_oauth_callback(
     row.oauth_code_verifier = None
     session.commit()
     return _oauth_page("Conectado com sucesso! Pode fechar esta aba e voltar ao painel.")
+
+
+# --- Comissão por categoria (informada pelo operador) ---------------------------
+
+
+class CommissionRow(BaseModel):
+    category_id: str
+    name: str
+    rate_pct: float | None = None
+
+
+class CommissionUpdate(BaseModel):
+    # `None` remove a taxa daquela categoria.
+    rates: dict[str, float | None]
+
+
+@router.get(
+    "/mercado_livre/commissions",
+    response_model=list[CommissionRow],
+    dependencies=[Depends(require("connectors.manage"))],
+)
+def list_mercado_livre_commissions(session: Session = Depends(get_session)) -> list[CommissionRow]:
+    """Categorias de topo da ML + a taxa que o operador cadastrou (se houver)."""
+    adapter = get_adapters().get("mercado_livre")
+    if adapter is None:
+        raise HTTPException(status_code=500, detail="adapter mercado_livre não registrado")
+    try:
+        categories = adapter._api_get(f"/sites/{adapter.cfg.site_id}/categories") or []
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"não foi possível listar categorias: {exc}") from exc
+    saved = {
+        row.category_id: row.rate_pct
+        for row in session.scalars(
+            select(CommissionRate).where(CommissionRate.marketplace == Marketplace.MERCADO_LIVRE)
+        )
+    }
+    return [
+        CommissionRow(category_id=str(c["id"]), name=c.get("name", ""), rate_pct=saved.get(str(c["id"])))
+        for c in categories
+        if c.get("id")
+    ]
+
+
+@router.put("/mercado_livre/commissions", dependencies=[Depends(require("connectors.manage"))])
+def update_mercado_livre_commissions(payload: CommissionUpdate, session: Session = Depends(get_session)) -> dict:
+    for category_id, rate in payload.rates.items():
+        if rate is not None and not 0 <= rate <= 100:
+            raise HTTPException(status_code=422, detail=f"taxa inválida para {category_id}: {rate}")
+    existing = {
+        row.category_id: row
+        for row in session.scalars(
+            select(CommissionRate).where(CommissionRate.marketplace == Marketplace.MERCADO_LIVRE)
+        )
+    }
+    for category_id, rate in payload.rates.items():
+        row = existing.get(category_id)
+        if rate is None:
+            if row is not None:
+                session.delete(row)
+        elif row is None:
+            session.add(CommissionRate(marketplace=Marketplace.MERCADO_LIVRE, category_id=category_id, rate_pct=rate))
+        else:
+            row.rate_pct = rate
+    session.commit()
+    return {"ok": True, "updated": len(payload.rates)}

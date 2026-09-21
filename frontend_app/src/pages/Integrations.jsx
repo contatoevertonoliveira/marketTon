@@ -24,6 +24,67 @@ const NAMES = {
   tiktok_shop: "TikTok Shop",
 };
 
+
+function CommissionPanel() {
+  const [rows, setRows] = useState(null);
+  const [edits, setEdits] = useState({});
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    getJSON("/marketplaces/mercado_livre/commissions").then(setRows).catch((e) => setMsg(e.message));
+  }, []);
+
+  async function save() {
+    const rates = {};
+    for (const [id, v] of Object.entries(edits)) rates[id] = v === "" ? null : Number(String(v).replace(",", "."));
+    try {
+      await putJSON("/marketplaces/mercado_livre/commissions", { rates });
+      setEdits({});
+      setRows(await getJSON("/marketplaces/mercado_livre/commissions"));
+      setMsg("Salvo.");
+    } catch (e) {
+      setMsg(e.message);
+    }
+  }
+
+  return (
+    <div style={{ ...card, marginBottom: 16 }}>
+      <strong style={{ color: "#32325d" }}>Comissão de afiliado — Mercado Livre</strong>
+      <div style={{ fontSize: 11, color: "#8898aa", margin: "4px 0 10px" }}>
+        A API não informa comissão. Digite a % de cada categoria conforme o painel do seu programa de afiliados
+        (varia por conta). Categoria em branco = sem estimativa; nada é preenchido por padrão.
+      </div>
+      {!rows ? (
+        <div style={{ fontSize: 12, color: "#8898aa" }}>{msg || "carregando categorias..."}</div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 8 }}>
+          {rows.map((r) => (
+            <label key={r.category_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12, color: "#525f7f" }}>
+              <span>{r.name}</span>
+              <input
+                style={{ ...input, width: 64 }}
+                placeholder="%"
+                value={edits[r.category_id] ?? (r.rate_pct ?? "")}
+                onChange={(e) => setEdits({ ...edits, [r.category_id]: e.target.value })}
+              />
+            </label>
+          ))}
+        </div>
+      )}
+      <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
+        <button
+          onClick={save}
+          disabled={!Object.keys(edits).length}
+          style={{ background: "#2dce89", color: "#fff", border: "none", borderRadius: 6, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}
+        >
+          Salvar comissões
+        </button>
+        {msg && rows && <span style={{ fontSize: 12, color: "#525f7f" }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
 function MarketplaceCard({ credential, onSaved }) {
   const [enabled, setEnabled] = useState(credential.enabled);
   const [values, setValues] = useState({});
@@ -164,7 +225,10 @@ export default function Integrations() {
         autenticação. Segredos nunca voltam preenchidos aqui; o campo mostra se já está configurado.
       </p>
       {credentials.map((c) => (
-        <MarketplaceCard key={c.marketplace} credential={c} onSaved={load} />
+        <React.Fragment key={c.marketplace}>
+          <MarketplaceCard credential={c} onSaved={load} />
+          {c.marketplace === "mercado_livre" && <CommissionPanel />}
+        </React.Fragment>
       ))}
     </div>
   );
