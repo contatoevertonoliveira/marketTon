@@ -105,7 +105,7 @@ export default function ProductCard({ product, onClick }) {
         {priceCompetitiveness(product) && (
           <div style={{ fontSize: 11, color: priceCompetitiveness(product).isLowest ? "#2dce89" : "#8898aa" }}>
             {priceCompetitiveness(product).isLowest ? "✓ menor preço" : "não é o menor preço"} entre{" "}
-            {priceCompetitiveness(product).offers} vendedores
+            {priceCompetitiveness(product).offers} {priceCompetitiveness(product).confirmed ? "vendedores" : "ofertas parecidas"}
           </div>
         )}
 

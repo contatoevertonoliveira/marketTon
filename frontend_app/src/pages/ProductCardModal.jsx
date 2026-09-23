@@ -154,7 +154,17 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
                   color: priceCompetitiveness(product).isLowest ? "#1a7a54" : "#c31e3f",
                 }}
               >
-                {priceCompetitiveness(product).offers} vendedores anunciam este mesmo produto, de{" "}
+                {priceCompetitiveness(product).confirmed ? (
+                  <>
+                    {priceCompetitiveness(product).offers} vendedores anunciam este mesmo produto (confirmado pelo
+                    catálogo da Mercado Livre), de{" "}
+                  </>
+                ) : (
+                  <>
+                    {priceCompetitiveness(product).offers} ofertas parecidas apareceram na mesma busca (a Shopee não
+                    confirma se é o item idêntico), de{" "}
+                  </>
+                )}
                 {fmtMoney(priceCompetitiveness(product).min, product.currency)} a{" "}
                 {fmtMoney(priceCompetitiveness(product).max, product.currency)}.{" "}
                 {priceCompetitiveness(product).isLowest

@@ -207,6 +207,7 @@ class ShopeeAdapter(MarketplaceAdapter):
                 break
             page = 1
             collected_for_keyword = 0
+            keyword_batch: list[ConnectorProduct] = []
             while collected_for_keyword < budget_per_keyword and len(products) < options.max_items:
                 page_size = min(
                     options.page_size,
@@ -229,13 +230,21 @@ class ShopeeAdapter(MarketplaceAdapter):
                     item_id = str(node.get("itemId")) if node.get("itemId") is not None else None
                     if item_id and item_id not in seen:
                         seen.add(item_id)
-                        products.append(self._normalize_offer(node))
+                        keyword_batch.append(self._normalize_offer(node))
                         collected_for_keyword += 1
 
                 page_info = payload.get("pageInfo") or {}
                 if not page_info.get("hasNextPage"):
                     break
                 page += 1
+
+            # A Affiliate Open API não tem um ID de catálogo compartilhado entre
+            # lojas (como a ML tem) — não há como saber com certeza que duas
+            # ofertas são o mesmo item. O sinal honesto que dá pra extrair é
+            # "outras ofertas que apareceram nesta mesma busca por palavra-chave":
+            # aproxima concorrência de nicho, não confirma item idêntico.
+            self._attach_similar_offers(keyword_batch)
+            products.extend(keyword_batch)
 
         if len(products) >= options.max_items:
             warnings.append(
@@ -274,6 +283,25 @@ class ShopeeAdapter(MarketplaceAdapter):
             affiliate_url=node.get("offerLink"),
             images=[node["imageUrl"]] if node.get("imageUrl") else None,
         )
+
+    @staticmethod
+    def _attach_similar_offers(batch: list[ConnectorProduct]) -> None:
+        """Faixa de preço entre as demais ofertas da mesma busca por palavra-chave.
+
+        Chave `similar_*`, não `competing_*` como na ML: aqui é semelhança por
+        termo de busca, não o mesmo item de catálogo confirmado.
+        """
+        priced = [p for p in batch if p.price is not None]
+        if len(priced) < 2:
+            return
+        prices = sorted(p.price for p in priced)
+        for product in priced:
+            product.attributes = {
+                **(product.attributes or {}),
+                "similar_offers": len(prices),
+                "similar_price_min": prices[0],
+                "similar_price_max": prices[-1],
+            }
 
     def fetch_sales(self, *, since: datetime | None = None) -> list[SalesRecord]:
         """A Affiliate Open API expõe catálogo/oferta, não conversão atribuída."""

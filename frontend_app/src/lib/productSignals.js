@@ -26,15 +26,39 @@ export function shipsFromBrazil(product) {
   return mode === "none";
 }
 
-// Quantos outros vendedores oferecem exatamente o mesmo produto de catálogo
-// (Mercado Livre) e a faixa de preço deles — real, vem de /products/{id}/items.
+// Comparação de preço com outras ofertas. Duas fontes possíveis, e a UI
+// precisa saber qual é qual — não são a mesma garantia:
+// - `confirmed`: Mercado Livre expõe um ID de catálogo compartilhado entre
+//   vendedores, então "outras ofertas" é o mesmo item, com certeza.
+// - `!confirmed` (Shopee): a Affiliate Open API não tem esse ID; o que dá
+//   pra comparar são outras ofertas que apareceram na mesma busca por
+//   palavra-chave — aproxima concorrência de nicho, não confirma item igual.
 export function priceCompetitiveness(product) {
-  const offers = product.attributes?.competing_offers;
-  if (!offers) return null;
-  const min = product.attributes.competing_price_min;
-  const max = product.attributes.competing_price_max;
-  const isLowest = product.price != null && min != null && product.price <= min + 0.01;
-  return { offers, min, max, isLowest };
+  const confirmedOffers = product.attributes?.competing_offers;
+  if (confirmedOffers) {
+    const min = product.attributes.competing_price_min;
+    const isLowest = product.price != null && min != null && product.price <= min + 0.01;
+    return {
+      offers: confirmedOffers,
+      min,
+      max: product.attributes.competing_price_max,
+      isLowest,
+      confirmed: true,
+    };
+  }
+  const similarOffers = product.attributes?.similar_offers;
+  if (similarOffers) {
+    const min = product.attributes.similar_price_min;
+    const isLowest = product.price != null && min != null && product.price <= min + 0.01;
+    return {
+      offers: similarOffers,
+      min,
+      max: product.attributes.similar_price_max,
+      isLowest,
+      confirmed: false,
+    };
+  }
+  return null;
 }
 
 export function sellerLocation(product) {
