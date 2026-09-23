@@ -68,6 +68,44 @@ export function sellerLocation(product) {
   return state || city || null;
 }
 
+const GOOD_REPUTATION_LEVELS = new Set(["5_green", "4_light_green"]);
+
+// Selo "Aprovado": não é a camada de IA do sistema (ela está desligada — exige
+// chave de API que ainda não foi configurada em Integrações). É uma regra
+// determinística sobre os mesmos sinais reais já coletados — demanda, vendedor
+// confiável, preço competitivo, comissão conhecida — com o motivo auditável,
+// igual à explicação que os scores já mostram. Passa quem atende pelo menos 3
+// dos 4 critérios: um produto sem nenhum sinal negativo não deveria precisar
+// de todos os 4 pra ser aprovado, mas dois ou menos não é indicação séria.
+export function approvalVerdict(product) {
+  const checks = [
+    {
+      label: "demanda real",
+      pass:
+        (product.sold_quantity != null && product.sold_quantity > 0) ||
+        (product.ranking_position != null && product.ranking_position <= 10),
+    },
+    {
+      label: "vendedor confiável",
+      pass:
+        product.seller_is_official_store === true ||
+        GOOD_REPUTATION_LEVELS.has(product.seller_reputation_level) ||
+        (product.rating != null && product.rating >= 4.5),
+    },
+    {
+      label: "preço competitivo",
+      pass: priceCompetitiveness(product)?.isLowest === true,
+    },
+    {
+      label: "comissão conhecida",
+      pass: product.affiliate_commission_pct != null,
+    },
+  ];
+  const passed = checks.filter((c) => c.pass).map((c) => c.label);
+  const failed = checks.filter((c) => !c.pass).map((c) => c.label);
+  return { approved: passed.length >= 3, passed, failed };
+}
+
 // Prioriza, nessa ordem: vendas reais -> avaliação -> velocidade de entrega
 // -> posição no ranking de mais vendidos (fallback quando o marketplace não
 // expõe vendas, caso da Mercado Livre hoje) -> score de Oportunidade.

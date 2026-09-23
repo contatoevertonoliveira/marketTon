@@ -1,5 +1,5 @@
 import React from "react";
-import { logisticSpeedRank, priceCompetitiveness, shipsFromBrazil } from "../lib/productSignals";
+import { approvalVerdict, logisticSpeedRank, priceCompetitiveness, shipsFromBrazil } from "../lib/productSignals";
 
 function fmtMoney(v, currency) {
   if (v === null || v === undefined) return "—";
@@ -11,16 +11,18 @@ function fmtMoney(v, currency) {
 export default function ProductCard({ product, onClick }) {
   const image = product.images?.[0];
   const opportunity = product.scores?.OPPORTUNITY;
+  const verdict = approvalVerdict(product);
 
   return (
     <button
       onClick={onClick}
+      title={verdict.approved ? `Aprovado: ${verdict.passed.join(", ")}` : `Não aprovado ainda: falta ${verdict.failed.join(", ")}`}
       style={{
         display: "flex",
         flexDirection: "column",
         textAlign: "left",
         background: "#fff",
-        border: "1px solid #eef0f5",
+        border: verdict.approved ? "1px solid #2dce89" : "1px solid #eef0f5",
         borderRadius: 12,
         overflow: "hidden",
         cursor: "pointer",
@@ -28,6 +30,20 @@ export default function ProductCard({ product, onClick }) {
         boxShadow: "0 0 1.5rem 0 rgba(136,152,170,.12)",
       }}
     >
+      {verdict.approved && (
+        <div
+          style={{
+            background: "#2dce89",
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: 700,
+            textAlign: "center",
+            padding: "4px 0",
+          }}
+        >
+          ✓ Aprovado pelo sistema
+        </div>
+      )}
       <div style={{ position: "relative", background: "#f6f9fc", aspectRatio: "1 / 1" }}>
         {image ? (
           <img

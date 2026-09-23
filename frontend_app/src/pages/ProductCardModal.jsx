@@ -1,11 +1,40 @@
 import React, { useEffect, useState } from "react";
 import { getJSON, postJSON } from "../lib/apiClient";
 import ProductDetailDrawer from "./ProductDetail";
-import { logisticSpeedRank, priceCompetitiveness, sellerLocation, shipsFromBrazil } from "../lib/productSignals";
+import { approvalVerdict, logisticSpeedRank, priceCompetitiveness, sellerLocation, shipsFromBrazil } from "../lib/productSignals";
 
 function fmtMoney(v, currency) {
   if (v === null || v === undefined) return "—";
   return Number(v).toLocaleString("pt-BR", { style: "currency", currency: currency || "BRL" });
+}
+
+// O veredito não vem de IA (a camada de IA do sistema está desligada — falta
+// configurar uma chave de API em Integrações). É uma regra determinística
+// sobre os mesmos sinais reais mostrados no resto desta modal, com o motivo
+// sempre visível — nada aqui é opaco.
+function ApprovalBadge({ product }) {
+  const verdict = approvalVerdict(product);
+  return (
+    <div
+      style={{
+        display: "inline-block",
+        marginBottom: 8,
+        padding: "4px 10px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 700,
+        background: verdict.approved ? "#2dce89" : "#f6f9fc",
+        color: verdict.approved ? "#fff" : "#8898aa",
+      }}
+      title={
+        verdict.approved
+          ? `Passou: ${verdict.passed.join(", ")}`
+          : `Passou: ${verdict.passed.join(", ") || "nenhum critério"} · Falta: ${verdict.failed.join(", ")}`
+      }
+    >
+      {verdict.approved ? "✓ Aprovado pelo sistema" : `${verdict.passed.length}/4 critérios — ainda não aprovado`}
+    </div>
+  );
 }
 
 // Quick-view de um produto do catálogo ainda fora (ou já dentro) do
@@ -97,6 +126,8 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
               </button>
             </div>
             <h5 style={{ margin: "2px 0 8px", color: "#32325d" }}>{product.title}</h5>
+
+            <ApprovalBadge product={product} />
 
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: "#32325d" }}>{fmtMoney(product.price, product.currency)}</span>
