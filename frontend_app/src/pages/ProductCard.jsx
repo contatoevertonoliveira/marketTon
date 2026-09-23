@@ -1,4 +1,5 @@
 import React from "react";
+import { logisticSpeedRank, shipsFromBrazil } from "../lib/productSignals";
 
 function fmtMoney(v, currency) {
   if (v === null || v === undefined) return "—";
@@ -106,22 +107,28 @@ export default function ProductCard({ product, onClick }) {
           <span>{product.sold_quantity ? `${product.sold_quantity} vendido(s)` : ""}</span>
         </div>
 
-        {product.affiliate_commission_pct != null && (
-          <span
-            style={{
-              alignSelf: "flex-start",
-              marginTop: 4,
-              background: "#e5faf1",
-              color: "#1a7a54",
-              fontSize: 11,
-              fontWeight: 700,
-              borderRadius: 999,
-              padding: "2px 8px",
-            }}
-          >
-            comissão {product.affiliate_commission_pct.toFixed(0)}%
-          </span>
-        )}
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+          {product.affiliate_commission_pct != null && (
+            <span style={{ background: "#e5faf1", color: "#1a7a54", fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "2px 8px" }}>
+              comissão {product.affiliate_commission_pct.toFixed(0)}%
+            </span>
+          )}
+          {product.seller_is_official_store && (
+            <span style={{ background: "#eef2ff", color: "#5e72e4", fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "2px 8px" }}>
+              loja oficial
+            </span>
+          )}
+          {logisticSpeedRank(product) === 3 && (
+            <span style={{ background: "#fff4e5", color: "#b8720a", fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "2px 8px" }}>
+              ⚡ entrega rápida
+            </span>
+          )}
+          {shipsFromBrazil(product) && logisticSpeedRank(product) !== 3 && (
+            <span style={{ background: "#f6f9fc", color: "#525f7f", fontSize: 11, borderRadius: 999, padding: "2px 8px" }}>
+              🇧🇷 estoque nacional
+            </span>
+          )}
+        </div>
       </div>
     </button>
   );

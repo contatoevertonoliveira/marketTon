@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { postJSON } from "../lib/apiClient";
 import ProductDetailDrawer from "./ProductDetail";
+import { logisticSpeedRank, sellerLocation, shipsFromBrazil } from "../lib/productSignals";
 
 function fmtMoney(v, currency) {
   if (v === null || v === undefined) return "—";
@@ -108,7 +109,7 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
               {product.scores?.OPPORTUNITY != null && <span>Oportunidade: {product.scores.OPPORTUNITY.toFixed(0)}/100</span>}
             </div>
 
-            <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
               {product.affiliate_commission_pct != null ? (
                 <span style={{ background: "#e5faf1", color: "#1a7a54", fontSize: 12, fontWeight: 700, borderRadius: 999, padding: "3px 10px" }}>
                   comissão {product.affiliate_commission_pct.toFixed(0)}%
@@ -116,6 +117,23 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
               ) : (
                 <span style={{ fontSize: 12, color: "#8898aa" }}>comissão não informada pela API deste marketplace</span>
               )}
+              {product.seller_is_official_store && (
+                <span style={{ background: "#eef2ff", color: "#5e72e4", fontSize: 12, fontWeight: 700, borderRadius: 999, padding: "3px 10px" }}>
+                  loja oficial
+                </span>
+              )}
+              {logisticSpeedRank(product) === 3 && (
+                <span style={{ background: "#fff4e5", color: "#b8720a", fontSize: 12, fontWeight: 700, borderRadius: 999, padding: "3px 10px" }}>
+                  ⚡ entrega rápida
+                </span>
+              )}
+            </div>
+
+            <div style={{ fontSize: 12, color: "#525f7f", marginTop: 8 }}>
+              Vendedor: {product.seller_nickname || "não identificado"}
+              {product.seller_reputation_level && ` · reputação ${product.seller_reputation_level}`}
+              {sellerLocation(product) && ` · ${sellerLocation(product)}`}
+              {shipsFromBrazil(product) && " · despacha do Brasil"}
             </div>
 
             {(product.affiliate_url || product.product_url) && (

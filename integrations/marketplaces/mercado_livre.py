@@ -382,6 +382,26 @@ class MercadoLivreAdapter(MarketplaceAdapter):
 
         images = [p.get("url") for p in (detail.get("pictures") or []) if p.get("url")]
         item_id = offer.get("item_id")
+
+        # Sinais de logística: nenhum dos dois é exposto como campo próprio do
+        # domínio (`ConnectorProduct`), então entram em `attributes` — mesmo
+        # padrão já usado para `catalog_product_id`/`item_id`.
+        shipping = offer.get("shipping") or {}
+        seller_address = offer.get("seller_address") or {}
+        logistics: dict[str, Any] = {}
+        if shipping.get("logistic_type"):
+            # "fulfillment" = Mercado Envios Full: estoque no armazém da ML,
+            # entrega mais rápida e previsível que envio direto do vendedor.
+            logistics["shipping_logistic_type"] = shipping["logistic_type"]
+        if offer.get("international_delivery_mode") is not None:
+            # "none" = despacha do Brasil; qualquer outro valor é importado —
+            # é o sinal mais direto de "estoque nacional" que a API expõe.
+            logistics["international_delivery_mode"] = offer["international_delivery_mode"]
+        if seller_address.get("state", {}).get("name"):
+            logistics["seller_state"] = seller_address["state"]["name"]
+        if seller_address.get("city", {}).get("name"):
+            logistics["seller_city"] = seller_address["city"]["name"]
+
         return ConnectorProduct(
             external_id=product_id,
             title=str(detail.get("name") or "").strip(),
@@ -415,6 +435,7 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 "catalog_product_id": product_id,
                 "item_id": item_id,
                 **({"commission_source": "operator_table"} if category_id in self.commission_rates else {}),
+                **logistics,
                 **attributes,
             },
         )

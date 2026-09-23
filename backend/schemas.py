@@ -178,6 +178,16 @@ class ProductSummary(BaseModel):
     product_url: str | None = None
     affiliate_url: str | None = None
     images: list[Any] | None = None
+    attributes: dict[str, Any] | None = None
+
+    # Confiabilidade do vendedor (quando o marketplace expõe): sinal real de
+    # "fonte confiável" para priorizar no card, não decoração.
+    seller_nickname: str | None = None
+    seller_reputation_level: str | None = None
+    seller_is_official_store: bool | None = None
+    # Posição no ranking de mais vendidos (Mercado Livre) — sinal de demanda
+    # de fallback quando o marketplace não expõe `sold_quantity` por item.
+    ranking_position: int | None = None
 
     # Scores vigentes por dimensão. Ausente = não calculado.
     scores: dict[str, float] = Field(default_factory=dict)
@@ -193,15 +203,8 @@ class ProductDetail(ProductSummary):
     condition: str | None = None
     category_path: list[Any] | None = None
     affiliate_commission_fixed: float | None = None
-    is_available: bool | None = None
-    ranking_position: int | None = None
     popularity_score: float | None = None
-    has_promotion: bool | None = None
     coupons: list[Any] | None = None
-    product_url: str | None = None
-    affiliate_url: str | None = None
-    images: list[Any] | None = None
-    attributes: dict[str, Any] | None = None
     identity_key: str | None = None
 
     price_history: list[PricePoint] = Field(default_factory=list)

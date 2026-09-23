@@ -3,6 +3,7 @@ import { getJSON } from "../lib/apiClient";
 import ProductDetailDrawer from "./ProductDetail";
 import ProductCard from "./ProductCard";
 import ProductCardModal from "./ProductCardModal";
+import { demandComparator } from "../lib/productSignals";
 
 const STATE_ORDER = [
   "DISCOVERED",
@@ -88,7 +89,7 @@ export default function Portfolio() {
   }, {});
   const productById = Object.fromEntries(products.map((p) => [p.id, p]));
 
-  const sorted = [...products].sort((a, b) => (b.scores?.OPPORTUNITY ?? -1) - (a.scores?.OPPORTUNITY ?? -1));
+  const sorted = [...products].sort(demandComparator);
 
   return (
     <div>
@@ -120,9 +121,12 @@ export default function Portfolio() {
         })}
       </div>
 
-      <h6 style={{ color: "#32325d", margin: "0 0 12px" }}>
+      <h6 style={{ color: "#32325d", margin: "0 0 4px" }}>
         Produtos sugeridos {MARKETPLACES[active]?.name ? `— ${MARKETPLACES[active].name}` : ""}
       </h6>
+      <div style={{ fontSize: 11, color: "#8898aa", marginBottom: 12 }}>
+        Ordenado por vendas reais primeiro; sem venda registrada, entra pela avaliação e pela velocidade de entrega.
+      </div>
       {sorted.length === 0 ? (
         <div style={{ background: "#fff", borderRadius: 10, padding: 20, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)", fontSize: 13, color: "#8898aa" }}>
           Nenhum produto no catálogo ainda para este marketplace. Rode <code>scripts/ingest.py --marketplace {active}</code> para coletar.

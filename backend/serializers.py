@@ -219,6 +219,11 @@ def product_summary(product: Product, scores: dict[str, float] | None = None) ->
         product_url=product.product_url,
         affiliate_url=product.affiliate_url,
         images=product.images,
+        attributes=product.attributes,
+        seller_nickname=product.seller.nickname if product.seller else None,
+        seller_reputation_level=product.seller.reputation_level if product.seller else None,
+        seller_is_official_store=product.seller.is_official_store if product.seller else None,
+        ranking_position=product.ranking_position,
         scores=scores or {},
     )
 
@@ -296,10 +301,8 @@ def product_detail(
         condition=product.condition,
         category_path=product.category_path,
         affiliate_commission_fixed=product.affiliate_commission_fixed,
-        ranking_position=product.ranking_position,
         popularity_score=product.popularity_score,
         coupons=product.coupons,
-        attributes=product.attributes,
         identity_key=product.identity_key,
         # Ordem cronológica para o gráfico: mais antigo primeiro.
         price_history=[price_point(item) for item in reversed(history)],

@@ -82,6 +82,9 @@ def list_products(
 
     order_column = getattr(Product, order_by)
     statement = statement.order_by(order_column.desc().nullslast()).limit(limit).offset(offset)
+    # Card grid mostra confiabilidade do vendedor — carrega junto para não
+    # virar uma consulta por produto.
+    statement = statement.options(selectinload(Product.seller))
 
     products = list(session.scalars(statement))
     scores = latest_scores_by_dimension(session, [product.id for product in products])
