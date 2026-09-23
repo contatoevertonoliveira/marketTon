@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import DailyOps from "./pages/DailyOps";
 import VisaoGeral from "./pages/VisaoGeral";
 import Portfolio from "./pages/Portfolio";
 import Integrations from "./pages/Integrations";
@@ -57,7 +56,7 @@ export default function App() {
         return (
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Daily Ops</h3>
-            <DailyOps />
+            <VisaoGeral />
           </div>
         );
       case "portfolio":

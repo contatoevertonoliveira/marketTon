@@ -20,11 +20,13 @@ Notas de honestidade dos dados:
 
 * **Comissão e link de afiliado** vêm prontos da API (`commissionRate`,
   `offerLink`) — ao contrário de Mercado Livre e Amazon, aqui não ficam `None`.
-* **Vendas** não são expostas por esta API (é catálogo/oferta, não conversão
-  attribuída); `fetch_sales` continua vazio.
+* **Vendas existem, sim** — descoberto tarde: a API tem `conversionReport`
+  (clique → conversão, com itens e comissão por item) e `validatedReport`
+  (comissão já confirmada/paga). `fetch_sales` usa `conversionReport`, que já
+  traz os dois estados (`PENDING`/`COMPLETED`) sem precisar de duas chamadas.
 * Confiança moderada no formato exato da assinatura: montada a partir de
-  documentação de terceiros (a doc oficial não abre para scraping) — validar
-  contra uma chamada real assim que houver `app_id`/`secret` de verdade.
+  documentação de terceiros (a doc oficial não abre para scraping) — validada
+  ao vivo contra uma chamada real já.
 """
 from __future__ import annotations
 
@@ -32,7 +34,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
@@ -75,6 +77,43 @@ query($keyword: String, $page: Int, $limit: Int) {
     }
   }
 }
+"""
+
+def _conversion_report_query(start: int, end: int, limit: int, scroll_id: str | None) -> str:
+    """Monta a query de `conversionReport` com argumentos literais.
+
+    Não usa `$variáveis`: declarar o tipo GraphQL errado (`Int64!` em vez do
+    nome exato do schema) falhou ao vivo com "wrong type" — argumento inline
+    evita esse problema de vez, mesmo padrão já usado em `_graphql`.
+    """
+    scroll_arg = f', scrollId: "{scroll_id}"' if scroll_id else ""
+    return f"""
+query {{
+  conversionReport(purchaseTimeStart: {start}, purchaseTimeEnd: {end}, limit: {limit}{scroll_arg}) {{
+    nodes {{
+      conversionId
+      purchaseTime
+      conversionStatus
+      orders {{
+        orderId
+        orderStatus
+        items {{
+          itemId
+          itemName
+          itemPrice
+          qty
+          actualAmount
+          itemTotalCommission
+          fraudStatus
+        }}
+      }}
+    }}
+    pageInfo {{
+      hasNextPage
+      scrollId
+    }}
+  }}
+}}
 """
 
 
@@ -304,9 +343,75 @@ class ShopeeAdapter(MarketplaceAdapter):
             }
 
     def fetch_sales(self, *, since: datetime | None = None) -> list[SalesRecord]:
-        """A Affiliate Open API expõe catálogo/oferta, não conversão atribuída."""
-        logger.info("fetch_sales da Shopee não implementado: API de afiliado não expõe vendas")
-        return []
+        """Vendas e comissão via `conversionReport`.
+
+        Cada item de cada pedido de cada conversão vira um `SalesRecord` — é a
+        granularidade que carrega `itemId` (pra ligar ao produto do catálogo)
+        e comissão por item ao mesmo tempo. `conversionStatus` decide se a
+        comissão é estimada (`PENDING`) ou confirmada (`COMPLETED`);
+        `CANCELLED` não gera comissão nenhuma — nem estimada.
+        """
+        if not self.is_configured():
+            raise ShopeeNotConfigured(
+                "Credenciais da Shopee incompletas. São necessários app_id e secret "
+                "(MARKETPLACE_SHOPEE_* no .env, ou salvos em Integrações)."
+            )
+
+        start = int((since or (datetime.now(UTC) - timedelta(days=30))).timestamp())
+        end = int(datetime.now(UTC).timestamp())
+
+        records: list[SalesRecord] = []
+        scroll_id: str | None = None
+        for _ in range(50):  # teto de segurança: nunca fica em loop infinito
+            query = _conversion_report_query(start, end, 100, scroll_id)
+            try:
+                data = self._graphql(query, {})
+            except ShopeeError as exc:
+                logger.warning("conversionReport interrompido: %s", exc)
+                break
+
+            payload = data.get("conversionReport") or {}
+            nodes = payload.get("nodes") or []
+            for node in nodes:
+                records.extend(self._sales_from_conversion(node))
+
+            page_info = payload.get("pageInfo") or {}
+            if not page_info.get("hasNextPage") or not page_info.get("scrollId"):
+                break
+            scroll_id = page_info["scrollId"]
+
+        return records
+
+    @staticmethod
+    def _sales_from_conversion(node: dict[str, Any]) -> list[SalesRecord]:
+        status = node.get("conversionStatus")
+        purchase_time = _to_int(node.get("purchaseTime"))
+        occurred_at = datetime.fromtimestamp(purchase_time, tz=UTC) if purchase_time else datetime.now(UTC)
+
+        records: list[SalesRecord] = []
+        for order in node.get("orders") or []:
+            order_id = order.get("orderId")
+            for item in order.get("items") or []:
+                item_id = item.get("itemId")
+                if not order_id or item_id is None:
+                    continue
+                commission = _to_float(item.get("itemTotalCommission"))
+                records.append(
+                    SalesRecord(
+                        # Um pedido pode ter vários itens; o par (pedido, item)
+                        # é a chave real, não só o pedido.
+                        external_order_id=f"{order_id}:{item_id}",
+                        occurred_at=occurred_at,
+                        quantity=_to_int(item.get("qty")) or 1,
+                        currency="BRL",
+                        gross_amount=_to_float(item.get("actualAmount")) or _to_float(item.get("itemPrice")),
+                        product_external_id=str(item_id),
+                        status=status,
+                        commission_estimated=commission if status == "PENDING" else None,
+                        commission_confirmed=commission if status == "COMPLETED" else None,
+                    )
+                )
+        return records
 
     def search_competitor(self, query: str, *, limit: int = 10) -> list[dict[str, Any]]:
         """Busca de concorrentes reaproveitando `productOfferV2`."""

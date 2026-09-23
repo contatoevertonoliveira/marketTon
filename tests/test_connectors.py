@@ -107,6 +107,8 @@ class TestUnconfiguredAdaptersFailLoudly:
         assert not adapter.is_configured()
         with pytest.raises(ShopeeNotConfigured, match="Credenciais"):
             adapter.fetch_products()
+        with pytest.raises(ShopeeNotConfigured, match="Credenciais"):
+            adapter.fetch_sales()
 
     def test_amazon_without_credentials(self) -> None:
         adapter = AmazonAdapter(cfg=AmazonConfig())
@@ -147,9 +149,8 @@ class TestHonestAboutMissingData:
         adapter = MercadoLivreAdapter()
         assert adapter.fetch_sales() == []
 
-    def test_shopee_does_not_invent_sales_or_competitors(self) -> None:
+    def test_shopee_does_not_invent_competitors(self) -> None:
         adapter = ShopeeAdapter(cfg=ShopeeConfig())
-        assert adapter.fetch_sales() == []
         assert adapter.search_competitor("fone") == []
 
     def test_amazon_does_not_invent_sales(self) -> None:
