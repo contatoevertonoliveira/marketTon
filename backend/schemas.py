@@ -171,6 +171,14 @@ class ProductSummary(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
 
+    # Campos de exibição (cards): já no Product, sem join extra — por isso
+    # entram na listagem, não só no detalhe.
+    is_available: bool | None = None
+    has_promotion: bool | None = None
+    product_url: str | None = None
+    affiliate_url: str | None = None
+    images: list[Any] | None = None
+
     # Scores vigentes por dimensão. Ausente = não calculado.
     scores: dict[str, float] = Field(default_factory=dict)
 

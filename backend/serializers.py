@@ -214,6 +214,11 @@ def product_summary(product: Product, scores: dict[str, float] | None = None) ->
         is_active=product.is_active,
         first_seen_at=product.first_seen_at,
         last_seen_at=product.last_seen_at,
+        is_available=product.is_available,
+        has_promotion=product.has_promotion,
+        product_url=product.product_url,
+        affiliate_url=product.affiliate_url,
+        images=product.images,
         scores=scores or {},
     )
 
@@ -291,14 +296,9 @@ def product_detail(
         condition=product.condition,
         category_path=product.category_path,
         affiliate_commission_fixed=product.affiliate_commission_fixed,
-        is_available=product.is_available,
         ranking_position=product.ranking_position,
         popularity_score=product.popularity_score,
-        has_promotion=product.has_promotion,
         coupons=product.coupons,
-        product_url=product.product_url,
-        affiliate_url=product.affiliate_url,
-        images=product.images,
         attributes=product.attributes,
         identity_key=product.identity_key,
         # Ordem cronológica para o gráfico: mais antigo primeiro.
