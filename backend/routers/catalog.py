@@ -111,6 +111,33 @@ def get_product(product_id: int, session: Session = Depends(get_session)) -> Pro
     return product_detail(session, product)
 
 
+@router.get("/products/{product_id}/comparables", response_model=list[ProductSummary])
+def product_comparables(product_id: int, session: Session = Depends(get_session)) -> list[ProductSummary]:
+    """Mesmo produto (por `identity_key`) já visto em outro anúncio ou marketplace.
+
+    `identity_key` (título normalizado + marca) é gerado na ingestão, mas nunca
+    tinha um consumidor — é a resposta real para "esse preço compete com quem
+    mais vende a mesma coisa?", sem inventar um comparador externo. Só existe
+    resultado quando o catálogo já coletou o mesmo produto de outro lugar;
+    catálogo pequeno ou de nicho único não terá comparáveis, o que é honesto,
+    não um bug.
+    """
+    product = session.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail=f"produto {product_id} não encontrado")
+    if not product.identity_key:
+        return []
+
+    others = session.scalars(
+        select(Product)
+        .where(Product.identity_key == product.identity_key, Product.id != product_id)
+        .options(selectinload(Product.seller))
+        .order_by(Product.price.asc().nullslast())
+    ).all()
+    scores = latest_scores_by_dimension(session, [p.id for p in others])
+    return [product_summary(p, scores.get(p.id)) for p in others]
+
+
 @router.get("/products/{product_id}/source", response_model=list[SourceRecordOut])
 def product_provenance(
     product_id: int, session: Session = Depends(get_session)

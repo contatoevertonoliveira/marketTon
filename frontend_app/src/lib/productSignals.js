@@ -26,6 +26,17 @@ export function shipsFromBrazil(product) {
   return mode === "none";
 }
 
+// Quantos outros vendedores oferecem exatamente o mesmo produto de catálogo
+// (Mercado Livre) e a faixa de preço deles — real, vem de /products/{id}/items.
+export function priceCompetitiveness(product) {
+  const offers = product.attributes?.competing_offers;
+  if (!offers) return null;
+  const min = product.attributes.competing_price_min;
+  const max = product.attributes.competing_price_max;
+  const isLowest = product.price != null && min != null && product.price <= min + 0.01;
+  return { offers, min, max, isLowest };
+}
+
 export function sellerLocation(product) {
   const city = product.attributes?.seller_city;
   const state = product.attributes?.seller_state;

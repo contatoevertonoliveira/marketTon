@@ -367,6 +367,17 @@ class MercadoLivreAdapter(MarketplaceAdapter):
         priced = [l for l in listings if l.get("price") is not None]
         offer = min(priced, key=lambda l: l["price"]) if priced else {}
 
+        # A ML devolve TODAS as ofertas de outros vendedores do mesmo produto de
+        # catálogo — é o dado real para responder "nosso preço é competitivo
+        # frente a quem mais vende exatamente isto?". Escolher a mais barata já
+        # usava essa lista; só faltava guardar o resto em vez de descartar.
+        competing_prices = sorted(l["price"] for l in priced)
+        price_comparison: dict[str, Any] = {}
+        if len(competing_prices) > 1:
+            price_comparison["competing_offers"] = len(competing_prices)
+            price_comparison["competing_price_min"] = competing_prices[0]
+            price_comparison["competing_price_max"] = competing_prices[-1]
+
         attributes = {
             attr.get("id"): attr.get("value_name")
             for attr in (detail.get("attributes") or [])
@@ -436,6 +447,7 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 "item_id": item_id,
                 **({"commission_source": "operator_table"} if category_id in self.commission_rates else {}),
                 **logistics,
+                **price_comparison,
                 **attributes,
             },
         )

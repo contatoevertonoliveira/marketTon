@@ -1,5 +1,5 @@
 import React from "react";
-import { logisticSpeedRank, shipsFromBrazil } from "../lib/productSignals";
+import { logisticSpeedRank, priceCompetitiveness, shipsFromBrazil } from "../lib/productSignals";
 
 function fmtMoney(v, currency) {
   if (v === null || v === undefined) return "—";
@@ -101,6 +101,13 @@ export default function ProductCard({ product, onClick }) {
             </span>
           )}
         </div>
+
+        {priceCompetitiveness(product) && (
+          <div style={{ fontSize: 11, color: priceCompetitiveness(product).isLowest ? "#2dce89" : "#8898aa" }}>
+            {priceCompetitiveness(product).isLowest ? "✓ menor preço" : "não é o menor preço"} entre{" "}
+            {priceCompetitiveness(product).offers} vendedores
+          </div>
+        )}
 
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#8898aa", marginTop: 2 }}>
           <span>{product.rating != null ? `⭐ ${product.rating.toFixed(1)}` : "sem avaliação"}</span>

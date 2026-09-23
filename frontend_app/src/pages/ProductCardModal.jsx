@@ -1,7 +1,7 @@
-import React, { useState } from "react";
-import { postJSON } from "../lib/apiClient";
+import React, { useEffect, useState } from "react";
+import { getJSON, postJSON } from "../lib/apiClient";
 import ProductDetailDrawer from "./ProductDetail";
-import { logisticSpeedRank, sellerLocation, shipsFromBrazil } from "../lib/productSignals";
+import { logisticSpeedRank, priceCompetitiveness, sellerLocation, shipsFromBrazil } from "../lib/productSignals";
 
 function fmtMoney(v, currency) {
   if (v === null || v === undefined) return "—";
@@ -16,6 +16,13 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
   const [justAdded, setJustAdded] = useState(null);
+  const [comparables, setComparables] = useState(null);
+
+  useEffect(() => {
+    getJSON(`/catalog/products/${product.id}/comparables`)
+      .then(setComparables)
+      .catch(() => setComparables([]));
+  }, [product.id]);
 
   if (portfolioItem || justAdded) {
     return (
@@ -135,6 +142,38 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
               {sellerLocation(product) && ` · ${sellerLocation(product)}`}
               {shipsFromBrazil(product) && " · despacha do Brasil"}
             </div>
+
+            {priceCompetitiveness(product) && (
+              <div
+                style={{
+                  fontSize: 12,
+                  marginTop: 8,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  background: priceCompetitiveness(product).isLowest ? "#e5faf1" : "#fef1f4",
+                  color: priceCompetitiveness(product).isLowest ? "#1a7a54" : "#c31e3f",
+                }}
+              >
+                {priceCompetitiveness(product).offers} vendedores anunciam este mesmo produto, de{" "}
+                {fmtMoney(priceCompetitiveness(product).min, product.currency)} a{" "}
+                {fmtMoney(priceCompetitiveness(product).max, product.currency)}.{" "}
+                {priceCompetitiveness(product).isLowest
+                  ? "Este é o menor preço — dá pra competir."
+                  : "Este não é o menor preço encontrado."}
+              </div>
+            )}
+
+            {comparables?.length > 0 && (
+              <div style={{ fontSize: 12, marginTop: 8 }}>
+                <div style={{ color: "#525f7f", marginBottom: 4 }}>Mesmo produto visto em outro anúncio/marketplace:</div>
+                {comparables.slice(0, 4).map((c) => (
+                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: "#8898aa" }}>
+                    <span>{c.marketplace}</span>
+                    <span>{fmtMoney(c.price, c.currency)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {(product.affiliate_url || product.product_url) && (
               <a
