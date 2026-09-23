@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import VisaoGeral from "./pages/VisaoGeral";
+import Dashboard from "./pages/Dashboard";
 import Portfolio from "./pages/Portfolio";
 import Integrations from "./pages/Integrations";
 import Login from "./pages/Login";
@@ -49,7 +50,7 @@ export default function App() {
         return (
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Visão Geral</h3>
-            <VisaoGeral />
+            <Dashboard />
           </div>
         );
       case "daily-ops":
