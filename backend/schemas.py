@@ -293,6 +293,14 @@ class PortfolioItemOut(BaseModel):
     missing_assets_for_publish: list[str] = Field(default_factory=list)
 
 
+class AffiliatedProductOut(BaseModel):
+    """Produto que o operador vinculou (item de portfólio + dados do catálogo)."""
+
+    item: PortfolioItemOut
+    product: ProductSummary
+    category_group: str
+
+
 class PortfolioItemDetail(PortfolioItemOut):
     transitions: list[PortfolioTransitionOut] = Field(default_factory=list)
     recommendations: list[RecommendationOut] = Field(default_factory=list)

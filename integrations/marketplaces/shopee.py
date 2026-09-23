@@ -69,6 +69,7 @@ query($keyword: String, $page: Int, $limit: Int) {
       priceMin
       priceMax
       offerLink
+      productLink
       productCatIds
       shopId
       shopName
@@ -336,6 +337,7 @@ class ShopeeAdapter(MarketplaceAdapter):
             sold_quantity=_to_int(node.get("sales")),
             rating=_to_float(node.get("ratingStar")),
             affiliate_url=node.get("offerLink"),
+            product_url=node.get("productLink"),
             images=[node["imageUrl"]] if node.get("imageUrl") else None,
         )
 

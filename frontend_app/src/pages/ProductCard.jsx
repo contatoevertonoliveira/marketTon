@@ -117,6 +117,7 @@ export default function ProductCard({ product, onClick }) {
         >
           {product.title}
         </div>
+        <div style={{ fontSize: 10, color: "#8898aa" }}>ID {product.external_id}</div>
 
         <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 2 }}>
           <span style={{ fontSize: 17, fontWeight: 700, color: "#32325d" }}>{fmtMoney(product.price, product.currency)}</span>

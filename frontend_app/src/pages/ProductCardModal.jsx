@@ -37,6 +37,38 @@ function ApprovalBadge({ product }) {
   );
 }
 
+// ID numérico do item na Shopee (`itemId`): é o que se cola na busca do portal
+// de afiliados ou na URL /offer/product_offer/<id> para achar o produto.
+function ProductIdRow({ product }) {
+  const [copied, setCopied] = useState("");
+  const isShopee = product.marketplace === "shopee";
+
+  function copy(key, text) {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(""), 1500);
+    });
+  }
+
+  const btn = { padding: "2px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #dde3ec", background: "#fff", cursor: "pointer" };
+  return (
+    <div style={{ fontSize: 12, color: "#525f7f", marginBottom: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      <span>
+        ID: <b style={{ userSelect: "all" }}>{product.external_id}</b>
+      </span>
+      <button style={btn} onClick={() => copy("id", product.external_id)}>{copied === "id" ? "Copiado ✓" : "Copiar ID"}</button>
+      {product.affiliate_url && (
+        <button style={btn} onClick={() => copy("aff", product.affiliate_url)}>{copied === "aff" ? "Copiado ✓" : "Copiar link afiliado"}</button>
+      )}
+      {isShopee && (
+        <a href={`https://affiliate.shopee.com.br/offer/product_offer/${product.external_id}`} target="_blank" rel="noreferrer" style={{ color: "#5e72e4" }}>
+          abrir no portal de afiliados ↗
+        </a>
+      )}
+    </div>
+  );
+}
+
 function CompetitionAndHashtags({ product }) {
   const [count, setCount] = useState(product.affiliate_count ?? "");
   const [period, setPeriod] = useState(product.affiliate_count_period || "total");
@@ -236,6 +268,8 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
             <h5 style={{ margin: "2px 0 8px", color: "#32325d" }}>{product.title}</h5>
 
             <ApprovalBadge product={product} />
+
+            <ProductIdRow product={product} />
 
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: "#32325d" }}>{fmtMoney(product.price, product.currency)}</span>

@@ -12,11 +12,13 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from backend.deps import get_session
 from backend.security import require
 from backend.serializers import (
+    latest_scores_by_dimension,
+    product_summary,
     creative_asset_out,
     portfolio_item_out,
     recommendation_out,
@@ -24,6 +26,7 @@ from backend.serializers import (
 )
 from backend.schemas import (
     AddToPortfolioRequest,
+    AffiliatedProductOut,
     PortfolioItemDetail,
     PortfolioItemOut,
     PortfolioTransitionOut,
@@ -35,6 +38,7 @@ from core.db.catalog import Product
 from core.db.creative import CreativeAsset
 from core.db.portfolio import PortfolioItem, Recommendation
 from core.db.scoring import ScoreRun
+from core.services.categories import department_name
 from core.services.portfolio import (
     ALLOWED_TRANSITIONS,
     TransitionError,
@@ -88,6 +92,42 @@ def list_items(
     statement = statement.order_by(PortfolioItem.state_changed_at.desc()).limit(limit).offset(offset)
 
     return [portfolio_item_out(session, item) for item in session.scalars(statement)]
+
+
+@router.get("/affiliated", response_model=list[AffiliatedProductOut])
+def list_affiliated(
+    session: Session = Depends(get_session),
+    marketplace: Marketplace | None = None,
+) -> list[AffiliatedProductOut]:
+    """Produtos vinculados pelo operador (tudo no portfólio, exceto removidos).
+
+    Alimenta a página "Produtos": cada linha traz o item (estado no funil), o
+    produto do catálogo e o departamento para agrupar em seções.
+    """
+    statement = (
+        select(PortfolioItem, Product)
+        .join(Product, Product.id == PortfolioItem.product_id)
+        .where(PortfolioItem.state != PortfolioState.REMOVED)
+        .options(selectinload(Product.seller))
+        .order_by(PortfolioItem.state_changed_at.desc())
+    )
+    if marketplace is not None:
+        statement = statement.where(PortfolioItem.marketplace == marketplace)
+    rows = session.execute(statement).all()
+
+    products = [product for _, product in rows]
+    scores = latest_scores_by_dimension(session, [p.id for p in products])
+    out: list[AffiliatedProductOut] = []
+    for item, product in rows:
+        marketplace_value = product.marketplace.value if hasattr(product.marketplace, "value") else str(product.marketplace)
+        out.append(
+            AffiliatedProductOut(
+                item=portfolio_item_out(session, item),
+                product=product_summary(product, scores.get(product.id)),
+                category_group=department_name(marketplace_value, product.category_id),
+            )
+        )
+    return out
 
 
 @router.get("/items/{item_id}", response_model=PortfolioItemDetail)
