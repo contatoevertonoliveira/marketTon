@@ -254,7 +254,7 @@ class TestMercadoLivreCommissionTable:
 
     def _product(self, adapter):
         options = type("O", (), {"fetch_seller_profile": False, "warnings": [], "max_seller_lookups": 0})()
-        return adapter._product_from_catalog("MLB1", 1, "MLB1000", options, [], {})
+        return adapter._product_from_catalog("MLB1", 1, "MLB1000", "MLB", options, [], {})
 
     def test_rate_comes_only_from_the_operator_table(self) -> None:
         product = self._product(self._adapter({"MLB1000": 7.5}))

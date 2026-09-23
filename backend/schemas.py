@@ -421,3 +421,29 @@ class DailyOperationsOut(BaseModel):
     published: list[PortfolioItemOut] = Field(default_factory=list)
     optimization_required: list[PortfolioItemOut] = Field(default_factory=list)
     alerts: list[str] = Field(default_factory=list)
+
+
+# --- Tendências internacionais (Mercado Livre) ---------------------------------
+
+
+class TrendingAbroadProduct(BaseModel):
+    """Mais vendido de outro país da ML — não persistido, é dado ao vivo.
+
+    `already_in_brazil_catalog` é uma checagem honesta e exata (mesmo título
+    normalizado + marca do catálogo brasileiro), não uma tradução automática:
+    um título em espanhol quase nunca bate com o mesmo produto em português,
+    então `False` aqui não significa "produto inédito", só "não achamos uma
+    correspondência exata".
+    """
+
+    site_id: str
+    country: str
+    external_id: str
+    title: str
+    category_id: str | None = None
+    price: float | None = None
+    currency: str | None = None
+    ranking_position: int | None = None
+    product_url: str | None = None
+    images: list[Any] | None = None
+    already_in_brazil_catalog: bool

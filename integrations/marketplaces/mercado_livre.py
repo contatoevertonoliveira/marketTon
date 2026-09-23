@@ -71,6 +71,10 @@ class MLAdapterOptions:
     # Categorias cujos mais vendidos serão coletados. Vazio = todas as
     # categorias de topo do site (`/sites/{site}/categories`).
     category_ids: list[str] = field(default_factory=list)
+    # Sobrepõe o site do `cfg` (ex.: "MLM" para México, "MCO" para Colômbia).
+    # Confirmado ao vivo: o mesmo token de app funciona em vários países da
+    # América Latina sem credencial nova — só Argentina (MLA) bloqueou.
+    site_id: str | None = None
     max_items: int = 50
     # Buscar avaliação de cada item custa uma chamada por item.
     fetch_reviews: bool = True
@@ -292,7 +296,7 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 "ou preencha MARKETPLACE_MERCADOLIVRE_ACCESS_TOKEN no .env."
             )
 
-        site_id = self.cfg.site_id
+        site_id = options.site_id or self.cfg.site_id
         category_ids = options.category_ids or self._top_level_categories(site_id)
         warnings = list(options.warnings)
         if not category_ids:
@@ -322,7 +326,7 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                     continue
                 try:
                     product = self._product_from_catalog(
-                        product_id, entry.get("position"), category_id, options, warnings, seller_cache
+                        product_id, entry.get("position"), category_id, site_id, options, warnings, seller_cache
                     )
                 except MercadoLivreError as exc:
                     warnings.append(f"produto {product_id} ignorado: {exc}")
@@ -356,6 +360,7 @@ class MercadoLivreAdapter(MarketplaceAdapter):
         product_id: str,
         position: int | None,
         category_id: str,
+        site_id: str,
         options: MLAdapterOptions,
         warnings: list[str],
         seller_cache: dict[str, dict[str, Any]],
@@ -440,11 +445,12 @@ class MercadoLivreAdapter(MarketplaceAdapter):
             # Posição no ranking de mais vendidos: sinal de demanda comparável.
             ranking_position=position,
             has_promotion=bool(discount_pct) or None,
-            product_url=f"https://www.mercadolivre.com.br/p/{product_id}",
+            product_url=f"https://{_site_domain(site_id)}/p/{product_id}",
             images=images or None,
             attributes={
                 "catalog_product_id": product_id,
                 "item_id": item_id,
+                "site_id": site_id,
                 **({"commission_source": "operator_table"} if category_id in self.commission_rates else {}),
                 **logistics,
                 **price_comparison,
@@ -651,6 +657,26 @@ class MercadoLivreAdapter(MarketplaceAdapter):
                 }
             )
         return results
+
+
+# Domínio público por site — cada país da ML tem o seu, e usar sempre
+# ".com.br" quebraria o link de produtos de outro país (a URL simplesmente
+# não existiria). Confirmado ao vivo: MLM/MCO/MLC funcionam com o mesmo
+# token; os demais ficam aqui prontos para quando/se forem testados.
+_SITE_DOMAINS = {
+    "MLB": "www.mercadolivre.com.br",
+    "MLA": "www.mercadolibre.com.ar",
+    "MLM": "www.mercadolibre.com.mx",
+    "MCO": "www.mercadolibre.com.co",
+    "MLC": "www.mercadolibre.cl",
+    "MLU": "www.mercadolibre.com.uy",
+    "MPE": "www.mercadolibre.com.pe",
+    "MLV": "www.mercadolibre.com.ve",
+}
+
+
+def _site_domain(site_id: str) -> str:
+    return _SITE_DOMAINS.get(site_id, "www.mercadolivre.com.br")
 
 
 def _to_float(value: Any) -> float | None:

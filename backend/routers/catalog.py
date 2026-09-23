@@ -20,7 +20,7 @@ from backend.serializers import (
     product_summary,
     source_record_out,
 )
-from backend.schemas import ProductDetail, ProductSummary, SourceRecordOut
+from backend.schemas import ProductDetail, ProductSummary, SourceRecordOut, TrendingAbroadProduct
 from core.db.base import Marketplace
 from core.db.catalog import Product, SourceRecord
 
@@ -136,6 +136,79 @@ def product_comparables(product_id: int, session: Session = Depends(get_session)
     ).all()
     scores = latest_scores_by_dimension(session, [p.id for p in others])
     return [product_summary(p, scores.get(p.id)) for p in others]
+
+
+_ML_SITE_COUNTRY = {
+    "MLB": "Brasil",
+    "MLA": "Argentina",
+    "MLM": "México",
+    "MCO": "Colômbia",
+    "MLC": "Chile",
+    "MLU": "Uruguai",
+    "MPE": "Peru",
+    "MLV": "Venezuela",
+}
+
+
+@router.get("/trending-abroad", response_model=list[TrendingAbroadProduct])
+def trending_abroad(
+    session: Session = Depends(get_session),
+    sites: str = Query("MLM,MCO,MLC", description="Sites da Mercado Livre, separados por vírgula"),
+    limit_per_site: int = Query(15, ge=1, le=30),
+) -> list[TrendingAbroadProduct]:
+    """Mais vendidos de outros países da Mercado Livre — ao vivo, não persistido.
+
+    Confirmado ao vivo que o mesmo app funciona em MLM/MCO/MLC sem credencial
+    nova; um site bloqueado (ex.: MLA) é só pulado, sem quebrar os demais.
+    `already_in_brazil_catalog` compara `identity_key` (título normalizado +
+    marca) exato com o catálogo brasileiro já coletado — não é tradução
+    automática, então `False` aqui é "não achamos correspondência exata", não
+    "produto inédito garantido".
+    """
+    from integrations.marketplaces.mercado_livre import MLAdapterOptions
+
+    adapter = get_adapters().get("mercado_livre")
+    if adapter is None:
+        raise HTTPException(status_code=500, detail="adapter mercado_livre não registrado")
+
+    br_keys = set(
+        session.scalars(
+            select(Product.identity_key).where(
+                Product.marketplace == Marketplace.MERCADO_LIVRE, Product.identity_key.is_not(None)
+            )
+        )
+    )
+
+    out: list[TrendingAbroadProduct] = []
+    for site in [s.strip().upper() for s in sites.split(",") if s.strip()]:
+        try:
+            batch = adapter.fetch_products(
+                options=MLAdapterOptions(
+                    site_id=site,
+                    max_items=limit_per_site,
+                    fetch_reviews=False,
+                    fetch_seller_profile=False,
+                )
+            )
+        except Exception:  # noqa: BLE001 - país indisponível não pode quebrar os outros
+            continue
+        for product in batch.products:
+            out.append(
+                TrendingAbroadProduct(
+                    site_id=site,
+                    country=_ML_SITE_COUNTRY.get(site, site),
+                    external_id=product.external_id,
+                    title=product.title,
+                    category_id=product.category_id,
+                    price=product.price,
+                    currency=product.currency,
+                    ranking_position=product.ranking_position,
+                    product_url=product.product_url,
+                    images=product.images,
+                    already_in_brazil_catalog=product.identity_key() in br_keys,
+                )
+            )
+    return out
 
 
 @router.get("/products/{product_id}/source", response_model=list[SourceRecordOut])
