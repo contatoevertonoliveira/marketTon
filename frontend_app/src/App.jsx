@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import DailyOps from "./pages/DailyOps";
 import VisaoGeral from "./pages/VisaoGeral";
 import Portfolio from "./pages/Portfolio";
@@ -6,151 +6,16 @@ import Integrations from "./pages/Integrations";
 import Login from "./pages/Login";
 import { API_BASE, isLoggedIn, logout, setAuthExpiredHandler } from "./lib/apiClient";
 
-const API = "http://127.0.0.1:8000";
-
-const AGENTS = [
-  {
-    id: "master",
-    name: "Master",
-    role: "Coordenador",
-    description: "Coordena todo o ciclo",
-    color: "#5e72e4",
-    icon: "🎯",
-  },
-  {
-    id: "trend_hunter",
-    name: "Trend Hunter",
-    role: "Tendências",
-    description: "Captura tendências de mercado",
-    color: "#11cdef",
-    icon: "📈",
-  },
-  {
-    id: "product_hunter",
-    name: "Product Hunter",
-    role: "Produtos",
-    description: "Encontra produtos vencedores",
-    color: "#2dce89",
-    icon: "🎁",
-  },
-  {
-    id: "copy_chief",
-    name: "Copy Chief",
-    role: "Copy",
-    description: "Cria copys diretas e vendedoras",
-    color: "#fb6340",
-    icon: "✍️",
-  },
-  {
-    id: "marketplace_manager",
-    name: "Marketplace Manager",
-    role: "Marketplaces",
-    description: "Gerencia publicações",
-    color: "#f5365c",
-    icon: "🛒",
-  },
-  {
-    id: "growth_analyst",
-    name: "Growth Analyst",
-    role: "Crescimento",
-    description: "Analisa métricas e sugere ajustes",
-    color: "#f6c944",
-    icon: "📊",
-  },
-];
-
 const PAGES = [
   { id: "visao-geral", label: "Visão Geral", icon: "🏠" },
   { id: "daily-ops", label: "Daily Ops", icon: "🎯" },
   { id: "portfolio", label: "Portfólio", icon: "🗂️" },
-  { id: "agentes", label: "Agentes", icon: "🤖" },
-  { id: "produtos", label: "Produtos", icon: "📦" },
-  { id: "marketplace", label: "Marketplace", icon: "🛒" },
-  { id: "copys", label: "Copys", icon: "✍️" },
-  { id: "feedbacks", label: "Feedbacks", icon: "💬" },
-  { id: "agenda", label: "Agenda", icon: "📅" },
-  { id: "grupos", label: "Grupos", icon: "👥" },
   { id: "integracoes", label: "Integrações", icon: "🔌" },
 ];
-
-function fmtDateTime(v) {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return String(v);
-  return d.toLocaleString("pt-BR");
-}
-
-function statusChip(s) {
-  const base = {
-    padding: "4px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    color: "#fff",
-    background: "#525f7f",
-    display: "inline-block",
-  };
-  const map = {
-    scheduled: "#5e72e4",
-    published: "#2dce89",
-    failed: "#f5365c",
-    active: "#2dce89",
-    blocked: "#fb6340",
-    paused: "#f6c944",
-    muted: "#8898aa",
-  };
-  return { ...base, background: map[s] || base.background };
-}
-
-function rowHover() {
-  return {
-    ":hover": { background: "#f6f9fc" },
-  };
-}
 
 export default function App() {
   const [authed, setAuthed] = useState(isLoggedIn());
   const [page, setPage] = useState("daily-ops");
-  const [badge, setBadge] = useState(null);
-  const [dailyTarget, setDailyTarget] = useState(1);
-  const [feedbacks, setFeedbacks] = useState([]);
-  const [agenda, setAgenda] = useState([]);
-  const [groups, setGroups] = useState([]);
-  const [marketProducts, setMarketProducts] = useState([]);
-  const [marketRules, setMarketRules] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
-
-  async function loadAll(force) {
-    if (force) setRefreshing(true);
-    try {
-      const [badgeRes, fbRes, agRes, grRes, mktProdsRes, mktRulesRes] = await Promise.allSettled([
-        fetch(`${API}/methodology/badge`).then((r) => r.json()),
-        fetch(`${API}/feedback?limit=20`).then((r) => r.json()),
-        fetch(`${API}/agenda?limit=20`).then((r) => r.json()),
-        fetch(`${API}/groups`).then((r) => r.json()),
-        fetch(`${API}/market/products?limit=50`).then((r) => r.json()),
-        fetch(`${API}/market/rules`).then((r) => r.json()),
-      ]);
-      if (badgeRes.status === "fulfilled") {
-        setBadge(badgeRes.value.badge);
-        setDailyTarget(badgeRes.value.daily_sales_target ?? 1);
-      }
-      if (fbRes.status === "fulfilled") setFeedbacks(Array.isArray(fbRes.value) ? fbRes.value : []);
-      if (agRes.status === "fulfilled") setAgenda(Array.isArray(agRes.value) ? agRes.value : []);
-      if (grRes.status === "fulfilled") setGroups(Array.isArray(grRes.value) ? grRes.value : []);
-      if (mktProdsRes.status === "fulfilled") setMarketProducts(Array.isArray(mktProdsRes.value) ? mktProdsRes.value : []);
-      if (mktRulesRes.status === "fulfilled") setMarketRules(mktRulesRes.value || null);
-    } catch (e) {
-      // silent fallback
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
-  useEffect(() => {
-    loadAll(true);
-    const id = setInterval(() => loadAll(false), 15000);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     setAuthExpiredHandler(() => setAuthed(false));
@@ -179,66 +44,6 @@ export default function App() {
     </button>
   );
 
-  function renderAgenda() {
-    return (
-      <div className="card" style={{ marginTop: 18, background: "#fff", borderRadius: 10, padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h5 style={{ margin: 0, color: "#32325d" }}>Agenda</h5>
-          <span style={{ fontSize: 12, color: "#8898aa" }}>Fonte: /agenda</span>
-        </div>
-        <ul style={{ marginTop: 10, paddingLeft: 18, color: "#525f7f", fontSize: 13 }}>
-          {agenda.length === 0 && <li>Nenhum item.</li>}
-          {agenda.map((a) => (
-            <li key={a.id ?? a.when_date} style={{ marginBottom: 6 }}>
-              {a.title ?? a.description ?? "Item"} • {fmtDateTime(a.when_date)}
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
-
-  function renderGroups() {
-    return (
-      <div className="card" style={{ marginTop: 18, background: "#fff", borderRadius: 10, padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h5 style={{ margin: 0, color: "#32325d" }}>Grupos</h5>
-          <span style={{ fontSize: 12, color: "#8898aa" }}>Fonte: /groups</span>
-        </div>
-        <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {groups.length === 0 && <span style={{ fontSize: 12, color: "#8898aa" }}>Sem grupos cadastrados.</span>}
-          {groups.map((g) => (
-            <span key={g.group_id} style={{ ...statusChip(g.status) }}>
-              {g.group_name ?? g.group_id} • {g.status ?? "—"}
-            </span>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  function renderFeedbacks() {
-    return (
-      <div className="card" style={{ marginTop: 18, background: "#fff", borderRadius: 10, padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h5 style={{ margin: 0, color: "#32325d" }}>Feedbacks</h5>
-          <span style={{ fontSize: 12, color: "#8898aa" }}>Fonte: /feedback</span>
-        </div>
-        <div style={{ marginTop: 10 }}>
-          {feedbacks.length === 0 && <span style={{ fontSize: 12, color: "#8898aa" }}>Nenhum feedback.</span>}
-          {feedbacks.slice(0, 8).map((f) => (
-            <div key={f.id} style={{ padding: "10px 0", borderTop: "1px solid #f6f9fc" }}>
-              <div style={{ fontSize: 13, color: "#32325d" }}>{f.text ?? "(sem texto)"}</div>
-              <div style={{ fontSize: 12, color: "#8898aa", marginTop: 4 }}>
-                {f.username ?? f.user_id ?? "—"} • {f.sentiment ?? "—"} • {fmtDateTime(f.created_at)}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   const renderPage = () => {
     switch (page) {
       case "visao-geral":
@@ -260,88 +65,6 @@ export default function App() {
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Portfólio</h3>
             <Portfolio />
-          </div>
-        );
-      case "agentes":
-        return (
-          <div>
-            <h3 style={{ marginTop: 18, color: "#32325d" }}>Agentes</h3>
-            <div className="row" style={{ marginTop: 12 }}>
-              {AGENTS.map((a) => (
-                <div className="col-lg-4 col-md-6" key={a.id}>
-                  <div
-                    style={{
-                      background: "#fff",
-                      borderRadius: 10,
-                      padding: 18,
-                      boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)",
-                    }}
-                  >
-                    <div style={{ fontSize: 28 }}>{a.icon}</div>
-                    <h6 style={{ color: a.color, marginTop: 8 }}>{a.name}</h6>
-                    <div style={{ color: "#525f7f", fontSize: 13 }}>{a.role}</div>
-                    <div style={{ color: "#525f7f", fontSize: 13, marginTop: 4 }}>{a.description}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      case "produtos":
-        return (
-          <div>
-            <h3 style={{ marginTop: 18, color: "#32325d" }}>Produtos</h3>
-            <p style={{ color: "#525f7f" }}>Conectado ao Product Hunter — utilize o backend para popular registros.</p>
-          </div>
-        );
-      case "marketplace":
-        return (
-          <div>
-            <h3 style={{ marginTop: 18, color: "#32325d" }}>Marketplace</h3>
-            <p style={{ color: "#525f7f" }}>Produtos ranqueados por comissão, ticket e volume.</p>
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-              {marketProducts.length === 0 && <span style={{ color: "#8898aa" }}>Nenhum produto ranqueado ainda.</span>}
-              {marketProducts.slice(0, 20).map((p, idx) => (
-                <div key={idx} style={{ background: "#fff", padding: 14, borderRadius: 10, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)", display: "flex", justifyContent: "space-between", gap: 10 }}>
-                  <div>
-                    <div style={{ fontWeight: 700, color: "#32325d" }}>{p.title}</div>
-                    <div style={{ fontSize: 12, color: "#8898aa" }}>{p.marketplace}</div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 700, color: "#32325d" }}>R$ {Number(p.price ?? 0).toFixed(2)}</div>
-                    <div style={{ fontSize: 12, color: "#8898aa" }}>Comissão {p.commission_pct ?? "—"}% • Score {p.score ? p.score.toFixed(2) : "—"}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      case "copys":
-        return (
-          <div>
-            <h3 style={{ marginTop: 18, color: "#32325d" }}>Copys</h3>
-            <p style={{ color: "#525f7f" }}>Utilize os dados aprovados pelos agentes para gerar publicações.</p>
-          </div>
-        );
-      case "feedbacks":
-        return (
-          <div>
-            <h3 style={{ marginTop: 18, color: "#32325d" }}>Feedbacks</h3>
-            {renderFeedbacks()}
-          </div>
-        );
-      case "agenda":
-        return (
-          <div>
-            <h3 style={{ marginTop: 18, color: "#32325d" }}>Agenda</h3>
-            {renderAgenda()}
-          </div>
-        );
-      case "grupos":
-        return (
-          <div>
-            <h3 style={{ marginTop: 18, color: "#32325d" }}>Grupos</h3>
-            {renderGroups()}
           </div>
         );
       case "integracoes":
@@ -379,12 +102,7 @@ export default function App() {
       >
         <div style={{ marginBottom: 22, padding: "0 10px", display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 22 }}>🧲</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 17 }}>marketTon</div>
-            <div style={{ fontSize: 12, color: "#c2c9d6", marginTop: 2 }}>
-              Badge: <strong>{badge ?? "—"}</strong>
-            </div>
-          </div>
+          <div style={{ fontWeight: 700, fontSize: 17 }}>marketTon</div>
         </div>
 
         <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -422,27 +140,9 @@ export default function App() {
             padding: "14px 18px",
             boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)",
             marginBottom: 18,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
           }}
         >
-          <div>
-            <div style={{ fontWeight: 600, color: "#32325d" }}>Painel marketTon</div>
-            <div style={{ color: "#525f7f", fontSize: 13 }}>Objetivo do dia: {dailyTarget} venda(s)</div>
-          </div>
-          <div
-            style={{
-              background: "#5e72e4",
-              color: "#fff",
-              borderRadius: 999,
-              padding: "6px 14px",
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            {badge ? ` Badge: ${badge}` : " Badge: —"}
-          </div>
+          <div style={{ fontWeight: 600, color: "#32325d" }}>Painel marketTon</div>
         </header>
 
         {renderPage()}
@@ -450,22 +150,3 @@ export default function App() {
     </div>
   );
 }
-
-const inputStyle = {
-  padding: "8px 10px",
-  border: "1px solid #dee2e6",
-  borderRadius: 8,
-  background: "#f6f9fc",
-  color: "#32325d",
-  fontSize: 14,
-  outline: "none",
-};
-
-const buttonStyle = {
-  padding: "8px 12px",
-  border: "none",
-  borderRadius: 8,
-  color: "#fff",
-  fontSize: 14,
-  cursor: "pointer",
-};
