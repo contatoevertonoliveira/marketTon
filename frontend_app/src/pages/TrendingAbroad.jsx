@@ -7,6 +7,19 @@ const SITES = [
   { id: "MLC", country: "Chile" },
 ];
 
+const STORAGE_KEY = "trending-abroad:sites";
+
+function loadSavedSites() {
+  const all = SITES.map((x) => x.id);
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (Array.isArray(saved)) return all.filter((id) => saved.includes(id));
+  } catch {
+    // localStorage indisponível ou valor corrompido: cai no padrão (todos)
+  }
+  return all;
+}
+
 function fmtMoney(v, currency) {
   if (v === null || v === undefined) return "—";
   try {
@@ -17,12 +30,16 @@ function fmtMoney(v, currency) {
 }
 
 export default function TrendingAbroad() {
-  const [sites, setSites] = useState(SITES.map((s) => s.id));
+  const [sites, setSites] = useState(loadSavedSites);
   const [products, setProducts] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   function load() {
+    if (sites.length === 0) {
+      setProducts([]);
+      return;
+    }
     setLoading(true);
     setError("");
     getJSON(`/catalog/trending-abroad?sites=${sites.join(",")}&limit_per_site=15`)
@@ -34,7 +51,13 @@ export default function TrendingAbroad() {
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleSite(id) {
-    setSites((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+    const next = sites.includes(id) ? sites.filter((s) => s !== id) : [...sites, id];
+    setSites(next);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // sem persistência: o filtro só vale nesta sessão
+    }
   }
 
   return (
