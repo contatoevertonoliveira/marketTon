@@ -52,7 +52,7 @@ API_URL = "https://open-api.affiliate.shopee.com.br/graphql"
 
 PRODUCT_OFFER_QUERY = """
 query($keyword: String, $page: Int, $limit: Int) {
-  productOfferV2(input: {keyword: $keyword, page: $page, limit: $limit}) {
+  productOfferV2(keyword: $keyword, page: $page, limit: $limit) {
     nodes {
       itemId
       productName
