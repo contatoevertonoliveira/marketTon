@@ -19,6 +19,7 @@ import base64
 import hashlib
 import logging
 import secrets
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
@@ -71,6 +72,33 @@ class CredentialStatusOut(BaseModel):
     values_set: dict[str, bool]
     configured: bool | None = None
     reliability: float | None = None
+    # Resultado da última chamada de teste real — não confundir com `configured`
+    # (só diz se os campos estão preenchidos). Alimenta o semáforo da tela.
+    last_check_status: str | None = None
+    last_check_message: str | None = None
+    last_check_at: str | None = None
+
+
+def _status_out(row: MarketplaceCredential, fields: list[dict[str, str | bool]], adapters: dict) -> CredentialStatusOut:
+    adapter = adapters.get(row.marketplace.value) if row.marketplace else None
+    configured = reliability = None
+    if adapter is not None:
+        try:
+            configured = adapter.is_configured()
+            reliability = adapter.reliability
+        except Exception as exc:  # noqa: BLE001 - status nunca deve derrubar a tela
+            logger.warning("falha ao consultar status de %s: %s", row.marketplace.value, exc)
+    return CredentialStatusOut(
+        marketplace=row.marketplace.value,
+        enabled=row.enabled,
+        fields=fields,
+        values_set={f["name"]: bool(row.values.get(f["name"])) for f in fields},
+        configured=configured,
+        reliability=reliability,
+        last_check_status=row.last_check_status,
+        last_check_message=row.last_check_message,
+        last_check_at=row.last_check_at.isoformat() if row.last_check_at else None,
+    )
 
 
 def _get_or_create(session: Session, marketplace: Marketplace) -> MarketplaceCredential:
@@ -88,27 +116,8 @@ def list_credentials(session: Session = Depends(get_session)) -> list[Credential
     adapters = get_adapters()
     out: list[CredentialStatusOut] = []
     for slug, fields in CREDENTIAL_FIELDS.items():
-        row = rows.get(slug)
-        values = row.values if row else {}
-        adapter = adapters.get(slug)
-        configured = None
-        reliability = None
-        if adapter is not None:
-            try:
-                configured = adapter.is_configured()
-                reliability = adapter.reliability
-            except Exception as exc:  # noqa: BLE001 - status nunca deve derrubar a tela
-                logger.warning("falha ao consultar status de %s: %s", slug, exc)
-        out.append(
-            CredentialStatusOut(
-                marketplace=slug,
-                enabled=row.enabled if row else False,
-                fields=fields,
-                values_set={f["name"]: bool(values.get(f["name"])) for f in fields},
-                configured=configured,
-                reliability=reliability,
-            )
-        )
+        row = rows.get(slug) or MarketplaceCredential(marketplace=Marketplace(slug), enabled=False, values={})
+        out.append(_status_out(row, fields, adapters))
     return out
 
 
@@ -128,19 +137,74 @@ def update_credentials(
     row.enabled = payload.enabled
     merged = dict(row.values)
     known_names = {f["name"] for f in fields}
+    changed = False
     for key, value in payload.values.items():
         if key in known_names and value:
             merged[key] = value
+            changed = True
     row.values = merged
+    if changed:
+        # Credencial mudou: o resultado do teste anterior não vale mais —
+        # volta pra "amarelo" até validar de novo.
+        row.last_check_status = None
+        row.last_check_message = None
+        row.last_check_at = None
     session.commit()
     session.refresh(row)
 
-    return CredentialStatusOut(
-        marketplace=marketplace.value,
-        enabled=row.enabled,
-        fields=fields,
-        values_set={f["name"]: bool(row.values.get(f["name"])) for f in fields},
-    )
+    return _status_out(row, fields, get_adapters())
+
+
+def _test_connection(adapter, marketplace_slug: str) -> tuple[str, str]:
+    """Chamada real e barata por marketplace. Devolve `(status, mensagem)`.
+
+    Diferente de `is_configured()` (só olha se os campos estão preenchidos),
+    isto bate na API de verdade — foi assim que achei o bug do formato da
+    query da Shopee, por exemplo.
+    """
+    if adapter is None:
+        return "error", "adapter não registrado"
+    if not adapter.is_configured():
+        return "error", "credenciais incompletas"
+    try:
+        if marketplace_slug == "mercado_livre":
+            me = adapter._api_get("/users/me")
+            if not me:
+                return "error", "resposta vazia de /users/me"
+            return "ok", f"conectado como {me.get('nickname') or me.get('id')}"
+        if marketplace_slug == "shopee":
+            adapter._graphql("{ __typename }", {})
+            return "ok", "autenticação aceita pela Affiliate Open API"
+        if marketplace_slug == "amazon":
+            adapter._ensure_access_token()
+            return "ok", "token OAuth2 (Creators API) obtido com sucesso"
+        if marketplace_slug == "tiktok_shop":
+            return "error", "validação ao vivo ainda não implementada para TikTok Shop"
+        return "error", "sem verificação implementada para este marketplace"
+    except Exception as exc:  # noqa: BLE001 - o motivo da falha é o que interessa aqui
+        return "error", str(exc)[:480]
+
+
+@router.post(
+    "/{marketplace}/test",
+    response_model=CredentialStatusOut,
+    dependencies=[Depends(require("connectors.manage"))],
+)
+def test_connection(marketplace: Marketplace, session: Session = Depends(get_session)) -> CredentialStatusOut:
+    fields = CREDENTIAL_FIELDS.get(marketplace.value)
+    if fields is None:
+        raise HTTPException(status_code=404, detail=f"'{marketplace.value}' não tem esquema de credenciais")
+
+    row = _get_or_create(session, marketplace)
+    adapters = get_adapters()
+    status, message = _test_connection(adapters.get(marketplace.value), marketplace.value)
+    row.last_check_status = status
+    row.last_check_message = message
+    row.last_check_at = datetime.now(UTC)
+    session.commit()
+    session.refresh(row)
+
+    return _status_out(row, fields, adapters)
 
 
 # --- Mercado Livre: fluxo OAuth ------------------------------------------------
@@ -204,6 +268,9 @@ def mercado_livre_oauth_callback(
 
     row.oauth_state = None
     row.oauth_code_verifier = None
+    row.last_check_status = "ok"
+    row.last_check_message = "conectado via OAuth"
+    row.last_check_at = datetime.now(UTC)
     session.commit()
     return _oauth_page("Conectado com sucesso! Pode fechar esta aba e voltar ao painel.")
 

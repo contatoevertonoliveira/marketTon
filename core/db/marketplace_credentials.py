@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.db.base import Base, Marketplace, TimestampMixin, enum_column
@@ -49,6 +49,11 @@ class MarketplaceCredential(Base, TimestampMixin):
     # `invalid_request: code_verifier is a required parameter`. Gerado junto
     # com `oauth_state` no início do fluxo, consumido no callback.
     oauth_code_verifier: Mapped[str | None] = mapped_column(String(128))
+    # Resultado da última chamada real de teste (não só "tem credencial
+    # preenchida"): alimenta o semáforo da tela de Integrações.
+    last_check_status: Mapped[str | None] = mapped_column(String(16))  # "ok" | "error"
+    last_check_message: Mapped[str | None] = mapped_column(String(500))
+    last_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (UniqueConstraint("marketplace", name="uq_marketplace_credentials_marketplace"),)
 
