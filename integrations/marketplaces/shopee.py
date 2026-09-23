@@ -50,6 +50,12 @@ from integrations.marketplaces.signing import SignatureError, shopee_affiliate_a
 
 logger = logging.getLogger(__name__)
 
+# Parte da Shopee na comissão do canal Shopee Vídeo. Medido na tela do portal
+# de afiliados (detalhe do produto) em 2 produtos: Vídeo = comissão extra do
+# vendedor + 1,5%; Lives = +5%; redes sociais = +3% (esta última é o
+# `commissionRate` que a API devolve). A API não expõe a taxa por canal.
+SHOPEE_VIDEO_SHOPEE_PCT = 1.5
+
 API_URL = "https://open-api.affiliate.shopee.com.br/graphql"
 
 PRODUCT_OFFER_QUERY = """
@@ -59,6 +65,7 @@ query($keyword: String, $page: Int, $limit: Int) {
       itemId
       productName
       commissionRate
+      sellerCommissionRate
       priceMin
       priceMax
       offerLink
@@ -305,6 +312,9 @@ class ShopeeAdapter(MarketplaceAdapter):
         price_min = _to_float(node.get("priceMin"))
         price_max = _to_float(node.get("priceMax"))
         commission_rate = _to_float(node.get("commissionRate"))
+        seller_rate = _to_float(node.get("sellerCommissionRate"))
+        max_pct = commission_rate * 100 if commission_rate is not None else None
+        video_pct = seller_rate * 100 + SHOPEE_VIDEO_SHOPEE_PCT if seller_rate is not None else max_pct
 
         return ConnectorProduct(
             external_id=str(node.get("itemId")),
@@ -315,8 +325,14 @@ class ShopeeAdapter(MarketplaceAdapter):
             currency="BRL",
             price=price_min,
             original_price=price_max if price_max and price_max != price_min else None,
-            # A comissão real vem daqui — vantagem desta API sobre ML/Amazon.
-            affiliate_commission_pct=commission_rate * 100 if commission_rate is not None else None,
+            # Comissão do canal Shopee Vídeo (o que o operador usa), não a de
+            # "redes sociais" que a API devolve como `commissionRate`.
+            affiliate_commission_pct=video_pct,
+            attributes={
+                "commission_channel": "shopee_video" if seller_rate is not None else "api_default",
+                "commission_api_pct": max_pct,
+                "seller_commission_pct": seller_rate * 100 if seller_rate is not None else None,
+            },
             sold_quantity=_to_int(node.get("sales")),
             rating=_to_float(node.get("ratingStar")),
             affiliate_url=node.get("offerLink"),

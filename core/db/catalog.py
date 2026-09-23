@@ -153,6 +153,11 @@ class Product(Base, TimestampMixin):
     discount_pct: Mapped[float | None] = mapped_column(Float)
     affiliate_commission_pct: Mapped[float | None] = mapped_column(Float)
     affiliate_commission_fixed: Mapped[float | None] = mapped_column(Float)
+    # Digitado pelo usuário (a API da Shopee não expõe); a ingestão não toca.
+    affiliate_count: Mapped[int | None] = mapped_column(Integer)
+    affiliate_count_period: Mapped[str | None] = mapped_column(String(8))
+    manual_stock: Mapped[int | None] = mapped_column(Integer)
+    affiliate_count_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # --- Disponibilidade ------------------------------------------------------
     available_quantity: Mapped[int | None] = mapped_column(Integer)

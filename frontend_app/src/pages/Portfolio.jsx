@@ -3,7 +3,7 @@ import { getJSON } from "../lib/apiClient";
 import ProductDetailDrawer from "./ProductDetail";
 import ProductCard from "./ProductCard";
 import ProductCardModal from "./ProductCardModal";
-import { demandComparator } from "../lib/productSignals";
+import { demandComparator, opportunityComparator } from "../lib/productSignals";
 
 const STATE_ORDER = [
   "DISCOVERED",
@@ -38,6 +38,7 @@ export default function Portfolio() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedBoardItem, setSelectedBoardItem] = useState(null);
   const [error, setError] = useState(null);
+  const [sortMode, setSortMode] = useState("demand");
 
   useEffect(() => {
     getJSON("/marketplaces/credentials")
@@ -89,7 +90,7 @@ export default function Portfolio() {
   }, {});
   const productById = Object.fromEntries(products.map((p) => [p.id, p]));
 
-  const sorted = [...products].sort(demandComparator);
+  const sorted = [...products].sort(sortMode === "opportunity" ? opportunityComparator : demandComparator);
 
   return (
     <div>
@@ -125,7 +126,14 @@ export default function Portfolio() {
         Produtos sugeridos {MARKETPLACES[active]?.name ? `— ${MARKETPLACES[active].name}` : ""}
       </h6>
       <div style={{ fontSize: 11, color: "#8898aa", marginBottom: 12 }}>
-        Ordenado por vendas reais primeiro; sem venda registrada, entra pela avaliação e pela velocidade de entrega.
+        {sortMode === "opportunity"
+          ? "Menos afiliados primeiro (depois maior comissão); produtos sem nº de afiliados informado vêm depois, por demanda."
+          : "Ordenado por vendas reais primeiro; sem venda registrada, entra pela avaliação e pela velocidade de entrega."}
+        {" "}
+        <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={{ fontSize: 11, marginLeft: 6 }}>
+          <option value="demand">Ordenar: demanda</option>
+          <option value="opportunity">Ordenar: menos afiliados</option>
+        </select>
       </div>
       {sorted.length === 0 ? (
         <div style={{ background: "#fff", borderRadius: 10, padding: 20, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)", fontSize: 13, color: "#8898aa" }}>

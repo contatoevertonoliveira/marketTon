@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { getJSON, postJSON } from "../lib/apiClient";
+import { getJSON, postJSON, putJSON } from "../lib/apiClient";
 import ProductDetailDrawer from "./ProductDetail";
-import { approvalVerdict, logisticSpeedRank, priceCompetitiveness, sellerLocation, shipsFromBrazil } from "../lib/productSignals";
+import { approvalVerdict, AFFILIATE_PERIODS, competitionLevel, isLiveOpportunity, stockLevel, suggestHashtags, logisticSpeedRank, priceCompetitiveness, sellerLocation, shipsFromBrazil } from "../lib/productSignals";
 
 function fmtMoney(v, currency) {
   if (v === null || v === undefined) return "—";
@@ -37,6 +37,103 @@ function ApprovalBadge({ product }) {
   );
 }
 
+function CompetitionAndHashtags({ product }) {
+  const [count, setCount] = useState(product.affiliate_count ?? "");
+  const [period, setPeriod] = useState(product.affiliate_count_period || "total");
+  const [stock, setStock] = useState(product.manual_stock ?? "");
+  const [saved, setSaved] = useState({
+    affiliate_count: product.affiliate_count,
+    manual_stock: product.manual_stock,
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [copied, setCopied] = useState(false);
+  const level = competitionLevel(saved);
+  const stockInfo = stockLevel(saved);
+  const tags = suggestHashtags(product);
+  const small = { width: 84, padding: "3px 6px", border: "1px solid #dde3ec", borderRadius: 6, fontSize: 12 };
+
+  async function save() {
+    setSaving(true);
+    setErr("");
+    try {
+      const toInt = (v) => (v === "" ? null : Math.max(0, parseInt(v, 10)));
+      const updated = await putJSON(`/catalog/products/${product.id}/manual-signals`, {
+        affiliate_count: toInt(count),
+        affiliate_count_period: toInt(count) == null ? null : period,
+        manual_stock: toInt(stock),
+      });
+      Object.assign(product, {
+        affiliate_count: updated.affiliate_count,
+        affiliate_count_period: updated.affiliate_count_period,
+        manual_stock: updated.manual_stock,
+      });
+      setSaved({ affiliate_count: updated.affiliate_count, manual_stock: updated.manual_stock });
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function copyTags() {
+    navigator.clipboard?.writeText(tags.join(" ")).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <div style={{ marginTop: 10, fontSize: 12, borderTop: "1px solid #eef0f5", paddingTop: 10 }}>
+      <div style={{ color: "#525f7f", marginBottom: 4, fontWeight: 600 }}>Dados do app de afiliados (digite)</div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+        <input type="number" min="0" value={count} onChange={(e) => setCount(e.target.value)} placeholder="afiliados" title="Nº de afiliados que promoveram o produto" style={small} />
+        <select value={period} onChange={(e) => setPeriod(e.target.value)} style={{ ...small, width: "auto" }} title="Janela a que o nº de afiliados se refere">
+          {Object.entries(AFFILIATE_PERIODS).map(([k, label]) => (
+            <option key={k} value={k}>{label}</option>
+          ))}
+        </select>
+        <input type="number" min="0" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="estoque" title="Estoque do vendedor" style={small} />
+        <button onClick={save} disabled={saving} style={{ padding: "3px 10px", fontSize: 12, borderRadius: 6, border: "1px solid #5e72e4", background: "#fff", color: "#5e72e4", cursor: "pointer" }}>
+          {saving ? "Salvando…" : "Salvar"}
+        </button>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+        {level && (
+          <span style={{ background: level.bg, color: level.color, fontWeight: 700, borderRadius: 999, padding: "3px 10px" }}>
+            {isLiveOpportunity({ ...product, ...saved }) ? "🎯 oportunidade · " : ""}
+            {level.label}
+          </span>
+        )}
+        {stockInfo && (
+          <span style={{ background: stockInfo.bg, color: stockInfo.color, fontWeight: 700, borderRadius: 999, padding: "3px 10px" }}>
+            {stockInfo.label} ({saved.manual_stock})
+          </span>
+        )}
+      </div>
+      <div style={{ color: "#8898aa", marginTop: 4 }}>
+        A API da Shopee não informa afiliados nem estoque — leia no app de afiliados e digite. Compare contagens só do mesmo período.
+      </div>
+      {err && <div style={{ color: "#f5365c", marginTop: 4 }}>{err}</div>}
+
+      <div style={{ color: "#525f7f", margin: "10px 0 4px", fontWeight: 600 }}>Hashtags para o vídeo</div>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {tags.map((t) => (
+          <span key={t} style={{ background: "#eef2ff", color: "#5e72e4", borderRadius: 999, padding: "2px 8px" }}>
+            {t}
+          </span>
+        ))}
+      </div>
+      <button onClick={copyTags} style={{ marginTop: 6, padding: "3px 10px", fontSize: 12, borderRadius: 6, border: "1px solid #dde3ec", background: "#fff", cursor: "pointer" }}>
+        {copied ? "Copiado ✓" : "Copiar todas"}
+      </button>
+      <div style={{ color: "#8898aa", marginTop: 4 }}>
+        Sugeridas pelo título do produto + tags fixas de vídeo/afiliado. A Shopee não publica visualizações por hashtag, então não há ranking de popularidade.
+      </div>
+    </div>
+  );
+}
+
 // Quick-view de um produto do catálogo ainda fora (ou já dentro) do
 // portfólio. Fora: mostra os dados reais extraídos do marketplace + o botão
 // de afiliação. Dentro: abre direto o drawer de gestão do funil, que já sabe
@@ -46,6 +143,7 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
   const [error, setError] = useState("");
   const [justAdded, setJustAdded] = useState(null);
   const [comparables, setComparables] = useState(null);
+  const [dl, setDl] = useState({ state: "idle", text: "" });
 
   useEffect(() => {
     getJSON(`/catalog/products/${product.id}/comparables`)
@@ -81,6 +179,16 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
   }
 
   const image = product.images?.[0];
+
+  async function downloadImages() {
+    setDl({ state: "loading", text: "" });
+    try {
+      const r = await postJSON(`/catalog/products/${product.id}/download-images`, {});
+      setDl({ state: "ok", text: `${r.files.length} foto(s) salva(s) em ${r.folder}` });
+    } catch (e) {
+      setDl({ state: "error", text: e.message });
+    }
+  }
 
   return (
     <div
@@ -149,8 +257,12 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
 
             <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
               {product.affiliate_commission_pct != null ? (
-                <span style={{ background: "#e5faf1", color: "#1a7a54", fontSize: 12, fontWeight: 700, borderRadius: 999, padding: "3px 10px" }}>
-                  comissão {product.affiliate_commission_pct.toFixed(0)}%
+                <span
+                  title={product.attributes?.commission_api_pct != null ? `Taxa máxima na API: ${product.attributes.commission_api_pct.toFixed(1)}% (canal redes sociais). No Vídeo: comissão do vendedor + 1,5%.` : undefined}
+                  style={{ background: "#e5faf1", color: "#1a7a54", fontSize: 12, fontWeight: 700, borderRadius: 999, padding: "3px 10px" }}
+                >
+                  {product.attributes?.commission_channel === "shopee_video" ? "comissão Shopee Vídeo " : "comissão "}
+                  {product.affiliate_commission_pct.toFixed(1).replace(".0", "")}%
                 </span>
               ) : (
                 <span style={{ fontSize: 12, color: "#8898aa" }}>comissão não informada pela API deste marketplace</span>
@@ -216,6 +328,8 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
               </div>
             )}
 
+            {product.marketplace === "shopee" && <CompetitionAndHashtags product={product} />}
+
             {(product.affiliate_url || product.product_url) && (
               <a
                 href={product.affiliate_url || product.product_url}
@@ -225,6 +339,24 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
               >
                 {product.affiliate_url ? "abrir link de afiliado ↗" : "abrir anúncio ↗"}
               </a>
+            )}
+
+            {product.images?.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 12 }}>
+                <button
+                  onClick={downloadImages}
+                  disabled={dl.state === "loading"}
+                  style={{ padding: "4px 10px", fontSize: 12, borderRadius: 6, border: "1px solid #dde3ec", background: "#fff", cursor: "pointer" }}
+                >
+                  {dl.state === "loading" ? "Baixando…" : "⬇ Baixar foto do produto"}
+                </button>
+                {dl.text && (
+                  <div style={{ marginTop: 4, color: dl.state === "error" ? "#f5365c" : "#1a7a54", wordBreak: "break-all" }}>{dl.text}</div>
+                )}
+                <div style={{ color: "#8898aa", marginTop: 2 }}>
+                  A API entrega só a foto principal (sem vídeo). Confira os direitos de uso antes de reutilizar.
+                </div>
+              </div>
             )}
 
             {error && <div style={{ fontSize: 12, color: "#f5365c", marginTop: 8 }}>{error}</div>}

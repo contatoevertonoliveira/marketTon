@@ -1,5 +1,5 @@
 import React from "react";
-import { approvalVerdict, logisticSpeedRank, priceCompetitiveness, shipsFromBrazil } from "../lib/productSignals";
+import { approvalVerdict, competitionLevel, isLiveOpportunity, logisticSpeedRank, priceCompetitiveness, shipsFromBrazil } from "../lib/productSignals";
 
 function fmtMoney(v, currency) {
   if (v === null || v === undefined) return "—";
@@ -12,6 +12,7 @@ export default function ProductCard({ product, onClick }) {
   const image = product.images?.[0];
   const opportunity = product.scores?.OPPORTUNITY;
   const verdict = approvalVerdict(product);
+  const competition = competitionLevel(product);
 
   return (
     <button
@@ -42,6 +43,14 @@ export default function ProductCard({ product, onClick }) {
           }}
         >
           ✓ Aprovado pelo sistema
+        </div>
+      )}
+      {competition && (
+        <div
+          style={{ background: competition.bg, color: competition.color, fontSize: 11, fontWeight: 700, textAlign: "center", padding: "3px 0" }}
+        >
+          {isLiveOpportunity(product) ? "🎯 " : ""}
+          {product.affiliate_count} afiliados · {competition.label}
         </div>
       )}
       <div style={{ position: "relative", background: "#f6f9fc", aspectRatio: "1 / 1" }}>

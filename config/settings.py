@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     # --- Coleta ---------------------------------------------------------------
     agent_cycle_interval_seconds: int = 3600
     connector_timeout_seconds: float = 20.0
+    # Pasta local onde as fotos baixadas dos produtos são guardadas.
+    media_dir: str = "data/media"
 
     # --- Meta Ads (Marketing API / Ads Library) --------------------------------
     meta_access_token: str = ""
