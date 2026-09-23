@@ -128,7 +128,7 @@ export default function Portfolio() {
           Nenhum produto no catálogo ainda para este marketplace. Rode <code>scripts/ingest.py --marketplace {active}</code> para coletar.
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 14 }}>
           {sorted.map((p) => (
             <ProductCard key={p.id} product={p} onClick={() => setSelectedProduct(p)} />
           ))}
