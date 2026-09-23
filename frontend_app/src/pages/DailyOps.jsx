@@ -50,19 +50,21 @@ function CategoryRow({ label, items }) {
   );
 }
 
-export default function DailyOps() {
+export default function DailyOps({ marketplace } = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    getJSON("/operations/daily")
+    setData(null);
+    const query = marketplace ? `?marketplace=${encodeURIComponent(marketplace)}` : "";
+    getJSON(`/operations/daily${query}`)
       .then((res) => !cancelled && setData(res))
       .catch((e) => !cancelled && setError(e.message));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [marketplace]);
 
   if (error) return <p style={{ color: "#f5365c" }}>Não foi possível carregar o Daily Ops: {error}</p>;
   if (!data) return <p style={{ color: "#8898aa" }}>Carregando...</p>;

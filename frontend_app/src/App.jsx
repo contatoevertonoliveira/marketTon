@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DailyOps from "./pages/DailyOps";
+import VisaoGeral from "./pages/VisaoGeral";
 import Portfolio from "./pages/Portfolio";
 import Integrations from "./pages/Integrations";
 import Login from "./pages/Login";
@@ -72,11 +73,6 @@ const PAGES = [
   { id: "integracoes", label: "Integrações", icon: "🔌" },
 ];
 
-function fmtMoney(n) {
-  const v = typeof n === "number" ? n : Number(n || 0);
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
 function fmtDateTime(v) {
   if (!v) return "—";
   const d = new Date(v);
@@ -116,10 +112,7 @@ export default function App() {
   const [page, setPage] = useState("daily-ops");
   const [badge, setBadge] = useState(null);
   const [dailyTarget, setDailyTarget] = useState(1);
-  const [kpi, setKpi] = useState(null);
-  const [payments, setPayments] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
-  const [trends, setTrends] = useState([]);
   const [agenda, setAgenda] = useState([]);
   const [groups, setGroups] = useState([]);
   const [marketProducts, setMarketProducts] = useState([]);
@@ -129,12 +122,9 @@ export default function App() {
   async function loadAll(force) {
     if (force) setRefreshing(true);
     try {
-      const [badgeRes, kpiRes, payRes, fbRes, trendRes, agRes, grRes, mktProdsRes, mktRulesRes] = await Promise.allSettled([
+      const [badgeRes, fbRes, agRes, grRes, mktProdsRes, mktRulesRes] = await Promise.allSettled([
         fetch(`${API}/methodology/badge`).then((r) => r.json()),
-        fetch(`${API}/reports/kpis?days=1`).then((r) => r.json()),
-        fetch(`${API}/payments?limit=20`).then((r) => r.json()),
         fetch(`${API}/feedback?limit=20`).then((r) => r.json()),
-        fetch(`${API}/alerts/trends?limit=20`).then((r) => r.json()),
         fetch(`${API}/agenda?limit=20`).then((r) => r.json()),
         fetch(`${API}/groups`).then((r) => r.json()),
         fetch(`${API}/market/products?limit=50`).then((r) => r.json()),
@@ -144,10 +134,7 @@ export default function App() {
         setBadge(badgeRes.value.badge);
         setDailyTarget(badgeRes.value.daily_sales_target ?? 1);
       }
-      if (kpiRes.status === "fulfilled") setKpi(kpiRes.value);
-      if (payRes.status === "fulfilled") setPayments(Array.isArray(payRes.value) ? payRes.value : []);
       if (fbRes.status === "fulfilled") setFeedbacks(Array.isArray(fbRes.value) ? fbRes.value : []);
-      if (trendRes.status === "fulfilled") setTrends(Array.isArray(trendRes.value) ? trendRes.value : []);
       if (agRes.status === "fulfilled") setAgenda(Array.isArray(agRes.value) ? agRes.value : []);
       if (grRes.status === "fulfilled") setGroups(Array.isArray(grRes.value) ? grRes.value : []);
       if (mktProdsRes.status === "fulfilled") setMarketProducts(Array.isArray(mktProdsRes.value) ? mktProdsRes.value : []);
@@ -168,11 +155,6 @@ export default function App() {
   useEffect(() => {
     setAuthExpiredHandler(() => setAuthed(false));
   }, []);
-
-  const todaySales = kpi?.orders ?? 0;
-  const todayRevenue = kpi?.revenue ?? 0;
-  const avgTicket = kpi?.ticket_average ?? 0;
-  const metaFalta = Math.max(0, (dailyTarget || 1) - todaySales);
 
   const sidebarItem = (item) => (
     <button
@@ -196,109 +178,6 @@ export default function App() {
       <span>{item.label}</span>
     </button>
   );
-
-  function renderCards() {
-    return (
-      <div className="row" style={{ marginTop: 14 }}>
-        {[
-          { label: "Vendas hoje", value: todaySales, color: "#2dce89", note: metaFalta > 0 ? `faltam ${metaFalta} para a meta` : "meta atingida" },
-          { label: "Receita hoje (R$)", value: fmtMoney(todayRevenue), color: "#5e72e4" },
-          { label: "Ticket médio (R$)", value: fmtMoney(avgTicket), color: "#11cdef" },
-          { label: "Meta diária", value: String(dailyTarget), color: "#fb6340", note: "1 venda/dia mínimo" },
-        ].map((kpiItem) => (
-          <div className="col-xl-3 col-lg-6" key={kpiItem.label}>
-            <div
-              style={{
-                background: "#fff",
-                borderRadius: 10,
-                padding: 18,
-                boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)",
-                borderLeft: `4px solid ${kpiItem.color}`,
-              }}
-            >
-              <div style={{ fontSize: 12, color: "#8898aa", textTransform: "uppercase", letterSpacing: 1 }}>{kpiItem.label}</div>
-              <div style={{ fontSize: 26, fontWeight: 700, color: "#32325d", marginTop: 4 }}>{kpiItem.value}</div>
-              {kpiItem.note && (
-                <div style={{ fontSize: 12, color: "#525f7f", marginTop: 6 }}>{kpiItem.note}</div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  function renderPayments() {
-    return (
-      <div className="card" style={{ marginTop: 18, background: "#fff", borderRadius: 10, padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h5 style={{ margin: 0, color: "#32325d" }}>Vendas recentes</h5>
-          <span style={{ fontSize: 12, color: "#8898aa" }}>Fonte: /payments</span>
-        </div>
-        <div style={{ marginTop: 10 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left", padding: "8px 4px", color: "#525f7f", fontSize: 12 }}>ID</th>
-                <th style={{ textAlign: "left", padding: "8px 4px", color: "#525f7f", fontSize: 12 }}>Usuário</th>
-                <th style={{ textAlign: "right", padding: "8px 4px", color: "#525f7f", fontSize: 12 }}>Valor</th>
-                <th style={{ textAlign: "left", padding: "8px 4px", color: "#525f7f", fontSize: 12 }}>Data</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.slice(0, 10).map((p) => (
-                <tr key={p.id ?? p.user_id}>
-                  <td style={{ padding: "8px 4px", borderTop: "1px solid #e9ecef", fontSize: 13 }}>{p.id ?? "—"}</td>
-                  <td style={{ padding: "8px 4px", borderTop: "1px solid #e9ecef", fontSize: 13 }}>{p.username ?? p.user_id ?? "—"}</td>
-                  <td style={{ padding: "8px 4px", borderTop: "1px solid #e9ecef", fontSize: 13, textAlign: "right" }}>{fmtMoney(p.amount)}</td>
-                  <td style={{ padding: "8px 4px", borderTop: "1px solid #e9ecef", fontSize: 13 }}>{fmtDateTime(p.created_at)}</td>
-                </tr>
-              ))}
-              {payments.length === 0 && (
-                <tr>
-                  <td colSpan={4} style={{ padding: "10px 4px", borderTop: "1px solid #e9ecef", fontSize: 13, color: "#8898aa" }}>
-                    Nenhuma venda registrada ainda.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
-
-  function renderTrends() {
-    return (
-      <div className="card" style={{ marginTop: 18, background: "#fff", borderRadius: 10, padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h5 style={{ margin: 0, color: "#32325d" }}>Alertas de tendência</h5>
-          <span style={{ fontSize: 12, color: "#8898aa" }}>Fonte: /alerts/trends</span>
-        </div>
-        <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {trends.slice(0, 12).map((t) => (
-            <span
-              key={t.id ?? t.keyword}
-              style={{
-                background: "#eef2ff",
-                color: "#32325d",
-                border: "1px solid #e9ecef",
-                borderRadius: 12,
-                padding: "8px 12px",
-                fontSize: 12,
-              }}
-            >
-              {t.keyword ?? t.topic ?? "trend"}{" "}
-              {typeof t.score === "number" && <span style={{ color: "#5e72e4" }}>{t.score.toFixed(1)}</span>}
-            </span>
-          ))}
-          {trends.length === 0 && (
-            <span style={{ fontSize: 12, color: "#8898aa" }}>Sem alertas no momento.</span>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   function renderAgenda() {
     return (
@@ -365,11 +244,8 @@ export default function App() {
       case "visao-geral":
         return (
           <div>
-            {renderCards()}
-            {renderPayments()}
-            {renderTrends()}
-            {renderAgenda()}
-            {renderGroups()}
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Visão Geral</h3>
+            <VisaoGeral />
           </div>
         );
       case "daily-ops":

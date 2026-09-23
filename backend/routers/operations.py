@@ -45,23 +45,29 @@ router = APIRouter(
 )
 
 
-def _portfolio_in_states(session: Session, states: list[PortfolioState], limit: int = 20) -> list[PortfolioItemOut]:
+def _portfolio_in_states(
+    session: Session, states: list[PortfolioState], limit: int = 20, marketplace: Marketplace | None = None
+) -> list[PortfolioItemOut]:
+    filters = [PortfolioItem.state.in_(states)]
+    if marketplace is not None:
+        filters.append(PortfolioItem.marketplace == marketplace)
     items = session.scalars(
-        select(PortfolioItem)
-        .where(PortfolioItem.state.in_(states))
-        .order_by(PortfolioItem.state_changed_at.desc())
-        .limit(limit)
+        select(PortfolioItem).where(*filters).order_by(PortfolioItem.state_changed_at.desc()).limit(limit)
     )
     return [portfolio_item_out(session, item) for item in items]
 
 
-def _creatives_in_status(session: Session, statuses: list[CreativeStatus], limit: int = 20) -> list[CreativeAssetOut]:
-    assets = session.scalars(
-        select(CreativeAsset)
-        .where(CreativeAsset.status.in_(statuses))
-        .order_by(CreativeAsset.status_changed_at.asc())
-        .limit(limit)
-    )
+def _creatives_in_status(
+    session: Session, statuses: list[CreativeStatus], limit: int = 20, marketplace: Marketplace | None = None
+) -> list[CreativeAssetOut]:
+    query = select(CreativeAsset).where(CreativeAsset.status.in_(statuses))
+    if marketplace is not None:
+        # `product_id` é opcional no modelo; um criativo sem produto vinculado não
+        # tem como ser atribuído a um marketplace, então o join já os exclui.
+        query = query.join(Product, Product.id == CreativeAsset.product_id).where(
+            Product.marketplace == marketplace
+        )
+    assets = session.scalars(query.order_by(CreativeAsset.status_changed_at.asc()).limit(limit))
     return [creative_asset_out(asset) for asset in assets]
 
 
@@ -70,35 +76,40 @@ def daily_operations(
     session: Session = Depends(get_session),
     days: int = Query(1, ge=1, le=30, description="Janela dos KPIs, em dias"),
     limit: int = Query(20, ge=1, le=100),
+    marketplace: Marketplace | None = Query(None, description="Restringe o painel a um marketplace"),
 ) -> DailyOperationsOut:
     """O painel de decisão do briefing seção 9.
 
     Cada bloco responde uma pergunta operacional. `alerts` reúne o que exige ação
-    agora, derivado de dados — não é uma lista decorativa.
+    agora, derivado de dados — não é uma lista decorativa. Com `marketplace`,
+    cada bloco é restrito àquele marketplace (a Visão Geral usa isso para
+    montar uma aba por marketplace ativado).
     """
     now = datetime.now(UTC)
-    snapshot = compute_kpis(session, days=days, now=now)
+    snapshot = compute_kpis(session, days=days, now=now, marketplace=marketplace)
     alerts: list[str] = []
 
     # --- Oportunidades de hoje -------------------------------------------------
     cutoff = now - timedelta(days=1)
+    product_filters = [Product.is_active.is_(True), Product.first_seen_at >= cutoff]
+    if marketplace is not None:
+        product_filters.append(Product.marketplace == marketplace)
     recent_products = list(
         session.scalars(
-            select(Product)
-            .where(Product.is_active.is_(True), Product.first_seen_at >= cutoff)
-            .order_by(desc(Product.first_seen_at))
-            .limit(limit)
+            select(Product).where(*product_filters).order_by(desc(Product.first_seen_at)).limit(limit)
         )
     )
     scores = latest_scores_by_dimension(session, [product.id for product in recent_products])
     opportunities = [product_summary(product, scores.get(product.id)) for product in recent_products]
 
     # --- Recomendados: maior Opportunity Score ---------------------------------
+    # Sobra de margem no limite bruto: produtos de outros marketplaces são
+    # descartados no laço abaixo antes de bater o `limit` de saída.
     top_runs = session.scalars(
         select(ScoreRun)
         .where(ScoreRun.target_type == "product", ScoreRun.dimension == "OPPORTUNITY")
         .order_by(desc(ScoreRun.score))
-        .limit(limit * 3)
+        .limit(limit * (8 if marketplace is not None else 3))
     ).all()
 
     recommended: list[ProductSummary] = []
@@ -108,6 +119,8 @@ def daily_operations(
             continue
         product = session.get(Product, run.target_id)
         if product is None:
+            continue
+        if marketplace is not None and product.marketplace != marketplace:
             continue
         seen_products.add(run.target_id)
         recommended.append(product_summary(product, {run.dimension.value: float(run.score)}))
@@ -121,18 +134,22 @@ def daily_operations(
         )
 
     # --- Blocos por estado do portfólio ---------------------------------------
-    awaiting = _portfolio_in_states(session, [PortfolioState.RECOMMENDED, PortfolioState.WATCHLIST, PortfolioState.DISCOVERED], limit)
-    affiliation = _portfolio_in_states(session, [PortfolioState.AFFILIATION_PENDING], limit)
-    ready = _portfolio_in_states(session, [PortfolioState.READY_TO_PUBLISH], limit)
-    published = _portfolio_in_states(session, [PortfolioState.PUBLISHED, PortfolioState.MONITORING, PortfolioState.SCALING], limit)
-    optimization = _portfolio_in_states(session, [PortfolioState.OPTIMIZATION_REQUIRED], limit)
+    awaiting = _portfolio_in_states(
+        session, [PortfolioState.RECOMMENDED, PortfolioState.WATCHLIST, PortfolioState.DISCOVERED], limit, marketplace
+    )
+    affiliation = _portfolio_in_states(session, [PortfolioState.AFFILIATION_PENDING], limit, marketplace)
+    ready = _portfolio_in_states(session, [PortfolioState.READY_TO_PUBLISH], limit, marketplace)
+    published = _portfolio_in_states(
+        session, [PortfolioState.PUBLISHED, PortfolioState.MONITORING, PortfolioState.SCALING], limit, marketplace
+    )
+    optimization = _portfolio_in_states(session, [PortfolioState.OPTIMIZATION_REQUIRED], limit, marketplace)
 
     # --- Criativos -------------------------------------------------------------
     creatives_pending = _creatives_in_status(
-        session, [CreativeStatus.PENDING, CreativeStatus.IN_PROGRESS, CreativeStatus.BLOCKED], limit
+        session, [CreativeStatus.PENDING, CreativeStatus.IN_PROGRESS, CreativeStatus.BLOCKED], limit, marketplace
     )
     creatives_ready = _creatives_in_status(
-        session, [CreativeStatus.READY, CreativeStatus.APPROVED], limit
+        session, [CreativeStatus.READY, CreativeStatus.APPROVED], limit, marketplace
     )
 
     # --- Alertas derivados de dado --------------------------------------------
@@ -146,19 +163,21 @@ def daily_operations(
     if snapshot.clicks_total is None:
         alerts.append("nenhum clique registrado; CTR e conversão indisponíveis")
 
-    blocked = session.scalar(
-        select(func.count())
-        .select_from(CreativeAsset)
-        .where(CreativeAsset.status == CreativeStatus.BLOCKED)
-    )
+    blocked_query = select(func.count()).select_from(CreativeAsset).where(CreativeAsset.status == CreativeStatus.BLOCKED)
+    if marketplace is not None:
+        blocked_query = blocked_query.join(Product, Product.id == CreativeAsset.product_id).where(
+            Product.marketplace == marketplace
+        )
+    blocked = session.scalar(blocked_query)
     if blocked:
         alerts.append(f"{int(blocked)} material(is) criativo(s) bloqueado(s)")
 
-    stalled = session.scalar(
-        select(func.count())
-        .select_from(PortfolioItem)
-        .where(PortfolioItem.state == PortfolioState.OPTIMIZATION_REQUIRED)
+    stalled_query = select(func.count()).select_from(PortfolioItem).where(
+        PortfolioItem.state == PortfolioState.OPTIMIZATION_REQUIRED
     )
+    if marketplace is not None:
+        stalled_query = stalled_query.where(PortfolioItem.marketplace == marketplace)
+    stalled = session.scalar(stalled_query)
     if stalled:
         alerts.append(f"{int(stalled)} produto(s) exigindo otimização")
 
