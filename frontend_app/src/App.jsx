@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Portfolio from "./pages/Portfolio";
 import Integrations from "./pages/Integrations";
 import TrendingAbroad from "./pages/TrendingAbroad";
+import Opportunities from "./pages/Opportunities";
 import Login from "./pages/Login";
 import { API_BASE, isLoggedIn, logout, setAuthExpiredHandler } from "./lib/apiClient";
 
@@ -11,6 +12,7 @@ const PAGES = [
   { id: "visao-geral", label: "Visão Geral", icon: "🏠" },
   { id: "daily-ops", label: "Daily Ops", icon: "🎯" },
   { id: "portfolio", label: "Portfólio", icon: "🗂️" },
+  { id: "oportunidades", label: "Oportunidades de Busca", icon: "🔥" },
   { id: "tendencias", label: "Tendências Internacionais", icon: "🌎" },
   { id: "integracoes", label: "Integrações", icon: "🔌" },
 ];
@@ -67,6 +69,13 @@ export default function App() {
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Portfólio</h3>
             <Portfolio />
+          </div>
+        );
+      case "oportunidades":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Oportunidades de Busca</h3>
+            <Opportunities />
           </div>
         );
       case "tendencias":

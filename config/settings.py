@@ -84,6 +84,15 @@ class Settings(BaseSettings):
     meta_access_token: str = ""
     meta_ad_account_id: str = ""
 
+    # --- Métricas de busca (volume, CPC, concorrência no Google) ----------------
+    # Nenhuma API gratuita entrega isso: vem do Planejador de Palavras-chave do
+    # Google Ads, via provedor pago. DataForSEO aqui; sem credencial, o sistema
+    # mostra "—" nesses campos em vez de estimar. O CPC chega em dólar; só
+    # converte para R$ se o operador informar a cotação (sem valor embutido).
+    dataforseo_login: str = ""
+    dataforseo_password: str = ""
+    usd_brl_rate: float | None = None
+
     # --- Mercado Livre --------------------------------------------------------
     # https://developers.mercadolivre.com.br/ — app do tipo "Server Side".
     mercadolivre_client_id: str = ""
