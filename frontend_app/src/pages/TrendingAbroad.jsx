@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getJSON } from "../lib/apiClient";
+import TrendingAbroadModal from "./TrendingAbroadModal";
 
 const SITES = [
   { id: "MLM", country: "México" },
@@ -19,6 +20,7 @@ function fmtMoney(v, currency) {
 export default function TrendingAbroad() {
   const [sites, setSites] = useState(SITES.map((s) => s.id));
   const [products, setProducts] = useState(null);
+  const [selected, setSelected] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -98,12 +100,14 @@ export default function TrendingAbroad() {
           {products.map((p) => (
             <div
               key={`${p.site_id}-${p.external_id}`}
+              onClick={() => setSelected(p)}
               style={{
                 background: "#fff",
                 border: "1px solid #eef0f5",
                 borderRadius: 12,
                 overflow: "hidden",
                 boxShadow: "0 0 1.5rem 0 rgba(136,152,170,.12)",
+                cursor: "pointer",
               }}
             >
               <div style={{ position: "relative", background: "#f6f9fc", aspectRatio: "1 / 1" }}>
@@ -181,6 +185,7 @@ export default function TrendingAbroad() {
                     href={p.product_url}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     style={{ display: "inline-block", marginTop: 6, fontSize: 11, color: "#5e72e4" }}
                   >
                     ver anúncio original ↗
@@ -191,6 +196,8 @@ export default function TrendingAbroad() {
           ))}
         </div>
       )}
+
+      {selected && <TrendingAbroadModal product={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
