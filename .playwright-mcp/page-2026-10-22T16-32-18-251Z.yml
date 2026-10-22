@@ -1,0 +1,418 @@
+- generic [active] [ref=f1e1]:
+  - link "Ir para os achados" [ref=f1e2] [cursor=pointer]:
+    - /url: "#achados"
+  - banner [ref=f1e3]:
+    - generic [ref=f1e4]:
+      - link "Mural na Web, voltar ao topo" [ref=f1e5] [cursor=pointer]:
+        - /url: "#topo"
+        - img "Mural na Web" [ref=f1e6]
+      - search [ref=f1e7]:
+        - generic [ref=f1e8]: Buscar achados
+        - searchbox "Buscar achados" [ref=f1e9]
+      - button "Abrir Meu mural" [ref=f1e10] [cursor=pointer]:
+        - generic [ref=f1e13]: Meu mural
+        - generic [ref=f1e14]: "0"
+  - main [ref=f1e15]:
+    - region [ref=f1e16]:
+      - generic [ref=f1e17]:
+        - generic [ref=f1e18]:
+          - heading "Boas descobertas começam aqui." [level=1] [ref=f1e19]
+          - paragraph [ref=f1e20]: Produtos selecionados, ofertas interessantes e oportunidades digitais em um só lugar.
+          - search [ref=f1e21]:
+            - generic [ref=f1e22]: Buscar achados
+            - searchbox "Buscar achados" [ref=f1e23]
+            - button "Buscar" [ref=f1e24] [cursor=pointer]
+          - group "Categorias" [ref=f1e25]:
+            - button "Todos 28" [pressed] [ref=f1e26] [cursor=pointer]:
+              - text: Todos
+              - generic [ref=f1e27]: "28"
+            - button "Eletrônicos 8" [ref=f1e28] [cursor=pointer]:
+              - text: Eletrônicos
+              - generic [ref=f1e29]: "8"
+            - button "Casa 11" [ref=f1e30] [cursor=pointer]:
+              - text: Casa
+              - generic [ref=f1e31]: "11"
+            - button "Moda 8" [ref=f1e32] [cursor=pointer]:
+              - text: Moda
+              - generic [ref=f1e33]: "8"
+            - button "Achados diversos 1" [ref=f1e34] [cursor=pointer]:
+              - text: Achados diversos
+              - generic [ref=f1e35]: "1"
+          - paragraph [ref=f1e36]: Garimpamos em Shopee, Mercado Livre, Hotmart, Eduzz e Monetizze.
+        - generic "Alguns achados em destaque" [ref=f1e37]:
+          - 'button "Ver detalhes: TENIS CASUAL ADULTO ENVIO RAPIDO UNISSEX" [ref=f1e38] [cursor=pointer]':
+            - generic [ref=f1e39]: TENIS CASUAL ADULTO ENVIO RAPIDO UNISSEX
+            - generic [ref=f1e40]: R$ 59,00
+          - 'button "Ver detalhes: Fonte Carregador PD USB C 30W Turbo Anatel Rápido Original AGOLD…" [ref=f1e41] [cursor=pointer]':
+            - generic [ref=f1e42]: Fonte Carregador PD USB C 30W Turbo Anatel Rápido Original AGOLD…
+            - generic [ref=f1e43]: R$ 26,50
+    - region [ref=f1e44]:
+      - generic [ref=f1e45]:
+        - generic [ref=f1e46]:
+          - heading "Ofertas em destaque" [level=2] [ref=f1e47]
+          - paragraph [ref=f1e48]: Preços abaixo do valor anterior que vimos no marketplace.
+        - generic [ref=f1e49]:
+          - article [ref=f1e50]:
+            - generic [ref=f1e51]:
+              - 'button "Ver detalhes: Mini Lanterna Tática Led e Zoom Recarregável USB Multi Função…" [ref=f1e52] [cursor=pointer]'
+              - generic [ref=f1e53]: "-56%"
+              - generic [ref=f1e54]:
+                - button "Fixar no meu mural" [ref=f1e55] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e58] [cursor=pointer]
+            - generic [ref=f1e61]:
+              - generic [ref=f1e62]: Shopee
+              - heading [level=3] [ref=f1e63]:
+                - link "Mini Lanterna Tática Led e Zoom Recarregável USB Multi Função…" [ref=f1e64] [cursor=pointer]:
+                  - /url: "#p36"
+              - generic [ref=f1e65]:
+                - generic [ref=f1e66]: R$ 28,90
+                - generic [ref=f1e67]: R$ 65,99
+              - paragraph [ref=f1e68]: Nota 5
+              - 'link "Quero esse: Mini Lanterna Tática Led e Zoom Recarregável USB Multi Função…, na Shopee" [ref=f1e69] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/9zyi2u50wl
+                - text: Quero esse
+          - article [ref=f1e70]:
+            - generic [ref=f1e71]:
+              - 'button "Ver detalhes: Tênis de Corrida Ultraleves Profissionais com Placa de Carbono na…" [ref=f1e72] [cursor=pointer]'
+              - generic [ref=f1e73]: "-27%"
+              - generic [ref=f1e74]:
+                - button "Fixar no meu mural" [ref=f1e75] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e78] [cursor=pointer]
+            - generic [ref=f1e81]:
+              - generic [ref=f1e82]: Shopee
+              - heading [level=3] [ref=f1e83]:
+                - link "Tênis de Corrida Ultraleves Profissionais com Placa de Carbono na…" [ref=f1e84] [cursor=pointer]:
+                  - /url: "#p61"
+              - generic [ref=f1e85]:
+                - generic [ref=f1e86]: R$ 84,68
+                - generic [ref=f1e87]: R$ 116,13
+              - paragraph [ref=f1e88]: Nota 5 · 8 vendidos
+              - 'link "Quero esse: Tênis de Corrida Ultraleves Profissionais com Placa de Carbono na…, na Shopee" [ref=f1e89] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/6fiG74hwGH
+                - text: Quero esse
+          - article [ref=f1e90]:
+            - generic [ref=f1e91]:
+              - 'button "Ver detalhes: Luminária Painel Led 12W 18W 24W Branco Frio Quente Quadrado Redondo…" [ref=f1e92] [cursor=pointer]'
+              - generic [ref=f1e93]: "-25%"
+              - generic [ref=f1e94]:
+                - button "Fixar no meu mural" [ref=f1e95] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e98] [cursor=pointer]
+            - generic [ref=f1e101]:
+              - generic [ref=f1e102]: Shopee
+              - heading [level=3] [ref=f1e103]:
+                - link "Luminária Painel Led 12W 18W 24W Branco Frio Quente Quadrado Redondo…" [ref=f1e104] [cursor=pointer]:
+                  - /url: "#p20"
+              - generic [ref=f1e105]:
+                - generic [ref=f1e106]: R$ 30,00
+                - generic [ref=f1e107]: R$ 40,00
+              - paragraph [ref=f1e108]: Nota 5
+              - 'link "Quero esse: Luminária Painel Led 12W 18W 24W Branco Frio Quente Quadrado Redondo…, na Shopee" [ref=f1e109] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/3LRo8wChVr
+                - text: Quero esse
+          - article [ref=f1e110]:
+            - generic [ref=f1e111]:
+              - 'button "Ver detalhes: Kit Carregador Celular Tipo C 30W Turbo A''Gold Original Fonte Rápida…" [ref=f1e112] [cursor=pointer]'
+              - generic [ref=f1e113]: "-17%"
+              - generic [ref=f1e114]:
+                - button "Fixar no meu mural" [ref=f1e115] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e118] [cursor=pointer]
+            - generic [ref=f1e121]:
+              - generic [ref=f1e122]: Shopee
+              - heading [level=3] [ref=f1e123]:
+                - link "Kit Carregador Celular Tipo C 30W Turbo A'Gold Original Fonte Rápida…" [ref=f1e124] [cursor=pointer]:
+                  - /url: "#p65"
+              - generic [ref=f1e125]:
+                - generic [ref=f1e126]: R$ 24,99
+                - generic [ref=f1e127]: R$ 29,99
+              - paragraph [ref=f1e128]: Nota 5 · 3 vendidos
+              - 'link "Quero esse: Kit Carregador Celular Tipo C 30W Turbo A''Gold Original Fonte Rápida…, na Shopee" [ref=f1e129] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/6fiG74vHBQ
+                - text: Quero esse
+    - region [ref=f1e130]:
+      - generic [ref=f1e131]:
+        - generic [ref=f1e132]:
+          - heading "Todos os achados" [level=2] [ref=f1e133]
+          - paragraph [ref=f1e134]: 28 achados
+        - generic [ref=f1e135]:
+          - group "Filtrar por categoria" [ref=f1e136]:
+            - button "Todos 28" [pressed] [ref=f1e137] [cursor=pointer]:
+              - text: Todos
+              - generic [ref=f1e138]: "28"
+            - button "Eletrônicos 8" [ref=f1e139] [cursor=pointer]:
+              - text: Eletrônicos
+              - generic [ref=f1e140]: "8"
+            - button "Casa 11" [ref=f1e141] [cursor=pointer]:
+              - text: Casa
+              - generic [ref=f1e142]: "11"
+            - button "Moda 8" [ref=f1e143] [cursor=pointer]:
+              - text: Moda
+              - generic [ref=f1e144]: "8"
+            - button "Achados diversos 1" [ref=f1e145] [cursor=pointer]:
+              - text: Achados diversos
+              - generic [ref=f1e146]: "1"
+          - generic [ref=f1e147]:
+            - generic [ref=f1e148]:
+              - text: Preço
+              - combobox "Preço" [ref=f1e149]:
+                - option "Qualquer" [selected]
+                - option "Até R$ 30"
+                - option "Até R$ 60"
+                - option "Até R$ 100"
+                - option "Até R$ 200"
+            - generic [ref=f1e150]:
+              - text: Ordem
+              - combobox "Ordem" [ref=f1e151]:
+                - option "Em destaque" [selected]
+                - option "Menor preço"
+                - option "Maior desconto"
+                - option "Mais vendidos"
+        - generic [ref=f1e152]:
+          - article [ref=f1e153]:
+            - generic [ref=f1e154]:
+              - 'button "Ver detalhes: TENIS CASUAL ADULTO ENVIO RAPIDO UNISSEX" [ref=f1e155] [cursor=pointer]'
+              - generic [ref=f1e156]:
+                - button "Fixar no meu mural" [ref=f1e157] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e160] [cursor=pointer]
+            - generic [ref=f1e163]:
+              - generic [ref=f1e164]: Shopee
+              - heading [level=3] [ref=f1e165]:
+                - link "TENIS CASUAL ADULTO ENVIO RAPIDO UNISSEX" [ref=f1e166] [cursor=pointer]:
+                  - /url: "#p33"
+              - generic [ref=f1e167]: R$ 59,00
+              - paragraph [ref=f1e169]: Nota 5 · 15 vendidos
+              - 'link "Quero esse: TENIS CASUAL ADULTO ENVIO RAPIDO UNISSEX, na Shopee" [ref=f1e170] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/9APb3N3r9W
+                - text: Quero esse
+          - article [ref=f1e171]:
+            - generic [ref=f1e172]:
+              - 'button "Ver detalhes: Fonte Carregador PD USB C 30W Turbo Anatel Rápido Original AGOLD…" [ref=f1e173] [cursor=pointer]'
+              - generic [ref=f1e174]:
+                - button "Fixar no meu mural" [ref=f1e175] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e178] [cursor=pointer]
+            - generic [ref=f1e181]:
+              - generic [ref=f1e182]: Shopee
+              - heading [level=3] [ref=f1e183]:
+                - link "Fonte Carregador PD USB C 30W Turbo Anatel Rápido Original AGOLD…" [ref=f1e184] [cursor=pointer]:
+                  - /url: "#p109"
+              - generic [ref=f1e185]: R$ 26,50
+              - paragraph [ref=f1e187]: Nota 5 · 11 vendidos
+              - 'link "Quero esse: Fonte Carregador PD USB C 30W Turbo Anatel Rápido Original AGOLD…, na Shopee" [ref=f1e188] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/W7cjRjmpi
+                - text: Quero esse
+          - article [ref=f1e189]:
+            - generic [ref=f1e190]:
+              - 'button "Ver detalhes: Calça Feminina Pantalona Premium Couro Fake Cintura Alta Wide Leg com…" [ref=f1e191] [cursor=pointer]'
+              - generic [ref=f1e192]:
+                - button "Fixar no meu mural" [ref=f1e193] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e196] [cursor=pointer]
+            - generic [ref=f1e199]:
+              - generic [ref=f1e200]: Shopee
+              - heading [level=3] [ref=f1e201]:
+                - link "Calça Feminina Pantalona Premium Couro Fake Cintura Alta Wide Leg com…" [ref=f1e202] [cursor=pointer]:
+                  - /url: "#p55"
+              - generic [ref=f1e203]: R$ 49,99
+              - paragraph [ref=f1e205]: Nota 5 · 10 vendidos
+              - 'link "Quero esse: Calça Feminina Pantalona Premium Couro Fake Cintura Alta Wide Leg com…, na Shopee" [ref=f1e206] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/7puDVDZEer
+                - text: Quero esse
+          - article [ref=f1e207]:
+            - generic [ref=f1e208]:
+              - 'button "Ver detalhes: Tênis de Corrida Ultraleves Profissionais com Placa de Carbono na…" [ref=f1e209] [cursor=pointer]'
+              - generic [ref=f1e210]: "-27%"
+              - generic [ref=f1e211]:
+                - button "Fixar no meu mural" [ref=f1e212] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e215] [cursor=pointer]
+            - generic [ref=f1e218]:
+              - generic [ref=f1e219]: Shopee
+              - heading [level=3] [ref=f1e220]:
+                - link "Tênis de Corrida Ultraleves Profissionais com Placa de Carbono na…" [ref=f1e221] [cursor=pointer]:
+                  - /url: "#p61"
+              - generic [ref=f1e222]:
+                - generic [ref=f1e223]: R$ 84,68
+                - generic [ref=f1e224]: R$ 116,13
+              - paragraph [ref=f1e225]: Nota 5 · 8 vendidos
+              - 'link "Quero esse: Tênis de Corrida Ultraleves Profissionais com Placa de Carbono na…, na Shopee" [ref=f1e226] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/6fiG74hwGH
+                - text: Quero esse
+          - article [ref=f1e227]:
+            - generic [ref=f1e228]:
+              - 'button "Ver detalhes: Lanterna Tática Profissional Recarregável LED Alta Potência Zoom" [ref=f1e229] [cursor=pointer]'
+              - generic [ref=f1e230]:
+                - button "Fixar no meu mural" [ref=f1e231] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e234] [cursor=pointer]
+            - generic [ref=f1e237]:
+              - generic [ref=f1e238]: Shopee
+              - heading [level=3] [ref=f1e239]:
+                - link "Lanterna Tática Profissional Recarregável LED Alta Potência Zoom" [ref=f1e240] [cursor=pointer]:
+                  - /url: "#p38"
+              - generic [ref=f1e241]: R$ 46,99
+              - paragraph [ref=f1e243]: Nota 5 · 4 vendidos
+              - 'link "Quero esse: Lanterna Tática Profissional Recarregável LED Alta Potência Zoom, na Shopee" [ref=f1e244] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/9fLreI6Hcj
+                - text: Quero esse
+          - article [ref=f1e245]:
+            - generic [ref=f1e246]:
+              - 'button "Ver detalhes: Garrafa Térmica Infantil Canudo 500ml Quente ou Frio Tema…" [ref=f1e247] [cursor=pointer]'
+              - generic [ref=f1e248]:
+                - button "Fixar no meu mural" [ref=f1e249] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e252] [cursor=pointer]
+            - generic [ref=f1e255]:
+              - generic [ref=f1e256]: Shopee
+              - heading [level=3] [ref=f1e257]:
+                - link "Garrafa Térmica Infantil Canudo 500ml Quente ou Frio Tema…" [ref=f1e258] [cursor=pointer]:
+                  - /url: "#p56"
+              - generic [ref=f1e259]: R$ 39,90
+              - paragraph [ref=f1e261]: Nota 5 · 3 vendidos
+              - 'link "Quero esse: Garrafa Térmica Infantil Canudo 500ml Quente ou Frio Tema…, na Shopee" [ref=f1e262] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/LoCX8X9Y6
+                - text: Quero esse
+          - article [ref=f1e263]:
+            - generic [ref=f1e264]:
+              - 'button "Ver detalhes: TENIS ESPORTIVO SNEAKERS dc shoes 2026" [ref=f1e265] [cursor=pointer]'
+              - generic [ref=f1e266]:
+                - button "Fixar no meu mural" [ref=f1e267] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e270] [cursor=pointer]
+            - generic [ref=f1e273]:
+              - generic [ref=f1e274]: Shopee
+              - heading [level=3] [ref=f1e275]:
+                - link "TENIS ESPORTIVO SNEAKERS dc shoes 2026" [ref=f1e276] [cursor=pointer]:
+                  - /url: "#p34"
+              - generic [ref=f1e277]: R$ 59,90
+              - paragraph [ref=f1e279]: Nota 5 · 3 vendidos
+              - 'link "Quero esse: TENIS ESPORTIVO SNEAKERS dc shoes 2026, na Shopee" [ref=f1e280] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/906Ar44UUV
+                - text: Quero esse
+          - article [ref=f1e281]:
+            - generic [ref=f1e282]:
+              - 'button "Ver detalhes: Kit Carregador Celular Tipo C 30W Turbo A''Gold Original Fonte Rápida…" [ref=f1e283] [cursor=pointer]'
+              - generic [ref=f1e284]: "-17%"
+              - generic [ref=f1e285]:
+                - button "Fixar no meu mural" [ref=f1e286] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e289] [cursor=pointer]
+            - generic [ref=f1e292]:
+              - generic [ref=f1e293]: Shopee
+              - heading [level=3] [ref=f1e294]:
+                - link "Kit Carregador Celular Tipo C 30W Turbo A'Gold Original Fonte Rápida…" [ref=f1e295] [cursor=pointer]:
+                  - /url: "#p65"
+              - generic [ref=f1e296]:
+                - generic [ref=f1e297]: R$ 24,99
+                - generic [ref=f1e298]: R$ 29,99
+              - paragraph [ref=f1e299]: Nota 5 · 3 vendidos
+              - 'link "Quero esse: Kit Carregador Celular Tipo C 30W Turbo A''Gold Original Fonte Rápida…, na Shopee" [ref=f1e300] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/6fiG74vHBQ
+                - text: Quero esse
+          - article [ref=f1e301]:
+            - generic [ref=f1e302]:
+              - 'button "Ver detalhes: Garrafa Com Canudo Térmica Infantil Estampas Animais Aço Inox 400ml" [ref=f1e303] [cursor=pointer]'
+              - generic [ref=f1e304]:
+                - button "Fixar no meu mural" [ref=f1e305] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e308] [cursor=pointer]
+            - generic [ref=f1e311]:
+              - generic [ref=f1e312]: Shopee
+              - heading [level=3] [ref=f1e313]:
+                - link "Garrafa Com Canudo Térmica Infantil Estampas Animais Aço Inox 400ml" [ref=f1e314] [cursor=pointer]:
+                  - /url: "#p120"
+              - generic [ref=f1e315]: R$ 39,99
+              - paragraph [ref=f1e317]: Nota 5 · 1 vendidos
+              - 'link "Quero esse: Garrafa Com Canudo Térmica Infantil Estampas Animais Aço Inox 400ml, na Shopee" [ref=f1e318] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/9V2RUBMaHe
+                - text: Quero esse
+          - article [ref=f1e319]:
+            - generic [ref=f1e320]:
+              - 'button "Ver detalhes: Fone de Ouvido Bluetooth Sem Fio M. Mouse + Relógio Infantil…" [ref=f1e321] [cursor=pointer]'
+              - generic [ref=f1e322]:
+                - button "Fixar no meu mural" [ref=f1e323] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e326] [cursor=pointer]
+            - generic [ref=f1e329]:
+              - generic [ref=f1e330]: Shopee
+              - heading [level=3] [ref=f1e331]:
+                - link "Fone de Ouvido Bluetooth Sem Fio M. Mouse + Relógio Infantil…" [ref=f1e332] [cursor=pointer]:
+                  - /url: "#p15"
+              - generic [ref=f1e333]: R$ 129,90
+              - paragraph [ref=f1e335]: Nota 5 · 1 vendidos
+              - 'link "Quero esse: Fone de Ouvido Bluetooth Sem Fio M. Mouse + Relógio Infantil…, na Shopee" [ref=f1e336] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/3LRo6e8OZL
+                - text: Quero esse
+          - article [ref=f1e337]:
+            - generic [ref=f1e338]:
+              - 'button "Ver detalhes: Garrafa Térmica Animais Rabbit De Aço Inoxidável Garrafinha De Água…" [ref=f1e339] [cursor=pointer]'
+              - generic [ref=f1e340]:
+                - button "Fixar no meu mural" [ref=f1e341] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e344] [cursor=pointer]
+            - generic [ref=f1e347]:
+              - generic [ref=f1e348]: Shopee
+              - heading [level=3] [ref=f1e349]:
+                - link "Garrafa Térmica Animais Rabbit De Aço Inoxidável Garrafinha De Água…" [ref=f1e350] [cursor=pointer]:
+                  - /url: "#p30"
+              - generic [ref=f1e351]: R$ 69,90
+              - paragraph [ref=f1e353]: Nota 5 · 1 vendidos
+              - 'link "Quero esse: Garrafa Térmica Animais Rabbit De Aço Inoxidável Garrafinha De Água…, na Shopee" [ref=f1e354] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/AKaoJs4DfD
+                - text: Quero esse
+          - article [ref=f1e355]:
+            - generic [ref=f1e356]:
+              - 'button "Ver detalhes: Kit 2 Calças Legging Feminina Suplex Cós Alto Modeladora Academia…" [ref=f1e357] [cursor=pointer]'
+              - generic [ref=f1e358]:
+                - button "Fixar no meu mural" [ref=f1e359] [cursor=pointer]
+                - button "Compartilhar" [ref=f1e362] [cursor=pointer]
+            - generic [ref=f1e365]:
+              - generic [ref=f1e366]: Shopee
+              - heading [level=3] [ref=f1e367]:
+                - link "Kit 2 Calças Legging Feminina Suplex Cós Alto Modeladora Academia…" [ref=f1e368] [cursor=pointer]:
+                  - /url: "#p100"
+              - generic [ref=f1e369]: R$ 69,30
+              - paragraph [ref=f1e371]: Nota 5
+              - 'link "Quero esse: Kit 2 Calças Legging Feminina Suplex Cós Alto Modeladora Academia…, na Shopee" [ref=f1e372] [cursor=pointer]':
+                - /url: https://s.shopee.com.br/5LCsUK9eMf
+                - text: Quero esse
+        - button "Ver mais achados" [ref=f1e374] [cursor=pointer]
+    - region [ref=f1e375]:
+      - generic [ref=f1e376]:
+        - heading "Como o Mural funciona" [level=2] [ref=f1e377]
+        - list [ref=f1e378]:
+          - listitem [ref=f1e379]:
+            - heading "A gente garimpa" [level=3] [ref=f1e380]
+            - paragraph [ref=f1e381]: Procuramos nos marketplaces e plataformas digitais e ficamos só com o que tem boa avaliação, preço que faz sentido e procura real.
+          - listitem [ref=f1e382]:
+            - heading "Você compara e fixa" [level=3] [ref=f1e383]
+            - paragraph [ref=f1e384]: Veja preço, nota e vendas, e fixe no seu mural o que gostou. A lista fica no seu aparelho, sem cadastro.
+          - listitem [ref=f1e385]:
+            - heading "Compra onde é seguro" [level=3] [ref=f1e386]
+            - paragraph [ref=f1e387]: O botão leva direto à página do produto no marketplace. Pagamento, entrega e troca são com eles.
+        - paragraph [ref=f1e388]: "O Mural na Web participa de programas de afiliados de plataformas como Shopee, Mercado Livre, Hotmart, Eduzz e Monetizze e pode receber uma comissão pelas compras feitas pelos links desta página, sem custo extra para você. Não somos loja nem parceiros oficiais dessas plataformas: a compra, o pagamento e a entrega são feitos no site de cada uma. Preços e disponibilidade são os vistos no dia indicado e podem mudar: confira antes de comprar."
+    - region [ref=f1e389]:
+      - generic [ref=f1e390]:
+        - heading "Dúvidas" [level=2] [ref=f1e391]
+        - generic [ref=f1e392]:
+          - group [ref=f1e393]:
+            - generic "Vocês vendem os produtos?" [ref=f1e394] [cursor=pointer]
+          - group [ref=f1e395]:
+            - generic "Pago mais caro por comprar pelo Mural?" [ref=f1e396] [cursor=pointer]
+          - group [ref=f1e397]:
+            - generic "Os preços são os mesmos do marketplace?" [ref=f1e398] [cursor=pointer]
+          - group [ref=f1e399]:
+            - generic "Como vocês escolhem os achados?" [ref=f1e400] [cursor=pointer]
+          - group [ref=f1e401]:
+            - generic "O que é o Meu mural?" [ref=f1e402] [cursor=pointer]
+          - group [ref=f1e403]:
+            - generic "E se o produto chegar com problema?" [ref=f1e404] [cursor=pointer]
+          - group [ref=f1e405]:
+            - generic "O que vocês guardam sobre mim?" [ref=f1e406] [cursor=pointer]
+  - contentinfo [ref=f1e407]:
+    - generic [ref=f1e408]:
+      - generic [ref=f1e409]:
+        - img "Mural na Web" [ref=f1e410]
+        - paragraph [ref=f1e411]: Achadinhos, ofertas e oportunidades. Boas descobertas começam aqui.
+      - navigation "Rodapé" [ref=f1e412]:
+        - link "Todos os achados" [ref=f1e413] [cursor=pointer]:
+          - /url: "#achados"
+        - link "Como funciona" [ref=f1e414] [cursor=pointer]:
+          - /url: "#como"
+        - link "Dúvidas" [ref=f1e415] [cursor=pointer]:
+          - /url: "#duvidas"
+        - link "Política de privacidade" [ref=f1e416] [cursor=pointer]:
+          - /url: https://felixsystems.com.br/privacidade.html
+    - generic [ref=f1e417]:
+      - paragraph [ref=f1e418]: "O Mural na Web participa de programas de afiliados de plataformas como Shopee, Mercado Livre, Hotmart, Eduzz e Monetizze e pode receber uma comissão pelas compras feitas pelos links desta página, sem custo extra para você. Não somos loja nem parceiros oficiais dessas plataformas: a compra, o pagamento e a entrega são feitos no site de cada uma. Preços e disponibilidade são os vistos no dia indicado e podem mudar: confira antes de comprar."
+      - paragraph [ref=f1e419]: © 2026 Mural na Web. Imagens e marcas dos produtos pertencem aos seus donos e às plataformas.
+  - status

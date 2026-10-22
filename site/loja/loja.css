@@ -303,13 +303,24 @@ dialog::backdrop { background: rgba(23, 25, 35, 0.66); }
   .hero { padding-top: 24px; }
   .search-hero { flex-wrap: wrap; }
   .search-hero .btn { width: 100%; }
-  .tools { flex-direction: column; }
+  .tools { flex-direction: column; align-items: stretch; }
+  .tools .chips { max-width: 100%; }
   .chips { flex-wrap: nowrap; overflow-x: auto; margin-inline: calc(var(--m) * -1); padding-inline: var(--m); scrollbar-width: none; }
   .chips::-webkit-scrollbar { display: none; }
   .chip { flex: none; }
-  .sheet { width: 100%; margin: auto 0 0; border-radius: 16px 16px 0 0; }
-  .sheet-body { grid-template-columns: 1fr; }
-  .sheet-art { min-height: 0; aspect-ratio: 1; }
+  /* detalhe do achado no celular: gaveta compacta, foto baixa e botão de compra sempre à vista */
+  .sheet { width: 100%; max-width: 100%; margin: auto 0 0; max-height: 92svh; border-radius: 16px 16px 0 0; overflow: hidden; }
+  .sheet[open] { display: flex; flex-direction: column; }
+  .sheet-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .sheet-art { flex: none; min-height: 0; height: 34svh; max-height: 300px; }
+  .sheet-art img { object-fit: contain; background: #fff; }
+  .sheet-info { padding: 14px 16px 0; gap: 8px; }
+  .sheet-info h2 { font-size: var(--s-lead); }
+  .sheet-info .price b { font-size: var(--s-lead); }
+  .sheet-actions { position: sticky; bottom: 0; z-index: 2; background: var(--white); margin: 4px -16px 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); gap: 8px; }
+  .sheet-actions .btn { flex: 1 1 calc(50% - 4px); min-height: 44px; padding: 8px 8px; font-size: var(--s-small); }
+  .sheet-actions .btn-red { flex-basis: 100%; min-height: 50px; }
+  .close { top: 10px; right: 10px; min-height: 38px; }
   .rail .card { flex-basis: 66vw; }
 }
 @media (prefers-reduced-motion: reduce) {
