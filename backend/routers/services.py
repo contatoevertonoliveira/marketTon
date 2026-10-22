@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from backend.deps import get_session
 from backend.security import require
 from core.db.service_credentials import ServiceCredential
-from core.services import ads_budget, link_shortener, meta_ads, storefront
+from core.services import ads_budget, aistudio, link_shortener, meta_ads, storefront
 from integrations.google_ads import DEFAULT_API_VERSION, GoogleAdsClient, GoogleAdsConfig, GoogleAdsError
 
 router = APIRouter(
@@ -58,6 +58,24 @@ SERVICES: dict[str, dict] = {
             {"name": "instagram_business_id", "label": "ID da conta profissional do Instagram (opcional)", "secret": False},
             {"name": "app_id", "label": "ID do app da Meta (opcional, para conferir permissões)", "secret": False},
             {"name": "app_secret", "label": "Chave secreta do app da Meta (opcional)", "secret": True},
+        ],
+    },
+    "aistudio": {
+        "icon": "🎬",
+        "required": ["base_url", "api_key"],
+        "name": "AI Studio (criativos de anúncio)",
+        "description": "O seu estúdio de criativos: o agente pede vídeos, imagens e textos de anúncio de um produto e recebe o resultado por webhook.",
+        "help": "Endereço da API (termina em /api/v1) e a chave de cliente (api_key do AI Studio). O segredo do webhook e o endereço de retorno "
+                "(https://app.felixsystems.com.br/api/integrations/aistudio/webhook) permitem receber o resultado sem ficar consultando. "
+                "Por padrão SÓ SANDBOX (não gasta nada). Para gerar de verdade, escreva sim em \"Permitir geração ao vivo\": isso é a sua autorização "
+                "expressa. O teto por campanha em US$ vale sempre. O AI Studio precisa estar acessível por este servidor (endereço fixo, não túnel temporário).",
+        "fields": [
+            {"name": "base_url", "label": "Endereço da API do AI Studio (https://…/api/v1)", "secret": False},
+            {"name": "api_key", "label": "Chave de cliente do AI Studio", "secret": True},
+            {"name": "webhook_secret", "label": "Segredo do webhook", "secret": True},
+            {"name": "callback_url", "label": "Endereço de retorno (webhook) deste marketTon", "secret": False},
+            {"name": "allow_live", "label": "Permitir geração ao vivo (gasta créditos)? escreva sim para permitir; vazio = só sandbox", "secret": False},
+            {"name": "max_usd", "label": "Teto por campanha em US$ (padrão 2, máximo 25)", "secret": False},
         ],
     },
     "ads_budget": {
@@ -195,6 +213,11 @@ def test_service(service: str, session: Session = Depends(get_session)) -> Servi
             message = GoogleAdsClient(GoogleAdsConfig.from_values(row.values)).check()
         elif service == "meta_ads":
             message = meta_ads.check(row.values or {})
+        elif service == "aistudio":
+            cfg = aistudio.AIStudioConfig(str((row.values or {}).get("base_url") or "").strip().rstrip("/"), str((row.values or {}).get("api_key") or "").strip(),
+                                          "", "", False, 2.0)
+            cfg = aistudio.load_config(session) or cfg
+            message = aistudio.check(cfg)
         elif service == "ads_budget":
             message = ads_budget.check(row.values or {})
         elif service == "storefront":
@@ -208,7 +231,7 @@ def test_service(service: str, session: Session = Depends(get_session)) -> Servi
                 str(values.get("base_url") or "").strip().rstrip("/"), str(values.get("admin_token") or "").strip()))
         status = "ok"
     except (GoogleAdsError, link_shortener.ShortenerError, storefront.StorefrontError, meta_ads.MetaError,
-            ads_budget.BudgetError) as exc:
+            ads_budget.BudgetError, aistudio.AIStudioError) as exc:
         status, message = "error", str(exc)[:480]
     row.last_check_status = status
     row.last_check_message = message

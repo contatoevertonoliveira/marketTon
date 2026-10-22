@@ -8,6 +8,7 @@ import TrendingAbroad from "./pages/TrendingAbroad";
 import Opportunities from "./pages/Opportunities";
 import Profile from "./pages/Profile";
 import Vitrine from "./pages/Vitrine";
+import Criativos from "./pages/Criativos";
 import AgentSwitch from "./components/AgentSwitch";
 import AgentChat from "./pages/AgentChat";
 import Login from "./pages/Login";
@@ -21,6 +22,7 @@ const PAGES = [
   { id: "oportunidades", label: "Oportunidades de Busca", icon: "🔥" },
   { id: "tendencias", label: "Tendências Internacionais", icon: "🌎" },
   { id: "vitrine", label: "Vitrine (loja)", icon: "🛍️" },
+  { id: "criativos", label: "Criativos e anúncios", icon: "🎬" },
   { id: "agente", label: "Agente (chat)", icon: "🤖" },
   { id: "integracoes", label: "Integrações", icon: "🔌" },
   { id: "perfil", label: "Perfil", icon: "👤" },
@@ -122,6 +124,13 @@ export default function App() {
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Integrações</h3>
             <Integrations />
+          </div>
+        );
+      case "criativos":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Criativos e anúncios</h3>
+            <Criativos />
           </div>
         );
       case "vitrine":

@@ -38,6 +38,8 @@ from core.db.app_settings import AppSetting
 from core.db.marketplace_credentials import MarketplaceCredential
 from core.db.service_credentials import ServiceCredential
 from core.db.storefront import StorefrontItem
+from core.db.creatives import CreativeCampaign, CreativeEvent
+from core.db.ads import AdCampaign
 from core.db.portfolio import (
     PortfolioItem,
     PortfolioTransition,

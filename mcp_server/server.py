@@ -359,6 +359,32 @@ def sync_clicks():
 
 
 @mcp.tool(annotations=READ)
+def creative_estimate(product_id: int, quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2):
+    """Estima custo e prazo dos criativos de um produto no AI Studio, sem gastar. Use antes de `creative_create`.
+
+    `quality`: economy | standard | premium. `angle`: problem_solution | demo | comparison | offer | unboxing | ugc_style.
+    """
+    return _run(lambda: _client.post("/creatives/estimate", {"product_id": product_id, "quality": quality, "angle": angle, "hook_variants": hook_variants}))
+
+
+@mcp.tool(annotations=WRITE)
+def creative_create(product_id: int, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2):
+    """Pede ao AI Studio os criativos (vídeo 9:16 e 1:1, imagem 4:5 e texto) de um produto da vitrine. EXIGE o modo agente.
+
+    `mode="sandbox"` (padrão) não gasta nada e devolve peças de exemplo: use para testar o fluxo. `mode="live"` gasta créditos e só funciona
+    se o operador ligou a permissão no cartão do AI Studio; peça aprovação no chat antes. Nunca invente alegações: o produto só pode ser descrito
+    pelos fatos que o marketTon tem. O resultado chega por webhook; acompanhe com `creative_status`.
+    """
+    return _run(lambda: _client.post("/creatives", {"product_id": product_id, "mode": mode, "quality": quality, "angle": angle, "hook_variants": hook_variants}))
+
+
+@mcp.tool(annotations=READ)
+def creative_status(refresh: bool = True):
+    """Campanhas de criativos recentes: estado, custo e as peças prontas (vídeos, imagens e textos). `refresh` reconcilia com o AI Studio."""
+    return _run(lambda: _client.get("/creatives", refresh=str(refresh).lower()))
+
+
+@mcp.tool(annotations=READ)
 def goals_status():
     """As metas do mês definidas pelo operador e o quanto já foi feito (produtos na vitrine, posts, cliques, vendas, comissão).
 

@@ -109,6 +109,20 @@ A loja pública mostra os produtos do portfólio para quem vem das redes. Você 
 O link da loja é o link curto rastreado (canal `vitrine`): os cliques da loja entram em `sync_clicks`. Comissão e custos
 nunca aparecem na loja. A compra e o pagamento acontecem no marketplace.
 
+## 3.07 Criativos e anúncios (AI Studio e Meta)
+
+**Criativos (AI Studio):** `creative_estimate` (não gasta) → `creative_create` → `creative_status`. Comece sempre em `mode="sandbox"`
+(sem gasto) para provar o fluxo; `mode="live"` gasta créditos e só funciona se o operador ligou a permissão no cartão do AI Studio, e
+mesmo assim peça a aprovação no chat antes, mostrando o custo estimado. Só escolha produtos elegíveis (link, foto, oferta válida, nada
+sensível). Nunca invente alegação: o texto só pode afirmar o que o marketTon sabe do produto. Tudo fica na página **Criativos e anúncios**,
+com o produto ligado, as peças, o custo e os anúncios feitos sobre cada criativo.
+
+**Anúncios (Meta):** respeite o Orçamento de anúncios (valor por semana, teto por dia, produtos e criativos por semana). Plano da semana
+vai ao chat para aprovação **antes** de qualquer gasto; campanha nova nasce pausada. Decida por regra escrita: só julgue um criativo
+depois de dados suficientes (cliques e impressões), compare CTR e CPC entre os ganchos A/B do mesmo produto e justifique no chat.
+A venda de afiliado não é atribuível a um anúncio (chega dias depois, sem origem): use cliques nos links da loja como sinal de interesse
+e cruze com as vendas do produto no período, dizendo que é correlação, não prova.
+
 ## 3.1 Pesquisar plataformas e fontes de demanda
 
 Cruze sempre: Google Trends (momento) + Planejador (volume/CPC) + vendas/ranking do marketplace +
