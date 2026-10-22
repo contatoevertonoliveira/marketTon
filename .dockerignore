@@ -1,0 +1,16 @@
+.git
+.claude
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+.env
+.env.*
+!.env.production.example
+node_modules
+**/node_modules
+frontend_app/dist
+site
+*.log

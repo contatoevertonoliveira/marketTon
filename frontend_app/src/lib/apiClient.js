@@ -1,7 +1,8 @@
 // Client for the real backend (FastAPI + PostgreSQL, backend/main.py), which
 // requires a JWT on every request. Replaces intelApi.js (talked to the
 // retired Django prototype).
-export const API_BASE = "http://127.0.0.1:8000";
+// Em produção a tela é servida junto com a API (VITE_API_BASE=/api); no desenvolvimento aponta para o backend local.
+export const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
 
 const ACCESS_KEY = "aisys_access_token";
 const REFRESH_KEY = "aisys_refresh_token";
