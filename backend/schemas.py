@@ -440,11 +440,13 @@ class DailyOperationsOut(BaseModel):
 class TrendingAbroadProduct(BaseModel):
     """Mais vendido de outro país da ML — não persistido, é dado ao vivo.
 
-    `already_in_brazil_catalog` é uma checagem honesta e exata (mesmo título
-    normalizado + marca do catálogo brasileiro), não uma tradução automática:
-    um título em espanhol quase nunca bate com o mesmo produto em português,
-    então `False` aqui não significa "produto inédito", só "não achamos uma
-    correspondência exata".
+    `brazil_matches` é uma checagem honesta e exata (mesmo título normalizado
+    + marca do catálogo brasileiro), não uma tradução automática: um título em
+    espanhol quase nunca bate com o mesmo produto em português, então lista
+    vazia não significa "produto inédito", só "não achamos uma correspondência
+    exata". `competing_offers`/min/max vêm do mesmo mecanismo já usado para o
+    catálogo brasileiro (`/products/{id}/items`): quantos vendedores anunciam
+    exatamente este item de catálogo no país de origem, e a faixa de preço.
     """
 
     site_id: str
@@ -457,4 +459,9 @@ class TrendingAbroadProduct(BaseModel):
     ranking_position: int | None = None
     product_url: str | None = None
     images: list[Any] | None = None
+    seller_nickname: str | None = None
+    competing_offers: int | None = None
+    competing_price_min: float | None = None
+    competing_price_max: float | None = None
     already_in_brazil_catalog: bool
+    brazil_matches: list[ProductSummary] = Field(default_factory=list)

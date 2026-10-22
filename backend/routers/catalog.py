@@ -264,13 +264,20 @@ def trending_abroad(
     if adapter is None:
         raise HTTPException(status_code=500, detail="adapter mercado_livre não registrado")
 
-    br_keys = set(
+    # Um lote só, reaproveitado por todos os produtos estrangeiros — bem mais
+    # barato que uma consulta por item quando o catálogo BR já tem centenas
+    # de linhas.
+    br_products = list(
         session.scalars(
-            select(Product.identity_key).where(
-                Product.marketplace == Marketplace.MERCADO_LIVRE, Product.identity_key.is_not(None)
-            )
+            select(Product)
+            .where(Product.marketplace == Marketplace.MERCADO_LIVRE, Product.identity_key.is_not(None))
+            .options(selectinload(Product.seller))
         )
     )
+    br_by_key: dict[str, list[Product]] = {}
+    for p in br_products:
+        br_by_key.setdefault(p.identity_key, []).append(p)
+    br_scores = latest_scores_by_dimension(session, [p.id for p in br_products])
 
     out: list[TrendingAbroadProduct] = []
     for site in [s.strip().upper() for s in sites.split(",") if s.strip()]:
@@ -280,12 +287,14 @@ def trending_abroad(
                     site_id=site,
                     max_items=limit_per_site,
                     fetch_reviews=False,
-                    fetch_seller_profile=False,
+                    fetch_seller_profile=True,
                 )
             )
         except Exception:  # noqa: BLE001 - país indisponível não pode quebrar os outros
             continue
         for product in batch.products:
+            matches = br_by_key.get(product.identity_key(), [])
+            attrs = product.attributes or {}
             out.append(
                 TrendingAbroadProduct(
                     site_id=site,
@@ -298,7 +307,12 @@ def trending_abroad(
                     ranking_position=product.ranking_position,
                     product_url=product.product_url,
                     images=product.images,
-                    already_in_brazil_catalog=product.identity_key() in br_keys,
+                    seller_nickname=product.seller_nickname,
+                    competing_offers=attrs.get("competing_offers"),
+                    competing_price_min=attrs.get("competing_price_min"),
+                    competing_price_max=attrs.get("competing_price_max"),
+                    already_in_brazil_catalog=bool(matches),
+                    brazil_matches=[product_summary(p, br_scores.get(p.id)) for p in matches],
                 )
             )
     return out
