@@ -3,6 +3,7 @@ import { getJSON } from "../lib/apiClient";
 import ProductCard from "./ProductCard";
 import ProductCardModal from "./ProductCardModal";
 import ProdutosDesempenho from "./ProdutosDesempenho";
+import ProdutosSugeridos from "./ProdutosSugeridos";
 
 const MARKETPLACES = [
   { id: "mercado_livre", name: "Mercado Livre", icon: "🛒" },
@@ -33,7 +34,7 @@ export default function Produtos() {
   const [error, setError] = useState("");
   const [active, setActive] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [mode, setMode] = useState("desempenho");
+  const [mode, setMode] = useState("sugeridos");
 
   function load() {
     getJSON("/portfolio/affiliated")
@@ -44,7 +45,9 @@ export default function Produtos() {
       .catch((e) => setError(e.message));
   }
 
-  useEffect(load, []);
+  // Recarrega ao trocar de visão: uma afiliação feita em "Sugeridos" precisa
+  // aparecer em "Vinculados" e na contagem das abas.
+  useEffect(load, [mode]);
 
   const counts = useMemo(() => {
     const c = {};
@@ -107,7 +110,7 @@ export default function Produtos() {
       </div>
 
       <div style={{ display: "inline-flex", borderRadius: 999, background: "#fff", padding: 3, marginBottom: 18, boxShadow: "0 0 1.5rem 0 rgba(136,152,170,.12)" }}>
-        {[["desempenho", "Desempenho"], ["categoria", "Por categoria"]].map(([id, label]) => (
+        {[["sugeridos", "Sugeridos pelo sistema"], ["vinculados", `Vinculados à conta (${counts[active] || 0})`], ["desempenho", "Desempenho"]].map(([id, label]) => (
           <button
             key={id}
             onClick={() => setMode(id)}
@@ -127,7 +130,9 @@ export default function Produtos() {
         ))}
       </div>
 
-      {mode === "desempenho" ? (
+      {mode === "sugeridos" ? (
+        active && <ProdutosSugeridos marketplace={active} />
+      ) : mode === "desempenho" ? (
         active && <ProdutosDesempenho marketplace={active} />
       ) : sections.length === 0 ? (
         <div style={{ background: "#fff", borderRadius: 10, padding: 20, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)", fontSize: 13, color: "#8898aa" }}>
