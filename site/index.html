@@ -3,50 +3,158 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>marketTon — inteligência para afiliados</title>
-  <meta name="description" content="marketTon é uma ferramenta de pesquisa de produtos e palavras-chave para marketing de afiliados em Mercado Livre e Shopee.">
-  <style>
-    :root { --bg:#f6f9fc; --card:#fff; --ink:#32325d; --muted:#525f7f; --accent:#5e72e4; --line:#e9ecef; }
-    @media (prefers-color-scheme: dark) {
-      :root { --bg:#121826; --card:#1b2336; --ink:#e8ecf5; --muted:#a9b3c9; --accent:#8a9bff; --line:#2a3550; }
-    }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); line-height:1.6; }
-    main { max-width: 760px; margin: 0 auto; padding: 48px 20px 64px; }
-    h1 { font-size: 2rem; margin: 0 0 8px; }
-    h2 { font-size: 1.15rem; margin: 32px 0 8px; }
-    p, li { color: var(--muted); }
-    .lead { font-size: 1.1rem; }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; margin-top: 24px; }
-    a { color: var(--accent); }
-    footer { margin-top: 40px; font-size: .9rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
-  </style>
+  <title>marketTon — decida o que divulgar com dados, não com palpite</title>
+  <meta name="description" content="marketTon: inteligência para afiliados de Shopee e Mercado Livre. Produtos sugeridos, preço e concorrência, vendas e comissão, tendências de busca. Em breve.">
+  <meta property="og:title" content="marketTon — inteligência para afiliados">
+  <meta property="og:description" content="Decida o que divulgar com dados, não com palpite. Em breve.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main>
-  <h1>marketTon</h1>
-  <p class="lead">Ferramenta de inteligência para marketing de afiliados: reúne dados públicos de marketplaces e de busca para ajudar a decidir quais produtos vale a pena divulgar.</p>
+<a class="skip" href="#conteudo">Pular para o conteúdo</a>
 
-  <div class="card">
-    <h2 style="margin-top:0">O que o marketTon faz</h2>
-    <ul>
-      <li>Coleta preço, vendas, avaliações e comissão de produtos do <strong>Mercado Livre</strong> e da <strong>Shopee</strong> pelas APIs oficiais de afiliados.</li>
-      <li>Acompanha vendas e comissões da conta de afiliado do próprio operador.</li>
-      <li>Mostra a tendência de interesse de busca (Google Trends) e, usando a <strong>Google Ads API</strong>, o volume mensal de buscas, o CPC estimado e o nível de concorrência de palavras-chave (Planejador de Palavras-chave).</li>
-      <li>Ordena produtos por critérios explícitos e auditáveis, sem inventar dados: quando uma informação não existe, a tela mostra “—”.</li>
-    </ul>
+<div class="soon" role="note">
+  <strong>Em breve!</strong> O marketTon ainda está em desenvolvimento e não está aberto ao público. <a href="mailto:sysefo.contato@gmail.com?subject=Quero%20ser%20avisado%20sobre%20o%20marketTon">Quero ser avisado</a>
+</div>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="marketTon — início">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5e72e4"/><stop offset="1" stop-color="#825ee4"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#lg)"/><path d="M14 44V22l9 12 9-12v22M36 22h16M44 22v22" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      marketTon
+    </a>
+    <nav class="links" aria-label="Principal">
+      <a class="l" href="#recursos">Recursos</a>
+      <a class="l" href="#como-funciona">Como funciona</a>
+      <a class="l" href="#status">Status</a>
+      <a class="l" href="#faq">Perguntas</a>
+      <a class="btn sm" href="mailto:sysefo.contato@gmail.com?subject=Quero%20ser%20avisado%20sobre%20o%20marketTon">Quero ser avisado</a>
+    </nav>
   </div>
+</header>
 
-  <div class="card">
-    <h2 style="margin-top:0">Uso da Google Ads API</h2>
-    <p>O marketTon é de <strong>uso interno</strong>: é operado por uma única pessoa, que conecta a <strong>própria</strong> conta do Google Ads. Ele usa a API somente para <strong>consultar</strong> métricas de palavras-chave (volume, CPC, concorrência). Não cria nem altera campanhas, anúncios ou orçamentos, e não acessa dados de terceiros.</p>
-    <p>Os detalhes sobre dados e privacidade estão na <a href="privacidade.html">Política de Privacidade</a>.</p>
-  </div>
+<main id="conteudo">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <span class="pill">Para afiliados de Shopee e Mercado Livre</span>
+        <h1>Decida o que divulgar com <em>dados</em>, não com palpite.</h1>
+        <p class="lead">O marketTon reúne vendas, preço, concorrência, comissão e tendências de busca num só lugar, para você escolher os produtos com mais chance de render antes de gastar tempo e dinheiro divulgando.</p>
+        <div class="cta">
+          <a class="btn" href="mailto:sysefo.contato@gmail.com?subject=Quero%20ser%20avisado%20sobre%20o%20marketTon">Quero ser avisado do lançamento</a>
+          <a class="btn ghost" href="#recursos">Ver o que ele faz</a>
+        </div>
+        <p class="fine">Sem cadastro por enquanto. Você escreve, e eu aviso quando abrir.</p>
+      </div>
 
-  <footer>
-    <p>Operado por [SEU NOME]. Contato: <a href="mailto:[SEU E-MAIL]">[SEU E-MAIL]</a></p>
-    <p><a href="privacidade.html">Política de Privacidade</a></p>
-  </footer>
+      <div class="mock" aria-label="Exemplo ilustrativo da tela de produtos sugeridos">
+        <span class="tag">Exemplo ilustrativo</span>
+        <h3>Produtos sugeridos</h3>
+        <div class="prod"><div class="ph"></div><div><b>Garrafa térmica inox 1 L</b><small>Comissão 12% · 3 vendedores</small></div><span class="badge ok">Aprovado</span></div>
+        <div class="prod"><div class="ph"></div><div><b>Luminária de mesa LED</b><small>Comissão 9% · 11 vendedores</small></div><span class="badge ok">Aprovado</span></div>
+        <div class="prod"><div class="ph"></div><div><b>Organizador de cabos</b><small>Comissão — · 24 vendedores</small></div><span class="badge mid">Em análise</span></div>
+        <div class="kpis">
+          <div class="kpi"><span>Tendência</span><b>▲ +18%</b></div>
+          <div class="kpi"><span>CPC</span><b>R$ 0,63</b></div>
+          <div class="kpi"><span>Concorrência</span><b>Baixa</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="recursos" class="band">
+    <div class="wrap">
+      <span class="eyebrow">Recursos</span>
+      <h2>Tudo o que você olharia em dez abas, numa só.</h2>
+      <p class="sub">Cada número vem de uma fonte real. Quando um dado não existe, a tela mostra “—” em vez de inventar.</p>
+      <div class="grid">
+        <article class="card"><div class="ic" aria-hidden="true">✅</div><h3>Produtos sugeridos</h3><p>Uma lista ordenada por demanda real, com o selo <b>Aprovado</b> para quem atende a pelo menos 3 de 4 critérios claros: demanda, vendedor confiável, preço competitivo e comissão conhecida.</p></article>
+        <article class="card"><div class="ic" aria-hidden="true">💰</div><h3>Preço e concorrência</h3><p>Veja quantos vendedores anunciam o mesmo produto, de quanto a quanto, e se o preço que você divulga é o menor encontrado.</p></article>
+        <article class="card"><div class="ic" aria-hidden="true">📈</div><h3>Vendas e comissão</h3><p>Quanto cada produto já vendeu, quanto rendeu, e a comissão <b>confirmada</b> separada da <b>pendente</b>. Os mais e os menos vendidos, por marketplace.</p></article>
+        <article class="card"><div class="ic" aria-hidden="true">🔎</div><h3>Oportunidades de busca</h3><p>Tendência de interesse no Google, crescimento no mês e, com sua conta do Google Ads conectada, volume de busca, CPC e concorrência.</p></article>
+        <article class="card"><div class="ic" aria-hidden="true">🌎</div><h3>Tendências internacionais</h3><p>Os mais vendidos de México, Colômbia e Chile no Mercado Livre, com os concorrentes de lá e o que já existe de equivalente no Brasil.</p></article>
+        <article class="card"><div class="ic" aria-hidden="true">🧾</div><h3>Dados honestos</h3><p>Nada de número inventado: o que é estimativa aparece como estimativa, e o que é inferido aparece rotulado como inferido.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="como-funciona">
+    <div class="wrap">
+      <span class="eyebrow">Como funciona</span>
+      <h2>Do palpite à decisão em três passos.</h2>
+      <p class="sub">Você conecta suas contas, o marketTon cruza as informações, e você escolhe com mais segurança.</p>
+      <div class="steps">
+        <div class="step"><h3>Conecte suas contas</h3><p>Use as integrações oficiais dos marketplaces e, se quiser, a sua conta do Google Ads. Você controla o que conecta e pode revogar quando quiser.</p></div>
+        <div class="step"><h3>Veja o que vale divulgar</h3><p>Compare produtos por demanda, preço, concorrência, comissão e tendência de busca, cada um com o motivo da avaliação à vista.</p></div>
+        <div class="step"><h3>Acompanhe o resultado</h3><p>Depois de divulgar, veja vendas e comissão por produto e descubra o que está funcionando e o que não está.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap trust">
+      <div>
+        <span class="eyebrow">Transparência</span>
+        <h2>Uma ferramenta que mostra o que sabe e o que não sabe.</h2>
+        <p class="sub" style="margin-bottom:0">Decisão de afiliado depende de número confiável. Por isso o marketTon separa o que é dado oficial do que é estimativa, e explica por que cada produto foi aprovado ou não.</p>
+      </div>
+      <ul class="checks">
+        <li><span><b>Fontes oficiais.</b> Os dados vêm das APIs dos próprios marketplaces e do Google.</span></li>
+        <li><span><b>Confirmado ≠ pendente.</b> Comissão que ainda pode ser cancelada nunca é somada à confirmada.</span></li>
+        <li><span><b>Sem “achismo”.</b> Quando falta informação, a tela diz que falta.</span></li>
+        <li><span><b>Seus dados são seus.</b> Leia a <a href="privacidade.html">Política de Privacidade</a>.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap">
+      <span class="eyebrow">Status</span>
+      <h2>Onde estamos.</h2>
+      <p class="sub">O marketTon está em desenvolvimento. Esta página existe para quem quiser acompanhar o lançamento.</p>
+      <div class="road">
+        <article class="card"><h3>🟢 Em uso interno</h3><ul><li>Mercado Livre e Shopee</li><li>Produtos sugeridos e selo Aprovado</li><li>Vendas e comissão (Shopee)</li><li>Tendências de busca e internacionais</li></ul></article>
+        <article class="card"><h3>🟡 Em preparação</h3><ul><li>Abertura para outros afiliados</li><li>Volume e CPC via Google Ads</li><li>Contagem de cliques nos seus links</li></ul></article>
+        <article class="card"><h3>⚪ Em estudo</h3><ul><li>Amazon</li><li>AliExpress</li><li>TikTok Shop</li></ul></article>
+      </div>
+      <p class="fine" style="margin-top:16px">“Em preparação” e “em estudo” são intenções, não promessas de data. Ainda não há data de lançamento nem preço definidos.</p>
+    </div>
+  </section>
+
+  <section id="faq" class="band">
+    <div class="wrap">
+      <span class="eyebrow">Perguntas</span>
+      <h2>Perguntas frequentes.</h2>
+      <p class="sub">O que mais se pergunta sobre o marketTon.</p>
+      <details><summary>Quando o marketTon abre?</summary><p>Ainda não há data. Se você mandar um e-mail pelo botão “Quero ser avisado”, eu aviso quando houver novidade.</p></details>
+      <details><summary>Quanto vai custar?</summary><p>Ainda não foi definido. Nenhum valor é cobrado hoje, e nenhuma forma de pagamento é pedida.</p></details>
+      <details><summary>O marketTon vende produtos ou faz anúncios por mim?</summary><p>Não. Ele é uma ferramenta de pesquisa e acompanhamento: ajuda você a decidir o que divulgar e mostra o resultado. Você continua divulgando e se afiliando pelos canais oficiais de cada marketplace.</p></details>
+      <details><summary>Que dados do Google Ads ele usa?</summary><p>Somente métricas de palavras-chave do Planejador (volume, CPC e concorrência), da conta que você mesmo conectar. Ele não cria nem altera campanhas. Detalhes na <a href="privacidade.html">Política de Privacidade</a>.</p></details>
+      <details><summary>O marketTon é ligado ao Mercado Livre, à Shopee ou ao Google?</summary><p>Não. É um projeto independente. Mercado Livre, Shopee e Google são marcas de seus respectivos donos, citadas aqui apenas para indicar com quais serviços o marketTon se integra. Não há parceria nem aprovação deles.</p></details>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <div class="box">
+        <h2>Fique por dentro do lançamento.</h2>
+        <p>Mande um e-mail e eu aviso quando o marketTon estiver disponível. Sem spam, e você sai da lista quando quiser.</p>
+        <a class="btn" href="mailto:sysefo.contato@gmail.com?subject=Quero%20ser%20avisado%20sobre%20o%20marketTon">Quero ser avisado</a>
+      </div>
+    </div>
+  </section>
 </main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <p><strong>marketTon</strong> — projeto de Everton Felix.</p>
+      <p>Contato: <a href="mailto:sysefo.contato@gmail.com">sysefo.contato@gmail.com</a></p>
+      <p>Mercado Livre, Shopee e Google são marcas de seus respectivos donos. O marketTon é independente e não tem parceria com eles.</p>
+    </div>
+    <div><a href="privacidade.html">Política de Privacidade</a></div>
+  </div>
+</footer>
 </body>
 </html>
