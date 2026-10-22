@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { getJSON, postJSON, putJSON } from "../lib/apiClient";
 import ProductDetailDrawer from "./ProductDetail";
+import ProductFunnel from "./ProductFunnel";
 import { approvalVerdict, AFFILIATE_PERIODS, competitionLevel, isLiveOpportunity, stockLevel, suggestHashtags, logisticSpeedRank, priceCompetitiveness, sellerLocation, shipsFromBrazil } from "../lib/productSignals";
 
 function fmtMoney(v, currency) {
@@ -241,7 +242,7 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
         style={{
           background: "#fff",
           borderRadius: 16,
-          width: "min(640px, 100%)",
+          width: "min(760px, 100%)",
           maxHeight: "88vh",
           overflowY: "auto",
           boxShadow: "0 20px 60px rgba(23,43,77,.35)",
@@ -414,6 +415,10 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
               {adding ? "Adicionando…" : "Afiliar-se a este produto"}
             </button>
           </div>
+        </div>
+
+        <div style={{ padding: "0 20px 20px" }}>
+          <ProductFunnel product={product} />
         </div>
       </div>
     </div>

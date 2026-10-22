@@ -192,6 +192,17 @@ def _planner_metrics(keywords: list[str]) -> tuple[dict[str, dict[str, Any]], st
     return {}, None, error
 
 
+def planner_volumes(keywords: list[str]) -> dict[str, int | None]:
+    """Volume mensal de várias palavras numa só consulta ao provedor (sem Trends).
+
+    Usado para escolher, entre candidatas, a mais buscada. Sem provedor devolve `{}`.
+    """
+    if not keywords or planner_provider() is None:
+        return {}
+    found, _source, _error = _planner_metrics(keywords)
+    return {k: (found.get(k.lower()) or {}).get("search_volume") for k in keywords}
+
+
 def analyze_keywords(keywords: list[str], *, geo: str = "BR") -> list[KeywordMetrics]:
     now = time.time()
     results: dict[str, KeywordMetrics] = {}
@@ -264,4 +275,4 @@ def rank_opportunities(items: list[KeywordMetrics], limit: int = 5) -> tuple[lis
     return sorted(rising, key=lambda m: -(m.growth_pct_30d or 0))[:limit], "growth_only"
 
 
-__all__ = ["KeywordMetrics", "analyze_keywords", "infer_audience", "planner_provider", "rank_opportunities"]
+__all__ = ["KeywordMetrics", "analyze_keywords", "infer_audience", "planner_provider", "planner_volumes", "rank_opportunities"]

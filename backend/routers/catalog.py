@@ -30,6 +30,8 @@ from backend.schemas import ProductDetail, ProductSummary, SourceRecordOut, Tren
 from core.db.base import Marketplace
 from config.settings import get_settings
 from core.db.catalog import Product, SourceRecord
+from core.services.keyword_metrics import analyze_keywords, planner_provider, planner_volumes
+from core.services.product_funnel import DEFAULT_CONVERSION_PCT, compute_funnel, suggest_candidates
 
 # Todas as rotas exigem `catalog.view`. O portão é declarado no router em vez de
 # repetido em cada endpoint: esquecer um seria um buraco silencioso.
@@ -406,3 +408,98 @@ def available_marketplaces() -> dict:
             if adapter is not None
         ],
     }
+
+
+# --- Funil de venda (Google Trends + Google Ads) -----------------------------
+
+
+class FunnelCheckOut(BaseModel):
+    key: str
+    label: str
+    status: str  # "pass" | "fail" | "unknown"
+    detail: str
+    group: str  # "demanda" | "anuncios"
+
+
+class ProductFunnelOut(BaseModel):
+    product_id: int
+    keyword: str | None = None
+    keyword_source: str  # "title" (sugerida) | "manual" (informada pelo operador)
+    # Candidatas tiradas do título, com o volume medido (None = sem dado). A escolhida
+    # é a de maior volume; a tela deixa trocar.
+    candidates: list[dict] = Field(default_factory=list)
+    metrics: dict | None = None
+    planner_provider: str | None = None
+    planner_error: str | None = None
+    conversion_pct: float
+    commission_per_sale: float | None = None
+    breakeven_cpc: float | None = None
+    verdict: str  # "good" | "uncertain" | "weak" | "insufficient" (= demanda)
+    demand_verdict: str = "insufficient"
+    ads_verdict: str = "insufficient"
+    summary: str
+    checks: list[FunnelCheckOut] = Field(default_factory=list)
+
+
+@router.get("/products/{product_id}/funnel", response_model=ProductFunnelOut)
+def product_funnel(
+    product_id: int,
+    keyword: str | None = Query(None, max_length=120, description="Palavra-chave; padrão: sugerida pelo título"),
+    conversion_pct: float = Query(DEFAULT_CONVERSION_PCT, gt=0, le=50, description="Premissa: % dos cliques que viram compra"),
+    session: Session = Depends(get_session),
+) -> ProductFunnelOut:
+    """Funil de venda do produto: Trends + Planejador do Google Ads + economia da comissão.
+
+    Ao vivo (com cache de 6 h por palavra-chave). Sem palavra-chave utilizável, ou
+    sem Google Ads, devolve o que tem e marca o resto como "sem dado" — nunca estima.
+    """
+    from dataclasses import asdict
+
+    product = session.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail=f"produto {product_id} não encontrado")
+
+    manual = bool(keyword and keyword.strip())
+    candidates = suggest_candidates(product.title)
+    volumes = planner_volumes(candidates) if candidates else {}
+    if manual:
+        term = keyword.strip()
+    elif candidates:
+        # A mais buscada; sem volume para nenhuma, a primeira (a mais curta).
+        term = max(candidates, key=lambda c: (volumes.get(c) or -1, -len(c)))
+    else:
+        term = None
+    candidate_out = [{"keyword": c, "monthly_volume": volumes.get(c)} for c in candidates]
+    if not term:
+        return ProductFunnelOut(
+            product_id=product_id, keyword=None, keyword_source="title", conversion_pct=conversion_pct,
+            verdict="insufficient", summary="Não foi possível sugerir uma palavra-chave a partir do título. Informe uma.",
+        )
+
+    (metrics,) = analyze_keywords([term])
+    funnel = compute_funnel(
+        price=product.price,
+        commission_pct=product.affiliate_commission_pct,
+        commission_fixed=product.affiliate_commission_fixed,
+        sold_quantity=product.sold_quantity,
+        ranking_position=product.ranking_position,
+        metrics=metrics,
+        conversion_pct=conversion_pct,
+    )
+    return ProductFunnelOut(
+        product_id=product_id,
+        keyword=term,
+        keyword_source="manual" if manual else "title",
+        candidates=candidate_out,
+        metrics={k: v for k, v in asdict(metrics).items() if k != "notes"},
+        planner_provider=planner_provider(),
+        planner_error=metrics.planner_error,
+        conversion_pct=conversion_pct,
+        commission_per_sale=funnel.commission_per_sale,
+        breakeven_cpc=funnel.breakeven_cpc,
+        verdict=funnel.verdict,
+        demand_verdict=funnel.demand_verdict,
+        ads_verdict=funnel.ads_verdict,
+        summary=funnel.summary,
+        checks=[FunnelCheckOut(**asdict(c)) for c in funnel.checks],
+    )
