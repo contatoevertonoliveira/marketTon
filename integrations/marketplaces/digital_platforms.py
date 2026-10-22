@@ -482,7 +482,9 @@ class MonetizzeAdapter(_PlatformAdapter):
 EDUZZ_TOKEN_URL = "https://accounts-api.eduzz.com/oauth/token"
 EDUZZ_API = "https://api.eduzz.com"
 EDUZZ_CONFIRMED = {"paid", "finished", "completed", "complete", "approved"}
-EDUZZ_CANCELLED = {"canceled", "cancelled", "refunded", "chargeback", "expired", "rejected", "blocked"}
+# Status oficiais (OpenAPI): paid = paga; canceled/refunded/duplicated/expired = sem comissão; os demais (open, processing,
+# waitingPayment, scheduled, recovering, negotiated, waitingRefund) ficam como estimada, até virarem paid ou cancelada.
+EDUZZ_CANCELLED = {"canceled", "cancelled", "refunded", "chargeback", "expired", "rejected", "blocked", "duplicated"}
 
 
 @dataclass

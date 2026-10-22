@@ -68,10 +68,11 @@ CREDENTIAL_FIELDS: dict[str, list[dict[str, str | bool]]] = {
     "monetizze": [
         {"name": "consumer_key", "label": "Chave de API (consumer key)", "secret": True},
     ],
-    # Eduzz: Console (console.eduzz.com) > Aplicativos.
+    # Eduzz: Console (console.eduzz.com) > Meus Aplicativos > Novo Aplicativo (escopos myeduzz_sales_read e myeduzz_products_read).
+    # NÃO são a Public Key / API Key / Origin Key do painel antigo (API 2.0): a API atual usa o ID e o Secret de um aplicativo.
     "eduzz": [
-        {"name": "client_id", "label": "Client ID do aplicativo", "secret": False},
-        {"name": "client_secret", "label": "Client Secret do aplicativo", "secret": True},
+        {"name": "client_id", "label": "Client ID do aplicativo (console.eduzz.com > Meus Aplicativos; não é a Public Key)", "secret": False},
+        {"name": "client_secret", "label": "Client Secret do aplicativo (não é a API Key)", "secret": True},
     ],
 }
 

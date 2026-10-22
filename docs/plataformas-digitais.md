@@ -46,6 +46,7 @@ foi montado pelos exemplos da documentação e **não foi testado com conta real
 * **Monetizze (vendas):** a doc não diz qual item de `comissoes` é o do afiliado que consulta. Só se aceita
   quando há um candidato único (item com `refAfiliado`, ou lista de 1); com mais de um, a comissão fica
   vazia em vez de chute. A data usada é `dataInicio` (a doc não traz a data da compra de forma clara).
+* **Eduzz — credenciais (conferido na documentação oficial e no OpenAPI, 22/10/2026):** a API atual usa o **Client ID e o Client Secret de um aplicativo** criado em console.eduzz.com > Meus Aplicativos, com os escopos `myeduzz_sales_read` e `myeduzz_products_read` (opcional: `myeduzz_affiliates_read`). A Public Key, a API Key e a Origin Key do painel antigo pertencem à API 2.0 e **não servem** a este adaptador. Os parâmetros e campos de `/myeduzz/v1/sales` batem com o OpenAPI; falta confirmar com uma conta real se a listagem inclui as vendas em que você é o afiliado.
 * **Eduzz:** os valores do campo `status` e o significado de `netGain` para a conta de afiliado não são
   detalhados; os parâmetros `referenceDate` e o formato de `startDate` da listagem também não. Se a API
   recusar, o erro aparece no card ao testar/coletar.
