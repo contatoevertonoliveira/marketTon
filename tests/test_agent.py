@@ -335,6 +335,7 @@ def test_mcp_exposes_exactly_the_intended_tools():
         "agent_playbook", "chat_inbox", "chat_send", "request_resource", "complete_task", "system_health",
         "capabilities", "sync_sales", "refresh_catalog", "catalog_refresh_status",
         "create_tracked_link", "sync_clicks", "list_tracked_links",
+        "storefront_status", "storefront_update_item", "storefront_publish",
     }
     # Nada de credenciais, usuários ou anúncios: o agente só tem o que a API do portfólio oferece.
     assert not any(w in n for n in names for w in ("credential", "user", "password", "ads_", "campaign"))

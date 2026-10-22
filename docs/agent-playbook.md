@@ -88,6 +88,16 @@ onde você posta (instagram, tiktok, youtube, shopee_video…) e a `campaign` id
 (cliques) **do que converte** (vendas). Cliques não são visualizações do post, e robôs não contam. Se o encurtador
 não estiver configurado, peça a configuração (`request_resource`) em vez de usar o link comum.
 
+## 3.06 Vitrine pública (Achados do Felix)
+
+A loja pública mostra os produtos do portfólio para quem vem das redes. Você a mantém:
+1. `storefront_status` — o que está na loja e o que ficou de fora (e o motivo).
+2. Para cada produto novo: `storefront_update_item` com nome curto (`display_title`), categoria e **uma** frase honesta
+   (`blurb`). Sem promessa de resultado, sem avaliação inventada, sem preço ou estoque que você não viu.
+3. `storefront_publish` ao fim da rotina da manhã se algo mudou. Nada vai ao ar sem publicar.
+O link da loja é o link curto rastreado (canal `vitrine`): os cliques da loja entram em `sync_clicks`. Comissão e custos
+nunca aparecem na loja. A compra e o pagamento acontecem no marketplace.
+
 ## 3.1 Pesquisar plataformas e fontes de demanda
 
 Cruze sempre: Google Trends (momento) + Planejador (volume/CPC) + vendas/ranking do marketplace +

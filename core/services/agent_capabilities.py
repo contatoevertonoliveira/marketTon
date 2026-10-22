@@ -77,6 +77,8 @@ def capabilities(session: Session) -> list[dict]:
 
     shortener = session.scalar(select(_SC).where(_SC.service == "link_shortener"))
     shortener_ok = bool(shortener and shortener.enabled and shortener.last_check_status == "ok")
+    store = session.scalar(select(_SC).where(_SC.service == "storefront"))
+    store_ok = bool(store and store.enabled and store.last_check_status == "ok")
     ads = states.get("google_ads", {})
     ads_ok = ads.get("enabled") and ads.get("last_check_status") == "ok"
     return [
@@ -111,6 +113,11 @@ def capabilities(session: Session) -> list[dict]:
              "saber quais divulgações geram clique, não só venda (use create_tracked_link e sync_clicks)",
              [] if shortener_ok else ["configurar o Encurtador de links em Integrações (endereço e token do redirecionador)"],
              "Conta cliques do link curto; não conta robôs nem pré-visualizações, e não é visualização do post."),
+        _cap("storefront", "Vitrine pública (loja online Achados do Felix)", "pronto" if store_ok else "configurar",
+             "mostrar os produtos escolhidos numa loja bonita para quem vem das redes, com os links de afiliado (use storefront_status, "
+             "storefront_update_item e storefront_publish)",
+             [] if store_ok else ["configurar a Vitrine pública em Integrações (endereço e token) e testar"],
+             "O pagamento e a entrega acontecem no marketplace; a loja só leva o cliente ao produto pelo seu link."),
         _cap("catalog_collect_api", "Atualizar o catálogo pelo agente", "pronto",
              "coletar produtos e recalcular scores quando o catálogo envelhecer ou para um nicho novo",
              note="Intervalo mínimo de 6 h por marketplace; precisa de credencial testada."),

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Achados do Felix: achados escolhidos na Shopee e no Mercado Livre</title>
+  <meta name="description" content="Uma seleção curada de produtos da Shopee e do Mercado Livre. Escolha, guarde na sacola e compre direto no marketplace oficial.">
+  <meta name="theme-color" content="#dc1928">
+  <meta property="og:title" content="Achados do Felix">
+  <meta property="og:description" content="Achados que valem o clique, escolhidos a dedo na Shopee e no Mercado Livre.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/eb-garamond-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="loja.css">
+</head>
+<body>
+  <a class="skip" href="#catalogo">Ir para os achados</a>
+
+  <header class="bar" id="bar">
+    <a class="mark" href="#topo" aria-label="Achados do Felix, voltar ao topo">Achados do Felix</a>
+    <nav class="bar-nav" aria-label="Seções">
+      <a href="#catalogo">Os achados</a>
+      <a href="#como">Como funciona</a>
+      <a href="#duvidas">Dúvidas</a>
+    </nav>
+    <button class="bag-btn" type="button" data-open-bag>Sacola <span class="bag-count" data-bag-count>0</span></button>
+  </header>
+
+  <main id="topo">
+    <section class="hero" aria-label="Apresentação">
+      <div class="wall" id="wall" aria-hidden="true"></div>
+      <div class="panel">
+        <h1>Achados do Felix</h1>
+        <p class="panel-lead">O que vale o clique na Shopee e no Mercado Livre, escolhido a dedo.</p>
+        <a class="btn btn-light" href="#catalogo">Ver os achados</a>
+        <nav class="panel-nav" aria-label="Atalhos">
+          <a href="#como">Como funciona</a>
+          <a href="#duvidas">Dúvidas</a>
+          <a href="https://felixsystems.com.br/privacidade.html">Privacidade</a>
+          <button type="button" class="link-btn" data-open-bag>Sacola (<span data-bag-count>0</span>)</button>
+        </nav>
+      </div>
+    </section>
+
+    <section class="catalogue" id="catalogo" aria-labelledby="catalogo-titulo">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 id="catalogo-titulo">Os achados</h2>
+          <p class="section-count" id="catalogo-total" aria-live="polite"></p>
+        </div>
+        <nav class="index" id="indice" aria-label="Categorias"></nav>
+        <div id="categorias">
+          <p class="state" id="estado">Carregando os achados…</p>
+        </div>
+        <noscript><p class="state">Esta vitrine precisa de JavaScript para mostrar os achados. Ative-o e recarregue a página.</p></noscript>
+      </div>
+    </section>
+
+    <section class="how" id="como" aria-labelledby="como-titulo">
+      <div class="wrap how-grid">
+        <h2 id="como-titulo">Como funciona</h2>
+        <div class="stage s1">
+          <div class="stage-art"><img data-stage alt="" width="400" height="400"></div>
+          <h3>Garimpado</h3>
+          <p>A gente procura nos marketplaces e fica só com o que tem boa avaliação e preço que faz sentido.</p>
+        </div>
+        <div class="stage s2">
+          <div class="stage-art"><img data-stage alt="" width="400" height="400"></div>
+          <h3>Guardado</h3>
+          <p>Você marca o que gostou na sacola. Ela fica no seu aparelho e não pede cadastro.</p>
+        </div>
+        <div class="stage s3">
+          <div class="stage-art"><img data-stage alt="" width="400" height="400"></div>
+          <h3>Na sua casa</h3>
+          <p>Cada achado abre direto na Shopee ou no Mercado Livre. Pagamento, entrega e troca são com eles.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="faq" id="duvidas" aria-labelledby="duvidas-titulo">
+      <div class="wrap faq-grid">
+        <h2 id="duvidas-titulo">Dúvidas</h2>
+        <div class="faq-list">
+          <details name="faq"><summary>Vocês vendem os produtos?</summary>
+            <p>Não. Mostramos produtos de outras lojas e levamos você até a página deles na Shopee ou no Mercado Livre. É lá que você compra, paga e acompanha a entrega.</p></details>
+          <details name="faq"><summary>Pago mais caro por comprar por aqui?</summary>
+            <p>Não. O preço é o mesmo do marketplace. Quando você compra pelo nosso link, o marketplace paga uma pequena comissão a nós, sem custo extra para você.</p></details>
+          <details name="faq"><summary>Os preços e o estoque são os mesmos do marketplace?</summary>
+            <p>O preço aqui é o que vimos no dia indicado em cada achado. Ele muda com frequência, então vale conferir na página do marketplace antes de finalizar.</p></details>
+          <details name="faq"><summary>Como vocês escolhem os achados?</summary>
+            <p>Olhamos avaliação, quantidade de vendas, preço e se o produto está em alta. Não aceitamos pagamento para destacar um produto, e não inventamos avaliação.</p></details>
+          <details name="faq"><summary>A sacola funciona como um carrinho de compras?</summary>
+            <p>Ela é uma lista para você não perder os achados. Como a compra acontece no marketplace, cada item abre na loja de origem, e o carrinho e o pagamento de lá é que valem.</p></details>
+          <details name="faq"><summary>E se o produto chegar com problema?</summary>
+            <p>Troca, garantia e devolução são com o marketplace e o vendedor, seguindo as regras de cada um. Guarde o número do pedido e use o atendimento da Shopee ou do Mercado Livre.</p></details>
+          <details name="faq"><summary>O que vocês guardam sobre mim?</summary>
+            <p>Nada que identifique você: não usamos cookies de rastreamento nem pedimos cadastro. Contamos apenas o clique no link, sem IP. Detalhes na <a href="https://felixsystems.com.br/privacidade.html">política de privacidade</a>.</p></details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-mark" id="marca" role="img" aria-label="Achados do Felix"></div>
+    <div class="wrap foot-body">
+      <div class="foot-links">
+        <a href="#catalogo">Os achados</a>
+        <a href="#como">Como funciona</a>
+        <a href="#duvidas">Dúvidas</a>
+        <a href="https://felixsystems.com.br/privacidade.html">Política de privacidade</a>
+      </div>
+      <p class="foot-note" id="aviso-afiliado">Participamos dos programas de afiliados da Shopee e do Mercado Livre e podemos receber comissão pelas compras feitas pelos links desta página, sem custo extra para você.</p>
+      <div class="foot-last">
+        <p>© <span id="ano">2026</span> Achados do Felix. Imagens e marcas dos produtos pertencem aos seus donos e aos marketplaces.</p>
+        <a class="btn btn-small" href="#topo">Voltar ao topo</a>
+      </div>
+    </div>
+  </footer>
+
+  <dialog id="produto" class="sheet" aria-labelledby="produto-titulo"></dialog>
+  <dialog id="sacola" class="drawer" aria-labelledby="sacola-titulo"></dialog>
+  <div class="preview" id="previa" aria-hidden="true"><img alt="" width="240" height="240"></div>
+
+  <script src="loja.js" defer></script>
+</body>
+</html>

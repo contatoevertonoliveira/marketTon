@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from backend.deps import get_session
 from backend.security import require
 from core.db.service_credentials import ServiceCredential
-from core.services import link_shortener
+from core.services import link_shortener, storefront
 from integrations.google_ads import DEFAULT_API_VERSION, GoogleAdsClient, GoogleAdsConfig, GoogleAdsError
 
 router = APIRouter(
@@ -39,6 +39,18 @@ SERVICES: dict[str, dict] = {
             {"name": "customer_id", "label": "Customer ID da conta (10 dígitos, sem traços)", "secret": False},
             {"name": "login_customer_id", "label": "ID da conta MCC (opcional — só se a conta for gerenciada por ela)", "secret": False},
             {"name": "api_version", "label": f"Versão da API (padrão {DEFAULT_API_VERSION})", "secret": False},
+        ],
+    },
+    "storefront": {
+        "icon": "🛍️",
+        "required": ["base_url", "admin_token"],
+        "name": "Vitrine pública (loja online)",
+        "description": "A loja pública Achados do Felix (loja.felixsystems.com.br). O marketTon envia a ela a lista de "
+                       "produtos escolhidos; ela fica no ar mesmo com o computador desligado.",
+        "fields": [
+            {"name": "base_url", "label": "Endereço do site onde estão as funções da loja (https://seudominio.com.br)", "secret": False},
+            {"name": "admin_token", "label": "Token administrativo da vitrine", "secret": True},
+            {"name": "public_url", "label": "Endereço público da loja (opcional; padrão: endereço do site + /loja)", "secret": False},
         ],
     },
     "link_shortener": {
@@ -144,12 +156,17 @@ def test_service(service: str, session: Session = Depends(get_session)) -> Servi
     try:
         if service == "google_ads":
             message = GoogleAdsClient(GoogleAdsConfig.from_values(row.values)).check()
+        elif service == "storefront":
+            values = row.values or {}
+            message = storefront.check(storefront.StoreConfig(
+                str(values.get("base_url") or "").strip().rstrip("/"), str(values.get("admin_token") or "").strip(),
+                str(values.get("public_url") or "").strip().rstrip("/")))
         else:
             values = row.values or {}
             message = link_shortener.check(link_shortener.ShortenerConfig(
                 str(values.get("base_url") or "").strip().rstrip("/"), str(values.get("admin_token") or "").strip()))
         status = "ok"
-    except (GoogleAdsError, link_shortener.ShortenerError) as exc:
+    except (GoogleAdsError, link_shortener.ShortenerError, storefront.StorefrontError) as exc:
         status, message = "error", str(exc)[:480]
     row.last_check_status = status
     row.last_check_message = message

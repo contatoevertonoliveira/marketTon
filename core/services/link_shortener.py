@@ -31,7 +31,7 @@ SERVICE = "link_shortener"
 ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # sem 0/o/1/l/i: o código pode ser lido e digitado
 CODE_LENGTH = 7
 CURSOR_KEY = "link_clicks_cursor"
-CHANNELS = ("instagram", "tiktok", "youtube", "pinterest", "whatsapp", "telegram", "facebook", "x", "shopee_video", "outro")
+CHANNELS = ("instagram", "tiktok", "youtube", "pinterest", "whatsapp", "telegram", "facebook", "x", "shopee_video", "vitrine", "outro")
 TIMEOUT = 25
 
 

@@ -359,6 +359,41 @@ def sync_clicks():
 
 
 @mcp.tool(annotations=READ)
+def storefront_status():
+    """A vitrine pública (loja Achados do Felix): produtos, categoria, o que pode ser publicado e por quê, último envio.
+
+    Todo item do portfólio entra na loja por padrão. Produto sem link de afiliado ou sem foto aparece com o motivo.
+    """
+    return _run(lambda: _client.get("/storefront"))
+
+
+@mcp.tool(annotations=WRITE)
+def storefront_update_item(product_id: int, category: str | None = None, blurb: str | None = None,
+                           display_title: str | None = None, highlight: bool | None = None,
+                           hidden: bool | None = None, position: int | None = None):
+    """Ajusta como um produto aparece na loja pública. EXIGE o modo agente.
+
+    `blurb`: uma frase honesta (até 280 caracteres) sobre por que vale a pena — sem promessa de resultado nem avaliação inventada.
+    `display_title`: nome curto e claro no lugar do título cheio de palavras-chave do marketplace.
+    `category`: Casa e cozinha, Moda fitness, Pet, Eletrônicos, Beleza ou Achados diversos. `highlight` destaca (bloco duplo).
+    Só é publicado depois de `storefront_publish`.
+    """
+    return _run(lambda: _client.put(f"/storefront/items/{product_id}", {
+        "category": category, "blurb": blurb, "display_title": display_title, "highlight": highlight,
+        "hidden": hidden, "position": position}))
+
+
+@mcp.tool(annotations=WRITE)
+def storefront_publish():
+    """Publica a vitrine: envia ao site público a lista atual de produtos. EXIGE o modo agente.
+
+    Faça depois de mudar a lista ou os textos, e na rotina da manhã quando entrou produto novo. Cria os links curtos
+    rastreados que faltam (canal vitrine) para contar os cliques da loja.
+    """
+    return _run(lambda: _client.post("/storefront/publish"))
+
+
+@mcp.tool(annotations=READ)
 def list_tracked_links(portfolio_item_id: int | None = None, product_id: int | None = None):
     """Links rastreados criados e quantos cliques cada um recebeu (por produto, canal e campanha)."""
     return _run(lambda: _client.get("/links", portfolio_item_id=portfolio_item_id, product_id=product_id))
