@@ -21,6 +21,7 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-unit-tests-only")
 # Custo mínimo de Argon2 nos testes. Em produção o custo é o recomendado da
 # RFC 9106; aqui centenas de hashes seriam gerados e o custo alto dominaria o
 # tempo de execução sem acrescentar cobertura de teste.
+os.environ.setdefault("AGENT_AUTORUN", "false")  # o supervisor do agente não sobe nos testes
 os.environ.setdefault("ARGON2_TIME_COST", "1")
 os.environ.setdefault("ARGON2_MEMORY_COST", "8192")
 os.environ.setdefault("ARGON2_PARALLELISM", "1")

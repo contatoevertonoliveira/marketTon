@@ -410,6 +410,31 @@ def login(
     )
 
 
+def issue_agent_session(session: Session, user: User) -> str:
+    """Emite uma sessão para o usuário de papel BOT, sem senha. Devolve o access token.
+
+    Existe para o supervisor do backend (`core/services/agent_runner.py`), que dispara o Claude
+    em segundo plano: assim nenhuma senha do agente precisa ser guardada nem digitada. Recusa
+    qualquer papel que não seja BOT e conta inativa — não é um atalho para entrar como pessoa.
+    """
+    from config.settings import get_settings
+
+    if user.role != Role.BOT:
+        raise AuthError("só o usuário de papel bot recebe sessão sem senha")
+    if not user.is_active:
+        raise AccountInactive("conta do agente desativada")
+    pair, refresh_hash, refresh_expires = create_token_pair(
+        subject=user.username, role=user.role.value, settings=get_settings()
+    )
+    session.add(RefreshToken(user_id=user.id, token_hash=refresh_hash, expires_at=refresh_expires,
+                             user_agent="supervisor-backend", client_ip="127.0.0.1"))
+    user.last_login_at = _now()
+    audit(session, actor=user.username, action="auth.login", outcome="success", actor_role=user.role.value,
+          detail="sessão do agente emitida pelo supervisor do backend")
+    session.flush()
+    return pair.access_token
+
+
 # --- Sessão -------------------------------------------------------------------
 
 

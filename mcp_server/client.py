@@ -31,7 +31,10 @@ class MarkettonClient:
         self.base_url = (base_url or os.environ.get("MARKETTON_API_URL") or DEFAULT_URL).rstrip("/")
         self.username = username or os.environ.get("MARKETTON_AGENT_USER", "")
         self.password = password or os.environ.get("MARKETTON_AGENT_PASSWORD", "")
-        self._access: str | None = None
+        # Rodando em segundo plano, o backend entrega um token já emitido (sem senha). Sem refresh:
+        # a rodada é curta e, se o token vencer, o erro é claro e a próxima rodada recebe outro.
+        self._access: str | None = os.environ.get("MARKETTON_AGENT_ACCESS_TOKEN") or None
+        self._token_only = bool(self._access)
         self._refresh: str | None = None
         self._lock = threading.Lock()
 
@@ -78,6 +81,8 @@ class MarkettonClient:
                 self._login()
             response = self._send(method, path, params, json)
             if response.status_code == 401:
+                if self._token_only:
+                    raise ApiError(401, "a sessão do agente venceu; a próxima rodada recebe uma nova")
                 if not self._refresh_tokens():
                     self._login()
                 response = self._send(method, path, params, json)

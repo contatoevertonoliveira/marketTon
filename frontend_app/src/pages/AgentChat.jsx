@@ -62,10 +62,85 @@ function Bubble({ m, onStatus }) {
   );
 }
 
+
+const TRIGGERS = { activation: "ativação", chat: "chat", morning: "rotina da manhã", evening: "rotina da noite", manual: "manual" };
+const RUN_STATUS = {
+  ok: ["✓", "#2dce89", "concluída"], failed: ["✗", "#f5365c", "falhou"], timeout: ["⏱", "#f5365c", "estourou o tempo"],
+  needs_login: ["🔑", "#f6c944", "pediu login"], running: ["…", "#5e72e4", "em execução"],
+};
+
+function RuntimePanel() {
+  const [rt, setRt] = useState(null);
+  const [canManage, setCanManage] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const load = useCallback(() => getJSON("/agent/runtime").then(setRt).catch(() => {}), []);
+  useEffect(() => {
+    load();
+    getJSON("/auth/me").then((me) => setCanManage(!!me.permissions?.includes("users.manage"))).catch(() => {});
+    const id = setInterval(load, 10000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  async function runNow() {
+    setMsg("");
+    try {
+      await postJSON("/agent/runtime/run");
+      setMsg("Pedido enviado: a rodada começa em instantes.");
+      setTimeout(load, 3000);
+    } catch (e) {
+      setMsg(e.message);
+    }
+  }
+
+  if (!rt) return null;
+  let state;
+  if (!rt.autorun) state = ["#8898aa", "#f6f9fc", "Execução automática desligada neste backend (AGENT_AUTORUN=false)."];
+  else if (!rt.supervisor_alive) state = ["#8898aa", "#f6f9fc", "O supervisor ainda não subiu: reinicie o backend com o código novo."];
+  else if (!rt.claude_found) state = ["#c31e3f", "#fef1f4", "Claude Code não encontrado nesta máquina."];
+  else if (rt.waiting_for_login) state = ["#8a6d1d", "#fff8e6", "Aguardando o login do Claude Code: abra um terminal, rode claude e use /login. O agente volta sozinho depois."];
+  else if (rt.running_now) state = ["#3b4fb8", "#eef2ff", `Executando agora: ${TRIGGERS[rt.running_now] || rt.running_now}…`];
+  else state = ["#1a7a54", "#e5faf1", `Em segundo plano: roda sozinho na ativação, quando você escreve no chat e (autonomia independente) na rotina da manhã (a partir das ${rt.schedule.morning_from_hour}h) e da noite (a partir das ${rt.schedule.evening_from_hour}h).`];
+
+  return (
+    <div style={card}>
+      <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14, marginBottom: 8 }}>Agente em segundo plano</div>
+      <div style={{ fontSize: 12, padding: "8px 10px", borderRadius: 8, color: state[0], background: state[1] }}>{state[2]}</div>
+      {canManage && (
+        <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
+          <button onClick={runNow} style={{ border: "none", background: "#5e72e4", color: "#fff", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer" }}>Rodar agora</button>
+          {msg && <span style={{ fontSize: 11, color: "#525f7f" }}>{msg}</span>}
+        </div>
+      )}
+      {rt.runs.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 11, color: "#8898aa", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Últimas rodadas</div>
+          {rt.runs.slice(0, 6).map((r) => {
+            const [icon, color, label] = RUN_STATUS[r.status] || ["?", "#8898aa", r.status];
+            return (
+              <details key={r.id} style={{ fontSize: 12, padding: "3px 0", borderTop: "1px solid #f0f2f7" }}>
+                <summary style={{ cursor: "pointer", color: "#32325d" }}>
+                  <span style={{ color, fontWeight: 900 }}>{icon}</span> {TRIGGERS[r.trigger] || r.trigger} · {label}
+                  <span style={{ color: "#8898aa" }}> · {time(r.started_at)}{r.duration_seconds ? ` · ${Math.round(r.duration_seconds)}s` : ""}</span>
+                </summary>
+                <div style={{ color: "#525f7f", whiteSpace: "pre-wrap", margin: "4px 0 4px 14px", wordBreak: "break-word" }}>
+                  {r.error && <div style={{ color: "#c31e3f" }}>{r.error}</div>}
+                  {r.output_tail || "sem saída"}
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SidePanel({ caps, health }) {
   const [open, setOpen] = useState(true);
   return (
     <div style={{ display: "grid", gap: 14, alignContent: "start" }}>
+      <RuntimePanel />
       <div style={card}>
         <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14, marginBottom: 8 }}>
           Saúde do sistema{" "}
@@ -187,9 +262,8 @@ export default function AgentChat({ onCountsChange }) {
       <div style={{ ...card, display: "flex", flexDirection: "column", height: "calc(100vh - 190px)", minHeight: 420 }}>
         <div style={{ fontSize: 12, padding: "8px 10px", borderRadius: 8, marginBottom: 10, background: mode?.enabled ? "#e5faf1" : "#f6f9fc", color: mode?.enabled ? "#1a7a54" : "#525f7f" }}>
           {mode?.enabled
-            ? "Modo agente ATIVO. O agente trabalha enquanto uma sessão do Claude estiver aberta e deixa o que fez aqui."
+            ? "Modo agente ATIVO. O agente trabalha em segundo plano (sem terminal) e deixa o que fez aqui."
             : "Modo agente em MANUAL: o agente só consulta. Ative no interruptor do topo para ele agir."}
-          {mode && !mode.agent_last_login_at && " O Claude ainda não conectou (use “Conectar Claude”)."}
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "4px 2px" }}>
@@ -209,7 +283,7 @@ export default function AgentChat({ onCountsChange }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Escreva para o agente (Enter envia, Shift+Enter quebra linha). Ele lê quando uma sessão do Claude estiver aberta."
+            placeholder="Escreva para o agente (Enter envia, Shift+Enter quebra linha). Ele lê e responde em segundo plano."
             rows={2}
             style={{ flex: 1, padding: "9px 11px", border: "1px solid #dee2e6", borderRadius: 8, fontSize: 13, background: "#f6f9fc", resize: "none", fontFamily: "inherit" }}
           />

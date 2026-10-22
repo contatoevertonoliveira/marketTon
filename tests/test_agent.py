@@ -656,3 +656,32 @@ def test_mcp_server_module_keeps_real_annotations_for_old_sdk_versions():
     assert not any(line.strip() == "from __future__ import annotations" for line in source.splitlines())
     assert all(not isinstance(p.annotation, str) for fn in (server.list_products, server.product_funnel, server.request_resource)
                for p in inspect.signature(fn).parameters.values())
+
+
+# --- agente em segundo plano: usuário automático e endpoints do supervisor -----------------------------
+
+
+def test_turning_the_mode_on_creates_the_agent_user_without_a_known_password(api):
+    from core.db.auth import User
+
+    admin = _as(api, "dono")
+    api.put("/agent/mode", json={"enabled": True}, headers=admin)
+    mode = api.get("/agent/mode", headers=admin).json()
+    assert mode["agent_user_exists"] is True and mode["agent_last_login_at"] is None  # existe, ainda não entrou
+    audit = [a["action"] for a in api.get("/auth/audit", headers=admin).json()]
+    assert "agent.user_created" in audit
+    # Ninguém conhece a senha: o supervisor emite a sessão. Quem quiser usar no terminal gera uma nova.
+    assert api.post("/auth/login", json={"username": "claude_agent", "password": "palpite12345"}).status_code == 401
+    fresh = api.post("/agent/access", headers=admin).json()
+    assert fresh["rotated"] is True and api.post("/auth/login", json={"username": "claude_agent", "password": fresh["password"]}).status_code == 200
+
+
+def test_runtime_endpoint_is_readable_by_the_agent_and_run_now_is_admin_only(api):
+    admin, agent = _as(api, "dono"), _as(api, "agente")
+    rt = api.get("/agent/runtime", headers=agent).json()
+    assert {"autorun", "supervisor_alive", "claude_found", "running_now", "waiting_for_login", "schedule", "runs"} <= set(rt)
+
+    assert api.post("/agent/runtime/run", headers=agent).status_code == 403  # o agente não se dispara
+    assert api.post("/agent/runtime/run", headers=admin).status_code == 409  # modo desligado
+    api.put("/agent/mode", json={"enabled": True}, headers=admin)
+    assert api.post("/agent/runtime/run", headers=admin).status_code == 503  # supervisor não sobe nos testes (AGENT_AUTORUN=false)

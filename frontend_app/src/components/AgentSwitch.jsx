@@ -130,7 +130,7 @@ function ConnectModal({ mode, onClose, onRefresh }) {
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(23,43,77,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, width: "min(640px, 100%)", maxHeight: "90vh", overflowY: "auto", padding: 24, boxShadow: "0 20px 60px rgba(23,43,77,.35)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h5 style={{ margin: 0, color: "#32325d" }}>🤖 Conectar o Claude ao marketTon</h5>
+          <h5 style={{ margin: 0, color: "#32325d" }}>🤖 Agente Claude em segundo plano</h5>
           <button onClick={onClose} style={{ border: "none", background: "transparent", fontSize: 22, cursor: "pointer", color: "#8898aa" }}>×</button>
         </div>
 
@@ -139,15 +139,17 @@ function ConnectModal({ mode, onClose, onRefresh }) {
             ? `✅ Claude conectado (${fmtAgo(mode.agent_last_login_at)}).`
             : everConnected
               ? `Último acesso do Claude: ${fmtAgo(mode.agent_last_login_at)}. O agente só trabalha enquanto uma sessão do Claude estiver aberta.`
-              : "⏳ O Claude ainda não conectou. Siga os passos abaixo; esta tela confirma sozinha."}
+              : "⏳ O agente ainda não rodou. Assim que o backend com o supervisor estiver no ar, ele começa sozinho."}
         </div>
 
         <p style={{ fontSize: 12, color: "#8898aa", margin: "12px 0" }}>
-          O Claude não faz login pelo site: ele entra no marketTon com um acesso próprio (papel “agente”, sem acesso a
-          credenciais nem usuários). O marketTon gera esse acesso para você — não precisa inventar usuário e senha.
+          Com o modo ligado, o <strong>backend</strong> executa o Claude sozinho (ativação, mensagens do chat e rotinas da
+          manhã e da noite), sem terminal aberto. O terminal só é preciso <strong>uma vez</strong>: abra um terminal, rode
+          <code>claude</code> e use <code>/login</code> na sua conta. Se o login expirar, o chat avisa e o agente volta
+          sozinho depois. Abaixo, o acesso manual é opcional (para conversar com o agente num terminal).
         </p>
 
-        <div style={{ fontWeight: 700, fontSize: 13, color: "#32325d" }}>1. Gerar o acesso do agente</div>
+        <div style={{ fontWeight: 700, fontSize: 13, color: "#32325d" }}>Opcional · usar o agente num terminal</div>
         <div style={{ marginTop: 6 }}>
           <button onClick={generate} disabled={busy} style={{ ...btn, background: "#5e72e4", color: "#fff" }}>
             {busy ? "Gerando…" : mode.agent_user_exists ? "Gerar novo acesso" : "Gerar acesso do agente"}
@@ -221,7 +223,6 @@ export default function AgentSwitch() {
     setError("");
     try {
       setMode(await putJSON("/agent/mode", { enabled: next }));
-      if (next && !mode.agent_last_login_at) setOpen(true);
     } catch (e) {
       setError(e.message);
     } finally {

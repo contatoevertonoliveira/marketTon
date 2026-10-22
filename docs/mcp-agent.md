@@ -18,7 +18,32 @@ Claude (Claude Code / Desktop)  ──MCP/stdio──▶  mcp_server  ──HTTP
   - **Ativo:** o agente pode executar as ações abaixo.
 - Só um administrador liga/desliga. O agente não consegue se ligar sozinho nem se dar acesso.
 
-## Conectar o Claude
+## Em segundo plano, sem terminal (padrão)
+
+Com o **modo agente ligado**, o próprio **backend** executa o Claude Code em modo sem tela (`claude -p`)
+quando há trabalho. Não precisa deixar terminal aberto:
+
+| Gatilho | Quando |
+|---|---|
+| ativação | há uma tarefa de ativação aberta (ao ligar o modo) |
+| chat | você escreveu e o agente ainda não leu (intervalo mínimo de 5 min) |
+| manhã / noite | rotinas diárias, **só em autonomia independente**, a partir das 8h e das 19h (`AGENT_MORNING_HOUR`, `AGENT_EVENING_HOUR`), uma por período |
+| manual | botão **Rodar agora** (administrador) |
+
+- **Login uma única vez:** abra um terminal, rode `claude` e use `/login`. Fica salvo na sua conta do Windows.
+  Se expirar, a rodada falha com um sinal claro: o chat recebe um pedido ("Entrar no Claude Code"), as tentativas
+  pausam por 15 min e voltam sozinhas.
+- **Isolamento:** a rodada carrega **só** o servidor do marketTon (`--strict-mcp-config`), com lista fechada de
+  ferramentas; terminal, leitura/edição de arquivos e web ficam **proibidos**; o processo filho não herda as
+  variáveis do backend e recebe um token de sessão emitido pelo backend (nenhuma senha guardada).
+- **Uma rodada por vez**, com tempo máximo (`AGENT_RUN_TIMEOUT_MINUTES`, 25). Cada rodada fica registrada
+  (painel "Agente em segundo plano" no chat: estado, últimas rodadas e saída).
+- **Requisitos:** o computador ligado, o Docker e o backend no ar, e o Claude Code instalado e logado.
+  Cada rodada consome o uso da sua conta do Claude.
+- **Desligar:** o interruptor do topo (modo manual), ou `AGENT_AUTORUN=false` no `.env` para o backend nunca
+  disparar o Claude.
+
+## Usar o agente num terminal (opcional)
 
 1. No app, clique em **Conectar Claude** (topo) e em **Gerar acesso do agente**. O marketTon cria
    o usuário `claude_agent` com senha aleatória, mostrada **uma única vez**.

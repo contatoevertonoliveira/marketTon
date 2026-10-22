@@ -33,7 +33,7 @@ from core.services import agent_chat
 from core.services.app_settings import agent_autonomy, agent_mode_info, set_agent_autonomy, set_agent_mode
 from core.services.agent_calibration import calibration_report
 from core.services.sales_sync import sync_sales
-from core.services.auth import create_user, get_user_by_username, set_password
+from core.services.auth import audit, create_user, get_user_by_username, set_password
 from core.services.security import validate_password_strength
 from core.services.commission_learning import apply_commissions, propose_commissions
 from integrations.google_ads import GoogleAdsConfig
@@ -85,6 +85,8 @@ def put_mode(
 ) -> AgentModeOut:
     was_enabled = agent_mode_info(session)["enabled"]
     info = set_agent_mode(session, enabled=payload.enabled, actor=principal.username)
+    if payload.enabled:
+        _ensure_agent_user(session, principal.username)
     if payload.enabled and not was_enabled:
         # Ao ligar, o agente recebe a rotina de análise completa. Ele a lê assim que uma sessão do
         # Claude conectar — o sistema não roda o Claude por conta própria.
@@ -104,6 +106,20 @@ def put_mode(
     )
     session.commit()
     return _mode_out(session)
+
+
+def _ensure_agent_user(session: Session, actor: str) -> None:
+    """Garante o usuário do agente. A senha é aleatória e descartada: o supervisor do backend emite a
+    sessão dele sem senha (`issue_agent_session`); quem quiser usar o Claude no terminal gera uma senha
+    nova em "Gerar acesso"."""
+    if get_user_by_username(session, AGENT_USERNAME) is not None:
+        return
+    password = ""
+    while validate_password_strength(password):
+        password = secrets.token_urlsafe(32)
+    create_user(session, username=AGENT_USERNAME, password=password, role=Role.BOT, created_by=actor)
+    audit(session, actor=actor, actor_role="admin", action="agent.user_created", resource_type="user",
+          resource_id=AGENT_USERNAME, detail="criado ao ligar o modo agente (sem senha conhecida)")
 
 
 class AgentAccessOut(BaseModel):
@@ -342,39 +358,17 @@ def chat_send(
         author = "user"
         if payload.kind != "message":
             raise HTTPException(status_code=422, detail="o operador envia apenas mensagens")
-    if author == "agent" and payload.kind == "request":
-        again = _remind_open_request(session, payload)
-        if again is not None:
-            session.commit()
-            return {**agent_chat.serialize(again), "deduplicated": True}
+    if author == "agent" and payload.kind == "request" and (payload.meta or {}).get("resource"):
+        # Mesmo recurso pedido de novo = renova o cartão aberto (a cobrança diária), não duplica.
+        message, renewed = agent_chat.upsert_open_request(session, text=payload.text, meta=payload.meta, author="agent")
+        session.commit()
+        return {**agent_chat.serialize(message), **({"deduplicated": True} if renewed else {})}
     try:
         message = agent_chat.post_message(session, author=author, text=payload.text, kind=payload.kind, meta=payload.meta)
     except agent_chat.ChatError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()
     return agent_chat.serialize(message)
-
-
-def _remind_open_request(session: Session, payload: "ChatPost"):
-    """Pedido repetido do mesmo recurso: em vez de criar outro cartão, renova o aberto.
-
-    É a "cobrança diária" sem spam: o cartão volta a contar como não lido (o aviso do menu
-    reaparece), acumula `reminders` e guarda a data da última cobrança.
-    """
-    resource = ((payload.meta or {}).get("resource") or "").strip().lower()
-    if not resource:
-        return None
-    for message in session.scalars(select(agent_chat.AgentMessage).where(
-            agent_chat.AgentMessage.kind == "request", agent_chat.AgentMessage.status == "open")):
-        if ((message.meta or {}).get("resource") or "").strip().lower() == resource:
-            message.meta = {**(message.meta or {}), **(payload.meta or {}),
-                            "reminders": int((message.meta or {}).get("reminders", 0)) + 1,
-                            "last_reminded_at": datetime.now(UTC).isoformat()}
-            message.text = payload.text
-            message.read_by_user = False
-            session.flush()
-            return message
-    return None
 
 
 @router.post("/chat/read", summary="Marcar como lido (para quem chama)")
@@ -500,3 +494,30 @@ def put_autonomy(
     agent_chat.post_message(session, author="system", kind="message", text=text)
     session.commit()
     return {"autonomy": level, "calibration": report}
+
+
+# --- Execução em segundo plano ---------------------------------------------------------------
+
+
+@router.get("/runtime", summary="Estado do agente em segundo plano e últimas rodadas")
+def get_runtime(
+    principal: Principal = Depends(require("operations.view")), session: Session = Depends(get_session)
+) -> dict:
+    from core.services.agent_runner import runtime_status
+
+    return runtime_status(session)
+
+
+@router.post("/runtime/run", summary="Rodar o agente agora (administrador)", status_code=202)
+def run_now(principal: Principal = Depends(require("users.manage")), session: Session = Depends(get_session)) -> dict:
+    from core.services.agent_runner import get_supervisor
+
+    if not agent_mode_info(session)["enabled"]:
+        raise HTTPException(status_code=409, detail="o modo agente está desligado")
+    supervisor = get_supervisor()
+    if supervisor is None or not supervisor.is_alive():
+        raise HTTPException(status_code=503, detail="o supervisor do agente não está ativo neste backend (AGENT_AUTORUN=false?)")
+    record_action(session, principal, action="agent.run_requested", resource_type="agent", detail="rodada manual pedida")
+    session.commit()
+    supervisor.request_manual()
+    return {"accepted": True}

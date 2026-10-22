@@ -76,8 +76,17 @@ async def lifespan(app: FastAPI):
         )
     else:
         _bootstrap_admin()
+        # O agente Claude em segundo plano: só age com o modo agente ligado (ver agent_runner).
+        from core.db.session import get_session_factory
+        from core.services.agent_runner import start_supervisor
+
+        start_supervisor(get_session_factory())
 
     yield
+
+    from core.services.agent_runner import stop_supervisor
+
+    stop_supervisor()
 
 
 def _bootstrap_admin() -> None:

@@ -82,6 +82,15 @@ class Settings(BaseSettings):
     # Pasta local onde as fotos baixadas dos produtos são guardadas.
     media_dir: str = "data/media"
 
+    # --- Agente Claude em segundo plano ----------------------------------------
+    # O backend dispara o Claude Code em modo sem tela quando o modo agente está ligado e há trabalho
+    # (ativação, mensagem no chat, rotinas da manhã e da noite). Só age com o modo ligado.
+    agent_autorun: bool = True
+    agent_claude_bin: str = ""  # vazio = procura `claude` no PATH
+    agent_run_timeout_minutes: int = 25
+    agent_morning_hour: int = 8  # a rotina da manhã roda a partir desta hora local
+    agent_evening_hour: int = 19  # e a da noite a partir desta
+
     # --- Meta Ads (Marketing API / Ads Library) --------------------------------
     meta_access_token: str = ""
     meta_ad_account_id: str = ""

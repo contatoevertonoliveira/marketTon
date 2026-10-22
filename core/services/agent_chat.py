@@ -149,3 +149,24 @@ def post_activation_task(session: Session) -> AgentMessage | None:
     if exists:
         return None
     return post_message(session, author="system", kind="task", text=ACTIVATION_TEXT, meta={"task": ACTIVATION_TASK})
+
+
+def upsert_open_request(session: Session, *, text: str, meta: dict, author: str = "system") -> tuple[AgentMessage, bool]:
+    """Cria o pedido ou, se já há um aberto para o mesmo recurso, renova em vez de duplicar.
+
+    Devolve `(mensagem, renovada)`. Renovar volta o cartão a não lido e conta a cobrança.
+    """
+    from datetime import UTC, datetime
+
+    resource = str(meta.get("resource") or "").strip().lower()
+    if resource:
+        for message in session.scalars(select(AgentMessage).where(AgentMessage.kind == "request", AgentMessage.status == "open")):
+            if str((message.meta or {}).get("resource") or "").strip().lower() == resource:
+                message.meta = {**(message.meta or {}), **meta,
+                                "reminders": int((message.meta or {}).get("reminders", 0)) + 1,
+                                "last_reminded_at": datetime.now(UTC).isoformat()}
+                message.text = text
+                message.read_by_user = False
+                session.flush()
+                return message, True
+    return post_message(session, author=author, kind="request", text=text, meta=meta), False
