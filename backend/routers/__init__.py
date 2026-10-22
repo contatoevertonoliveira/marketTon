@@ -11,6 +11,7 @@ from backend.routers import (
     catalog,
     creative,
     jobs,
+    links,
     marketplaces,
     operations,
     performance,
@@ -33,6 +34,7 @@ API_ROUTERS = [
     performance.router,
     services.router,
     agent.router,
+    links.router,
 ]
 
 __all__ = [
@@ -42,6 +44,7 @@ __all__ = [
     "catalog",
     "creative",
     "jobs",
+    "links",
     "marketplaces",
     "operations",
     "performance",

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { getJSON, postJSON, putJSON } from "../lib/apiClient";
 import ProductDetailDrawer from "./ProductDetail";
 import ProductFunnel from "./ProductFunnel";
+import TrackedLinks from "./TrackedLinks";
 import { approvalVerdict, AFFILIATE_PERIODS, competitionLevel, isLiveOpportunity, stockLevel, suggestHashtags, logisticSpeedRank, priceCompetitiveness, sellerLocation, shipsFromBrazil } from "../lib/productSignals";
 
 function fmtMoney(v, currency) {
@@ -418,6 +419,7 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
         </div>
 
         <div style={{ padding: "0 20px 20px" }}>
+          {portfolioItem && <TrackedLinks portfolioItem={portfolioItem} />}
           <ProductFunnel product={product} />
         </div>
       </div>

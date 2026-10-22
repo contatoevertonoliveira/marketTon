@@ -73,6 +73,10 @@ def capabilities(session: Session) -> list[dict]:
             s.get("last_check_message") if s.get("last_check_status") == "error" else None,
         )
 
+    from core.db.service_credentials import ServiceCredential as _SC
+
+    shortener = session.scalar(select(_SC).where(_SC.service == "link_shortener"))
+    shortener_ok = bool(shortener and shortener.enabled and shortener.last_check_status == "ok")
     ads = states.get("google_ads", {})
     ads_ok = ads.get("enabled") and ads.get("last_check_status") == "ok"
     return [
@@ -103,8 +107,10 @@ def capabilities(session: Session) -> list[dict]:
              ["escolher a plataforma (Google Ads, Meta, Shopee Ads…)", "permissão de escrita na conta e orçamento definido por você",
               "integração construída"],
              "O Google Ads está conectado só para leitura do Planejador. Afiliado não edita o anúncio do vendedor."),
-        _cap("link_clicks", "Contagem de cliques nos links de afiliado", "nao_construido",
-             "saber quais divulgações geram clique, não só venda", ["encurtador de links com contador (a construir)"]),
+        _cap("link_clicks", "Contagem de cliques nos links de afiliado", "pronto" if shortener_ok else "configurar",
+             "saber quais divulgações geram clique, não só venda (use create_tracked_link e sync_clicks)",
+             [] if shortener_ok else ["configurar o Encurtador de links em Integrações (endereço e token do redirecionador)"],
+             "Conta cliques do link curto; não conta robôs nem pré-visualizações, e não é visualização do post."),
         _cap("catalog_collect_api", "Atualizar o catálogo pelo agente", "pronto",
              "coletar produtos e recalcular scores quando o catálogo envelhecer ou para um nicho novo",
              note="Intervalo mínimo de 6 h por marketplace; precisa de credencial testada."),

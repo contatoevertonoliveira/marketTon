@@ -183,12 +183,12 @@ export default function ProdutosDesempenho({ marketplace }) {
         )}
       </Section>
 
-      <Section title="Mais cliques" hint="Cliques nos seus links de afiliado.">
+      <Section title="Mais cliques" hint="Cliques nos seus links rastreados (não conta robôs; não é visualização do post).">
         {!data.clicks_tracked ? (
           <Empty>
-            Cliques ainda não são rastreados. A API de afiliados da Shopee só informa cliques que viraram compra, e
-            não há registro de cliques no sistema — por isso mostramos "—" e não um zero inventado. Para ter esse
-            número é preciso passar os links por um encurtador próprio com contagem (ainda não implementado).
+            Ainda não há cliques registrados. A API da Shopee só informa cliques que viraram compra; para contar todos,
+            as divulgações precisam usar o <strong>link rastreado</strong> (abra um produto vinculado e clique em
+            "Criar link rastreado", ou peça ao agente). Produtos sem link rastreado mostram "—", nunca um zero inventado.
           </Empty>
         ) : clicks.length === 0 ? (
           <Empty>Nenhum clique registrado para os produtos deste marketplace.</Empty>

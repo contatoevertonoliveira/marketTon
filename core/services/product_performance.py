@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from core.db.base import Marketplace
 from core.db.catalog import Product
 from core.db.portfolio import PortfolioItem
-from core.db.tracking import ClickEvent, Commission, Sale
+from core.db.tracking import AffiliateLink, ClickEvent, Commission, Sale
 
 CANCELLED = "CANCELLED"
 
@@ -160,18 +160,23 @@ def product_performance(
         row.price = product.price
         row.commission_pct = product.affiliate_commission_pct
 
-    # Cliques: só rastreados se existir algum ClickEvent.
+    # Cliques: só de quem tem link rastreado. Sem link, o número é "não rastreado" (None), nunca zero.
     clicks_tracked = session.scalar(select(func.count()).select_from(ClickEvent)) > 0
     if clicks_tracked:
-        counts = dict(
-            session.execute(
-                select(ClickEvent.portfolio_item_id, func.count())
-                .where(ClickEvent.portfolio_item_id.is_not(None))
-                .group_by(ClickEvent.portfolio_item_id)
-            ).all()
-        )
+        by_item = dict(session.execute(
+            select(ClickEvent.portfolio_item_id, func.count()).where(ClickEvent.portfolio_item_id.is_not(None))
+            .group_by(ClickEvent.portfolio_item_id)).all())
+        by_product = dict(session.execute(
+            select(AffiliateLink.product_id, func.count(ClickEvent.id))
+            .join(ClickEvent, ClickEvent.affiliate_link_id == AffiliateLink.id)
+            .where(AffiliateLink.product_id.is_not(None)).group_by(AffiliateLink.product_id)).all())
+        linked_items = set(session.scalars(select(AffiliateLink.portfolio_item_id).where(AffiliateLink.portfolio_item_id.is_not(None))))
+        linked_products = set(session.scalars(select(AffiliateLink.product_id).where(AffiliateLink.product_id.is_not(None))))
         for row in rows.values():
-            row.clicks = counts.get(row.portfolio_item_id, 0) if row.portfolio_item_id else None
+            if row.portfolio_item_id in linked_items:
+                row.clicks = by_item.get(row.portfolio_item_id, 0)
+            elif row.product_id in linked_products:
+                row.clicks = by_product.get(row.product_id, 0)
 
     return list(rows.values()), clicks_tracked
 

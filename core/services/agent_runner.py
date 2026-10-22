@@ -80,12 +80,12 @@ PROMPTS = {
         "`chat_send` e faça o que ele pediu dentro das suas ferramentas e limites."
     ),
     "morning": (
-        "Rotina da MANHÃ do marketTon (`agent_playbook`, seção 2): `chat_inbox`, `system_health`, `sync_sales` (resuma vendas "
+        "Rotina da MANHÃ do marketTon (`agent_playbook`, seção 2): `chat_inbox`, `system_health`, `sync_sales` e `sync_clicks` (resuma vendas "
         "novas), `daily_review`, trate o que o checklist apontar, escolha o produto do dia e deixe o plano de conteúdo "
         "no chat. Cobre os recursos pendentes mais importantes com `request_resource` (renova, não duplica)."
     ),
     "evening": (
-        "Rotina da NOITE do marketTon (`agent_playbook`, seção 2): `chat_inbox`, `sales_performance`, `sync_sales`, o que "
+        "Rotina da NOITE do marketTon (`agent_playbook`, seção 2): `chat_inbox`, `sync_clicks`, `sales_performance`, `sync_sales`, o que "
         "performou e o que não, ajuste de ângulo/produto, plano do dia seguinte. Registre o resumo no chat."
     ),
     "manual": (

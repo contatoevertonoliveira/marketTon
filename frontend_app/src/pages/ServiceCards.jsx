@@ -69,7 +69,7 @@ function ServiceModal({ service, onClose, onSaved }) {
         style={{ background: "#fff", borderRadius: 16, width: "min(560px, 100%)", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(23,43,77,.35)" }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "20px 24px", borderBottom: "1px solid #f0f2f7" }}>
-          <div style={{ fontSize: 32 }}>🔎</div>
+          <div style={{ fontSize: 32 }}>{service.icon || "🔌"}</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 17, color: "#32325d" }}>{service.name}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: status.color, fontWeight: 600 }}>
@@ -122,10 +122,13 @@ function ServiceModal({ service, onClose, onSaved }) {
           {error && <div style={{ fontSize: 12, color: "#f5365c" }}>{error}</div>}
 
           <div style={{ fontSize: 11, color: "#8898aa", background: "#f6f9fc", padding: 10, borderRadius: 8 }}>
-            O teste confirma o login OAuth e consulta a conta. O Developer Token não é mais necessário (o Google o
-            desativou em 09/09/2026); o acesso agora é do projeto do Google Cloud. Se o Google responder
-            "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION" (ou "ACTION_NOT_PERMITTED"), as credenciais estão certas e o
-            projeto ainda não tem acesso de produção (Exploração/Básico).
+            {service.service === "google_ads"
+              ? `O teste confirma o login OAuth e consulta a conta. O Developer Token não é mais necessário (o Google o
+                desativou em 09/09/2026); o acesso agora é do projeto do Google Cloud. Se o Google responder
+                "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION" (ou "ACTION_NOT_PERMITTED"), as credenciais estão certas e o
+                projeto ainda não tem acesso de produção (Exploração/Básico).`
+              : `O teste confere o endereço e o token junto ao redirecionador. Os links curtos ficam em
+                endereço/r/código; cada clique de pessoa (não de robô) é contado sem guardar IP nem cookie.`}
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
@@ -187,14 +190,14 @@ export default function ServiceCards() {
               style={{ background: "#fff", border: "1px solid #eef0f5", borderRadius: 14, padding: 20, cursor: "pointer", textAlign: "left", boxShadow: "0 0 2rem 0 rgba(136,152,170,.12)", display: "flex", flexDirection: "column", gap: 12 }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ fontSize: 30 }}>🔎</div>
+                <div style={{ fontSize: 30 }}>{s.icon || "🔌"}</div>
                 <Led color={status.color} />
               </div>
               <div>
-                <div style={{ fontWeight: 700, color: "#32325d", fontSize: 15 }}>Google Ads</div>
+                <div style={{ fontWeight: 700, color: "#32325d", fontSize: 15 }}>{s.name.replace(/ \(.*\)$/, "")}</div>
                 <div style={{ fontSize: 12, color: status.color, fontWeight: 600, marginTop: 2 }}>{status.label}</div>
               </div>
-              <div style={{ fontSize: 11, color: "#8898aa" }}>Volume, CPC e concorrência · {s.enabled ? "ativo" : "desativado"}</div>
+              <div style={{ fontSize: 11, color: "#8898aa" }}>{(s.name.match(/\((.*)\)$/) || [])[1] || "serviço de dados"} · {s.enabled ? "ativo" : "desativado"}</div>
             </button>
           );
         })}

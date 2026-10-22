@@ -324,6 +324,34 @@ def catalog_refresh_status():
     return _run(lambda: _client.get("/agent/catalog/refresh"))
 
 
+@mcp.tool(annotations=WRITE)
+def create_tracked_link(portfolio_item_id: int | None = None, product_id: int | None = None, channel: str = "outro",
+                        campaign: str | None = None):
+    """Cria o link curto rastreado de um produto para um canal (ex.: instagram, tiktok, youtube, shopee_video). EXIGE o modo agente.
+
+    Use ESTE link, não o link comum, em toda divulgação: ele conta os cliques. Mesmo produto + canal + campanha
+    reaproveita o link. `campaign` identifica o ângulo/gancho testado (ex.: "gancho-preco"). Só funciona se o
+    produto tem link de afiliado e o encurtador está configurado em Integrações.
+    """
+    return _run(lambda: _client.post("/links", {
+        "portfolio_item_id": portfolio_item_id, "product_id": product_id, "channel": channel, "campaign": campaign}))
+
+
+@mcp.tool(annotations=WRITE)
+def sync_clicks():
+    """Busca no redirecionador os cliques novos dos links rastreados e atualiza as contagens. EXIGE o modo agente.
+
+    Faça na rotina da manhã e da noite, antes de comparar o desempenho de ganchos e canais.
+    """
+    return _run(lambda: _client.post("/links/sync"))
+
+
+@mcp.tool(annotations=READ)
+def list_tracked_links(portfolio_item_id: int | None = None, product_id: int | None = None):
+    """Links rastreados criados e quantos cliques cada um recebeu (por produto, canal e campanha)."""
+    return _run(lambda: _client.get("/links", portfolio_item_id=portfolio_item_id, product_id=product_id))
+
+
 @mcp.prompt(name="ativacao", description="Roda a rotina completa de ativação do agente no marketTon.")
 def ativacao() -> str:
     return (

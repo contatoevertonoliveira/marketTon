@@ -1,0 +1,12 @@
+{
+  "name": "markton-site",
+  "private": true,
+  "type": "module",
+  "description": "Site público do marketTon + redirecionador de links curtos com contagem de cliques (Netlify Functions).",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.6"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

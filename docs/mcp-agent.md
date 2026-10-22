@@ -92,6 +92,26 @@ Produto sem comissão informada que já vendeu: a taxa efetiva é `Σ comissão 
   (`attributes.commission_source = observed_from_sales`);
 - roda ao final de `python scripts/ingest.py --sales` e sob demanda pela ferramenta.
 
+## Links rastreados (contador de cliques)
+
+O redirecionador roda no **seu domínio público** (funções Netlify em `site/netlify/functions`), porque o backend
+fica no `localhost`, que a internet não alcança. `create_tracked_link(item, canal, campanha)` gera
+`felixsystems.com.br/r/<código>`, que redireciona ao **link de afiliado** do produto e conta o clique; `sync_clicks`
+traz as contagens para o banco (alimenta Produtos → Desempenho → "Mais cliques"). Cliques são contados mesmo com o
+computador desligado.
+
+- **Só encurta link de afiliado** (o comum daria clique sem comissão). Mesmo produto + canal + campanha reaproveita o link.
+- **Contagem honesta:** robôs e pré-visualizadores (WhatsApp, Telegram, Facebook…) não contam; clique não é
+  visualização do post nem venda. Por clique guarda só data/hora, país aproximado, tipo de dispositivo e site de origem
+  — **sem IP e sem cookie** (a política de privacidade do site já diz isso).
+- **Configuração:** Integrações → Encurtador de links (endereço + token). O token fica só aqui; o redirecionador guarda
+  apenas o **hash** dele. Para trocar: gere outro token, troque `TOKEN_SHA256` em `links-admin.mjs` e publique de novo.
+
+## Atualização do catálogo
+
+`refresh_catalog` roda a coleta (como `scripts/ingest.py`) em segundo plano, com `keywords` opcionais (até 10). Uma por
+vez, intervalo mínimo de 6 h por marketplace, o agente não força; o resultado cai no chat (`catalog_refresh_status`).
+
 ## O que o agente NÃO tem (e por quê)
 
 - **Credenciais, usuários, auditoria, publicação:** fora do papel `bot`, de propósito.
@@ -99,9 +119,8 @@ Produto sem comissão informada que já vendeu: a taxa efetiva é `Σ comissão 
   hoje. Afiliado não edita o anúncio do vendedor; e o Google Ads está conectado só para
   **Planejador de Palavras-chave** (leitura). Gerenciar campanhas exigiria escopo, permissão e
   telas próprias — não existe ainda.
-- **Gerar links de afiliado e coletar o catálogo por HTTP:** a Shopee tem `generateShortLink`, mas
-  falta o endpoint no marketTon; a coleta ainda é por `scripts/ingest.py`.
-- **Cliques:** só chegam os que viraram compra; falta um encurtador com contagem.
+- **Gerar o link de afiliado na Shopee:** a API tem `generateShortLink`, mas falta o endpoint no marketTon (hoje o
+  link vem do catálogo).
 
 ## Revisão diária
 

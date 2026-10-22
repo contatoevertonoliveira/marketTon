@@ -334,6 +334,7 @@ def test_mcp_exposes_exactly_the_intended_tools():
         "daily_review", "add_to_portfolio", "move_portfolio_item", "set_manual_signals", "apply_observed_commissions",
         "agent_playbook", "chat_inbox", "chat_send", "request_resource", "complete_task", "system_health",
         "capabilities", "sync_sales", "refresh_catalog", "catalog_refresh_status",
+        "create_tracked_link", "sync_clicks", "list_tracked_links",
     }
     # Nada de credenciais, usuários ou anúncios: o agente só tem o que a API do portfólio oferece.
     assert not any(w in n for n in names for w in ("credential", "user", "password", "ads_", "campaign"))
@@ -440,11 +441,12 @@ def test_resource_requests_can_be_resolved_only_by_the_operator(api):
 def test_capabilities_never_present_unbuilt_things_as_ready(api):
     data = api.get("/agent/capabilities", headers=_as(api, "agente")).json()
     by_key = {c["key"]: c for c in data["capabilities"]}
-    for key in ("social_publishing", "ads_management", "link_clicks", "meta_ads_library", "marketplace_kirvano"):
+    for key in ("social_publishing", "ads_management", "meta_ads_library", "marketplace_kirvano"):
         assert by_key[key]["status"] == "nao_construido" and by_key[key]["needs"], key
     # Hotmart, Monetizze e Eduzz já têm adaptador: falta só o operador configurar as credenciais.
     for key in ("marketplace_hotmart", "marketplace_monetizze", "marketplace_eduzz"):
         assert by_key[key]["status"] == "configurar" and by_key[key]["needs"], key
+    assert by_key["link_clicks"]["status"] == "configurar" and by_key["link_clicks"]["needs"]  # sem o encurtador configurado
     assert by_key["google_trends"]["status"] == "pronto"
     assert by_key["google_ads_keyword_planner"]["status"] == "configurar"  # sem credencial no banco de teste
     assert by_key["ai_creatives"]["status"] == "configurar" and any("AI_API_KEY" in n for n in by_key["ai_creatives"]["needs"])
@@ -713,3 +715,22 @@ def test_catalog_refresh_endpoint_respects_the_agent_mode_the_force_flag_and_val
     assert too_many.status_code == 422
     audit = [a["action"] for a in api.get("/auth/audit", headers=admin).json()]
     assert "agent.catalog_refresh" in audit
+
+
+# --- links rastreados: endpoints e travas -----------------------------------------------------------
+
+
+def test_tracked_link_endpoints_respect_roles_the_agent_mode_and_inputs(api):
+    admin, agent, viewer = _as(api, "dono"), _as(api, "agente"), _as(api, "leitor")
+    body = {"product_id": 1, "channel": "instagram"}
+
+    assert api.post("/links", json=body, headers=agent).status_code == 403  # modo manual: só consulta
+    assert api.post("/links", json=body, headers=viewer).status_code == 403
+    assert api.get("/links", headers=agent).status_code == 200 and api.get("/links", headers=viewer).status_code == 200
+    assert api.get("/links/channels", headers=agent).json()[0] == "instagram"
+
+    api.put("/agent/mode", json={"enabled": True}, headers=admin)
+    assert api.post("/links", json={"channel": "tiktok"}, headers=agent).status_code == 422  # falta o produto
+    no_setup = api.post("/links", json=body, headers=agent)
+    assert no_setup.status_code == 422 and "não configurado" in no_setup.json()["detail"]
+    assert api.post("/links/sync", headers=agent).status_code == 502  # sem encurtador configurado

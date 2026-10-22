@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from backend.deps import get_session
 from backend.security import require
 from core.db.service_credentials import ServiceCredential
+from core.services import link_shortener
 from integrations.google_ads import DEFAULT_API_VERSION, GoogleAdsClient, GoogleAdsConfig, GoogleAdsError
 
 router = APIRouter(
@@ -26,6 +27,8 @@ router = APIRouter(
 
 SERVICES: dict[str, dict] = {
     "google_ads": {
+        "icon": "🔎",
+        "required": ["client_id", "client_secret", "refresh_token", "customer_id"],
         "name": "Google Ads (Planejador de Palavras-chave)",
         "description": "Volume de busca mensal, CPC e concorrência no Google. O Trends não passa por aqui.",
         "fields": [
@@ -36,6 +39,17 @@ SERVICES: dict[str, dict] = {
             {"name": "customer_id", "label": "Customer ID da conta (10 dígitos, sem traços)", "secret": False},
             {"name": "login_customer_id", "label": "ID da conta MCC (opcional — só se a conta for gerenciada por ela)", "secret": False},
             {"name": "api_version", "label": f"Versão da API (padrão {DEFAULT_API_VERSION})", "secret": False},
+        ],
+    },
+    "link_shortener": {
+        "icon": "🔗",
+        "required": ["base_url", "admin_token"],
+        "name": "Encurtador de links (contador de cliques)",
+        "description": "Links curtos no seu domínio que contam os cliques das divulgações. O redirecionador roda no Netlify "
+                       "(felixsystems.com.br/r/…), então conta mesmo com o computador desligado.",
+        "fields": [
+            {"name": "base_url", "label": "Endereço público do redirecionador (https://seudominio.com.br)", "secret": False},
+            {"name": "admin_token", "label": "Token administrativo do redirecionador", "secret": True},
         ],
     },
 }
@@ -50,6 +64,7 @@ class ServiceStatusOut(BaseModel):
     service: str
     name: str
     description: str
+    icon: str = "🔌"
     enabled: bool
     fields: list[dict[str, str | bool]]
     values_set: dict[str, bool]
@@ -70,9 +85,10 @@ def _row(session: Session, service: str) -> ServiceCredential:
 
 def _status(service: str, row: ServiceCredential) -> ServiceStatusOut:
     meta = SERVICES[service]
-    configured = GoogleAdsConfig.from_values(row.values).is_complete() if service == "google_ads" else False
+    configured = all(bool((row.values or {}).get(f)) for f in meta["required"])
     return ServiceStatusOut(
         service=service,
+        icon=meta["icon"],
         name=meta["name"],
         description=meta["description"],
         enabled=row.enabled,
@@ -126,9 +142,14 @@ def test_service(service: str, session: Session = Depends(get_session)) -> Servi
     _known(service)
     row = _row(session, service)
     try:
-        message = GoogleAdsClient(GoogleAdsConfig.from_values(row.values)).check()
+        if service == "google_ads":
+            message = GoogleAdsClient(GoogleAdsConfig.from_values(row.values)).check()
+        else:
+            values = row.values or {}
+            message = link_shortener.check(link_shortener.ShortenerConfig(
+                str(values.get("base_url") or "").strip().rstrip("/"), str(values.get("admin_token") or "").strip()))
         status = "ok"
-    except GoogleAdsError as exc:
+    except (GoogleAdsError, link_shortener.ShortenerError) as exc:
         status, message = "error", str(exc)[:480]
     row.last_check_status = status
     row.last_check_message = message

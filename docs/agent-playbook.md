@@ -69,6 +69,14 @@ operador pedir. Ela roda em segundo plano e o resultado cai no chat; confira com
 analisar produtos novos. Há **intervalo mínimo de 6 h por marketplace** e você não pode forçar: se for recusada, siga
 com o que existe e tente de novo depois. Não peça ao operador para rodar script de coleta: a ferramenta é sua.
 
+## 3.05 Links rastreados (medir clique)
+
+Em **toda** divulgação use o link curto rastreado: `create_tracked_link(portfolio_item_id, channel, campaign)`. O canal é
+onde você posta (instagram, tiktok, youtube, shopee_video…) e a `campaign` identifica o gancho/ângulo testado
+(ex.: "gancho-preco"). Antes de comparar desempenho rode `sync_clicks`. Com isso você separa **o que chama atenção**
+(cliques) **do que converte** (vendas). Cliques não são visualizações do post, e robôs não contam. Se o encurtador
+não estiver configurado, peça a configuração (`request_resource`) em vez de usar o link comum.
+
 ## 3.1 Pesquisar plataformas e fontes de demanda
 
 Cruze sempre: Google Trends (momento) + Planejador (volume/CPC) + vendas/ranking do marketplace +
