@@ -127,18 +127,18 @@ def test_a_product_added_by_hand_enters_without_being_in_the_portfolio(session):
 def test_the_public_snapshot_leaks_no_internal_data(session):
     product = _product(session, 1)
     _item(session, product)
-    sf.upsert_item(session, product.id, display_title="Garrafa Rabbit", category="Casa e cozinha",
+    sf.upsert_item(session, product.id, display_title="Garrafa Rabbit", category="Casa",
                    blurb="Mantém gelado o dia todo.", highlight=True)
     snap = sf.build_snapshot(session)
     item_text = json.dumps(snap["items"], ensure_ascii=False)
     for secret in ("commission", "51.5", "score", "portfolio", "PORTFOLIO_ACTIVE", "external_id", "source"):
         assert secret not in item_text, secret
     item = snap["items"][0]
-    assert item["title"] == "Garrafa Rabbit" and item["category"] == "Casa e cozinha" and item["highlight"] is True
+    assert item["title"] == "Garrafa Rabbit" and item["category"] == "Casa" and item["highlight"] is True
     assert item["price"] == 50.0 and item["original_price"] == 70.0 and item["price_date"] == "2026-10-22"
     assert item["rating"] == 4.8 and item["sold"] == 120 and item["marketplace_name"] == "Shopee"
     disclosure = snap["store"]["disclosure"]
-    assert "comissão" in disclosure and "marketplace" in disclosure  # o aviso de afiliado sempre vai junto
+    assert "comissão" in disclosure and "parceiros oficiais" in disclosure  # o aviso de afiliado sempre vai junto, sem sugerir parceria oficial
 
 
 def test_titles_and_categories_are_tidied():
@@ -147,10 +147,13 @@ def test_titles_and_categories_are_tidied():
     assert len(cleaned) <= 85 and cleaned.endswith("…") and "  " not in cleaned
     assert sf.guess_category("Tapete Higiênico para Cachorro 50 Unid") == "Pet"  # Pet vence "tapete"
     assert sf.guess_category("Luminária UV LED para unhas") == "Beleza"
-    assert sf.guess_category("Calça Legging Fitness") == "Moda fitness"
+    assert sf.guess_category("Calça Legging Fitness") == "Moda"
     assert sf.guess_category("Fone de Ouvido Bluetooth") == "Eletrônicos"
-    assert sf.guess_category("Copo Térmico") == "Casa e cozinha"
+    assert sf.guess_category("Copo Térmico") == "Casa"
+    assert sf.guess_category("Controle Gamer sem fio") == "Games"
     assert sf.guess_category("Coisa qualquer") == "Achados diversos"
+    assert sf.guess_category("Qualquer nome", "hotmart") == "Cursos"  # plataformas digitais viram Cursos
+    assert sf.guess_category("Curso de Excel Completo") == "Cursos"
 
 
 def test_invalid_category_and_missing_product_are_rejected(session):
@@ -236,4 +239,29 @@ def test_the_integration_card_hides_the_token_and_tests_the_connection(session, 
 def test_store_name_and_tagline_have_defaults_and_can_change(session):
     assert sf.get_meta(session)["name"] == "Mural na Web"
     sf.set_meta(session, name="  Garimpo  ", tagline=None, actor="x")
-    assert sf.get_meta(session) == {"name": "Garimpo", "tagline": sf.DEFAULT_TAGLINE}
+    meta = sf.get_meta(session)
+    assert meta["name"] == "Garimpo" and meta["tagline"] == sf.DEFAULT_TAGLINE and meta["socials"] == {}
+
+
+def test_social_links_must_be_https_and_known(session):
+    sf.set_meta(session, name=None, tagline=None, actor="x",
+                socials={"instagram": "https://instagram.com/muralnaweb", "youtube": "", "whatsapp": "https://chat.whatsapp.com/abc"})
+    assert sf.get_meta(session)["socials"] == {"instagram": "https://instagram.com/muralnaweb", "whatsapp": "https://chat.whatsapp.com/abc"}
+    with pytest.raises(sf.StorefrontError, match="https://"):
+        sf.set_meta(session, name=None, tagline=None, actor="x", socials={"facebook": "javascript:alert(1)"})
+    with pytest.raises(sf.StorefrontError, match="rede desconhecida"):
+        sf.set_meta(session, name=None, tagline=None, actor="x", socials={"orkut": "https://orkut.com/x"})
+
+
+def test_sensitive_products_never_enter_the_store_and_cannot_be_forced(session):
+    ok = _product(session, 1, title="Garrafa Térmica Inox")
+    sensitive = [_product(session, 10 + i, title=t) for i, t in enumerate((
+        "Destruidor de Ejaculação Precoce", "Super Gel Volumão Super Aumento Peniano", "Libid Gel Men", "Maca X Power Potência Sexual"))]
+    for p in [ok, *sensitive]:
+        _item(session, p)
+    for p in sensitive:
+        sf.upsert_item(session, p.id, hidden=False, highlight=True)  # tentar "forçar" não adianta
+    admin = sf.list_admin(session)
+    reasons = {r["product_id"]: r["reason"] for r in admin["items"] if not r["eligible"]}
+    assert set(reasons) == {p.id for p in sensitive} and all("sensível" in r for r in reasons.values())
+    assert [i["id"] for i in sf.build_snapshot(session)["items"]] == [f"p{ok.id}"]

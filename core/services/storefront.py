@@ -39,23 +39,36 @@ CHANNEL = "vitrine"  # canal dos links curtos da loja: cliques da loja aparecem 
 TIMEOUT = 30
 
 DEFAULT_NAME = "Mural na Web"
-DEFAULT_TAGLINE = "O mural dos achados que valem o clique, escolhidos a dedo na Shopee e no Mercado Livre."
+DEFAULT_TAGLINE = "Boas descobertas começam aqui."
+DEFAULT_SUBTITLE = "Produtos selecionados, ofertas interessantes e oportunidades digitais em um só lugar."
+SOCIAL_KEYS = ("facebook", "instagram", "youtube", "whatsapp", "telegram", "tiktok")
 DISCLOSURE = (
-    "O Mural na Web participa dos programas de afiliados da Shopee e do Mercado Livre e pode receber uma comissão "
-    "pelas compras feitas pelos links desta página, sem custo extra para você. A compra, o pagamento e a entrega são "
-    "feitos no marketplace. Preços e disponibilidade são os vistos no dia indicado e podem mudar: confira antes de comprar."
+    "O Mural na Web participa de programas de afiliados de plataformas como Shopee, Mercado Livre, Hotmart, Eduzz e Monetizze "
+    "e pode receber uma comissão pelas compras feitas pelos links desta página, sem custo extra para você. Não somos loja "
+    "nem parceiros oficiais dessas plataformas: a compra, o pagamento e a entrega são feitos no site de cada uma. Preços e "
+    "disponibilidade são os vistos no dia indicado e podem mudar: confira antes de comprar."
 )
 
-CATEGORIES = ("Casa e cozinha", "Moda fitness", "Pet", "Eletrônicos", "Beleza", "Achados diversos")
-MARKETPLACE_NAMES = {"shopee": "Shopee", "mercado_livre": "Mercado Livre"}
+CATEGORIES = ("Eletrônicos", "Casa", "Moda", "Beleza", "Games", "Pet", "Cursos", "Achados diversos")
+MARKETPLACE_NAMES = {"shopee": "Shopee", "mercado_livre": "Mercado Livre", "hotmart": "Hotmart", "eduzz": "Eduzz",
+                     "monetizze": "Monetizze"}
+DIGITAL_PLATFORMS = ("hotmart", "eduzz", "monetizze")
 # A ordem importa: a primeira regra que casar vence ("tapete higiênico para cachorro" é Pet, não Casa).
 _CATEGORY_RULES = (
     ("Pet", ("cachorro", "cão", "gato", "pet", "coleira", "ração", "petisco", "arranhador")),
     ("Beleza", ("unha", "maquiagem", "cabelo", "creme", "batom", "esmalte", "skincare", "perfume", "hidratante")),
-    ("Eletrônicos", ("fone", "bluetooth", "carregador", "smartwatch", "cabo ", "caixa de som", "usb", "câmera", "mouse")),
-    ("Moda fitness", ("legging", "fitness", "academia", "short", "top ", "treino", "camiseta", "calça", "bermuda", "tênis", "tenis", "sapato")),
-    ("Casa e cozinha", ("copo", "garrafa", "térmic", "panela", "cozinha", "tapete", "organizador", "luminária", "pote", "prato")),
+    ("Games", ("game", "gamer", "console", "playstation", "xbox", "joystick", "controle de", "nintendo")),
+    ("Eletrônicos", ("fone", "bluetooth", "carregador", "smartwatch", "cabo ", "caixa de som", "usb", "câmera", "mouse", "fonte ")),
+    ("Moda", ("legging", "fitness", "academia", "short", "top ", "treino", "camiseta", "calça", "bermuda", "tênis", "tenis",
+              "sapato", "blusa", "vestido", "bolsa", "relógio")),
+    ("Casa", ("copo", "garrafa", "térmic", "panela", "cozinha", "tapete", "organizador", "luminária", "pote", "prato", "decoração")),
+    ("Cursos", ("curso", "ebook", "e-book", "treinamento", "mentoria", "método", "aprenda", "masterclass")),
 )
+
+# Conteúdo que a marca não promove (e que Facebook, Instagram, YouTube e Google restringem): fora da vitrine, sem exceção.
+_SENSITIVE = re.compile(
+    r"ejacula|pen[ií]an|p[eê]nis|libid|impot[eê]n|erec|ere[cç][aã]o|sexual|\bsexo\b|afrodis|er[oó]tic|vasodilatador|"
+    r"lubrificante [ií]ntimo|gel [ií]ntimo|aumento (do )?p", re.I)
 
 
 class StorefrontError(RuntimeError):
@@ -119,10 +132,13 @@ def check(cfg: StoreConfig) -> str:
 def get_meta(session: Session) -> dict:
     row = session.scalar(select(AppSetting).where(AppSetting.key == META_KEY))
     value = row.value if row else {}
-    return {"name": (value.get("name") or DEFAULT_NAME)[:60], "tagline": (value.get("tagline") or DEFAULT_TAGLINE)[:200]}
+    socials = {k: u for k, u in (value.get("socials") or {}).items() if k in SOCIAL_KEYS and str(u).startswith("https://")}
+    return {"name": (value.get("name") or DEFAULT_NAME)[:60], "tagline": (value.get("tagline") or DEFAULT_TAGLINE)[:200],
+            "subtitle": (value.get("subtitle") or DEFAULT_SUBTITLE)[:240], "socials": socials}
 
 
-def set_meta(session: Session, *, name: str | None, tagline: str | None, actor: str) -> dict:
+def set_meta(session: Session, *, name: str | None, tagline: str | None, actor: str, subtitle: str | None = None,
+             socials: dict | None = None) -> dict:
     row = session.scalar(select(AppSetting).where(AppSetting.key == META_KEY))
     if row is None:
         row = AppSetting(key=META_KEY, value={})
@@ -132,6 +148,19 @@ def set_meta(session: Session, *, name: str | None, tagline: str | None, actor: 
         value["name"] = name.strip()[:60]
     if tagline is not None:
         value["tagline"] = tagline.strip()[:200]
+    if subtitle is not None:
+        value["subtitle"] = subtitle.strip()[:240]
+    if socials is not None:
+        clean = {}
+        for key, url in socials.items():
+            url = str(url or "").strip()
+            if key not in SOCIAL_KEYS:
+                raise StorefrontError(f"rede desconhecida: {key}. Use {', '.join(SOCIAL_KEYS)}")
+            if url and not url.startswith("https://"):
+                raise StorefrontError(f"o endereço de {key} precisa começar com https://")
+            if url:
+                clean[key] = url[:300]
+        value["socials"] = clean
     row.value, row.updated_by, row.changed_at = value, actor[:64], datetime.now(UTC)
     session.flush()
     return get_meta(session)
@@ -140,7 +169,9 @@ def set_meta(session: Session, *, name: str | None, tagline: str | None, actor: 
 # --------------------------------------------------------------------- catálogo ------------
 
 
-def guess_category(title: str | None) -> str:
+def guess_category(title: str | None, marketplace: str | None = None) -> str:
+    if marketplace in DIGITAL_PLATFORMS:
+        return "Cursos"
     text = f" {(title or '').lower()} "
     for category, words in _CATEGORY_RULES:
         if any(w in text for w in words):
@@ -167,6 +198,8 @@ def _eligibility(product: Product, row: StorefrontItem | None, state: PortfolioS
     """`None` se o produto pode ir para a loja; senão o motivo, em português."""
     if row is not None and row.hidden:
         return "oculto na vitrine"
+    if _SENSITIVE.search(f"{product.title or ''} {row.display_title if row and row.display_title else ''}"):
+        return "conteúdo sensível (saúde sexual/adulto): fora da vitrine"
     if state == PortfolioState.PAUSED:
         return "pausado no portfólio"
     if not product.is_active:
@@ -199,7 +232,7 @@ def list_admin(session: Session) -> dict:
             "title": clean_title(product.title, 120), "display_title": row.display_title if row else None,
             "image": _first_image(product), "marketplace": product.marketplace.value,
             "price": product.price, "commission_pct": product.affiliate_commission_pct,
-            "category": (row.category if row and row.category else guess_category(product.title)),
+            "category": (row.category if row and row.category else guess_category(product.title, product.marketplace.value)),
             "category_is_guess": not (row and row.category),
             "blurb": row.blurb if row else None, "highlight": bool(row and row.highlight),
             "hidden": bool(row and row.hidden), "position": row.position if row else 0,
@@ -283,7 +316,7 @@ def build_snapshot(session: Session, *, create_links: bool = False) -> dict:
             "image": _first_image(product),
             "marketplace": product.marketplace.value,
             "marketplace_name": MARKETPLACE_NAMES.get(product.marketplace.value, product.marketplace.value),
-            "category": row.category if row and row.category else guess_category(product.title),
+            "category": row.category if row and row.category else guess_category(product.title, product.marketplace.value),
             "blurb": row.blurb if row and row.blurb else None,
             "price": round(float(price), 2) if price else None,
             "original_price": round(float(original), 2) if price and original and original > price else None,

@@ -25,6 +25,8 @@ class ItemUpdate(BaseModel):
 class MetaUpdate(BaseModel):
     name: str | None = None
     tagline: str | None = None
+    subtitle: str | None = None
+    socials: dict[str, str] | None = None  # facebook, instagram, youtube, whatsapp, telegram, tiktok (https://...)
 
 
 @router.get("", summary="Produtos da vitrine, o que pode ser publicado e o último envio")
@@ -66,7 +68,11 @@ def put_meta(
     principal: Principal = Depends(require("portfolio.manage")),
     session: Session = Depends(get_session),
 ) -> dict:
-    meta = storefront.set_meta(session, name=payload.name, tagline=payload.tagline, actor=principal.username)
+    try:
+        meta = storefront.set_meta(session, name=payload.name, tagline=payload.tagline, subtitle=payload.subtitle,
+                                   socials=payload.socials, actor=principal.username)
+    except StorefrontError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     record_action(session, principal, action="storefront.meta_updated", resource_type="storefront", detail=meta["name"])
     session.commit()
     return meta

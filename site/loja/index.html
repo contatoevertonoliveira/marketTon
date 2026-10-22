@@ -3,96 +3,136 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Achados do Felix: achados escolhidos na Shopee e no Mercado Livre</title>
-  <meta name="description" content="Uma seleção curada de produtos da Shopee e do Mercado Livre. Escolha, guarde na sacola e compre direto no marketplace oficial.">
-  <meta name="theme-color" content="#dc1928">
-  <meta property="og:title" content="Achados do Felix">
-  <meta property="og:description" content="Achados que valem o clique, escolhidos a dedo na Shopee e no Mercado Livre.">
+  <title>Mural na Web: achadinhos, ofertas e oportunidades selecionados</title>
+  <meta name="description" content="Boas descobertas começam aqui. Produtos selecionados da Shopee, Mercado Livre e plataformas digitais, com ofertas verificadas e links de afiliado identificados.">
+  <meta name="theme-color" content="#A71920">
+  <meta property="og:title" content="Mural na Web">
+  <meta property="og:description" content="Boas descobertas começam aqui. Achadinhos, ofertas e oportunidades selecionados.">
   <meta property="og:type" content="website">
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="preload" href="fonts/eb-garamond-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <meta property="og:image" content="img/og.jpg">
+  <link rel="icon" href="img/favicon-64.png" type="image/png">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="preload" href="fonts/montserrat.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="loja.css">
 </head>
 <body>
-  <a class="skip" href="#catalogo">Ir para os achados</a>
+  <a class="skip" href="#achados">Ir para os achados</a>
 
-  <header class="bar" id="bar">
-    <a class="mark" href="#topo" aria-label="Achados do Felix, voltar ao topo">Achados do Felix</a>
-    <nav class="bar-nav" aria-label="Seções">
-      <a href="#catalogo">Os achados</a>
-      <a href="#como">Como funciona</a>
-      <a href="#duvidas">Dúvidas</a>
-    </nav>
-    <button class="bag-btn" type="button" data-open-bag>Sacola <span class="bag-count" data-bag-count>0</span></button>
+  <header class="top" id="top">
+    <div class="top-in">
+      <a class="brand" href="#topo" aria-label="Mural na Web, voltar ao topo">
+        <img src="img/logo-96.png" srcset="img/logo-96.png 1x, img/logo-192.png 2x" width="56" height="56" alt="Mural na Web">
+      </a>
+      <form class="search search-top" role="search" data-search>
+        <label class="sr" for="busca-topo">Buscar achados</label>
+        <input id="busca-topo" type="search" name="q" placeholder="O que você quer achar?" autocomplete="off" enterkeyhint="search" data-q>
+        <button type="submit" class="btn btn-red">Buscar</button>
+      </form>
+      <nav class="top-nav" aria-label="Seções">
+        <a href="#achados">Achados</a>
+        <a href="#cursos" data-courses hidden>Cursos</a>
+        <a href="#como">Como funciona</a>
+      </nav>
+      <button class="mural-btn" type="button" data-open-bag aria-label="Abrir Meu mural">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 3l6 6-3 1-3.5 3.5.5 4.5-1.5 1.5-4-4-5 5-1-1 5-5-4-4L6 9.5l4.5.5L14 6.5z" fill="currentColor"/></svg>
+        <span class="mural-label">Meu mural</span>
+        <span class="count" data-bag-count>0</span>
+      </button>
+    </div>
   </header>
 
   <main id="topo">
-    <section class="hero" aria-label="Apresentação">
-      <div class="wall" id="wall" aria-hidden="true"></div>
-      <div class="panel">
-        <h1>Achados do Felix</h1>
-        <p class="panel-lead">O que vale o clique na Shopee e no Mercado Livre, escolhido a dedo.</p>
-        <a class="btn btn-light" href="#catalogo">Ver os achados</a>
-        <nav class="panel-nav" aria-label="Atalhos">
-          <a href="#como">Como funciona</a>
-          <a href="#duvidas">Dúvidas</a>
-          <a href="https://felixsystems.com.br/privacidade.html">Privacidade</a>
-          <button type="button" class="link-btn" data-open-bag>Sacola (<span data-bag-count>0</span>)</button>
-        </nav>
+    <section class="hero" aria-labelledby="titulo">
+      <div class="wrap hero-in">
+        <div class="hero-copy">
+          <h1 id="titulo">Boas descobertas começam aqui.</h1>
+          <p class="lead" id="subtitulo">Produtos selecionados, ofertas interessantes e oportunidades digitais em um só lugar.</p>
+          <form class="search search-hero" role="search" data-search>
+            <label class="sr" for="busca-hero">Buscar achados</label>
+            <input id="busca-hero" type="search" name="q" placeholder="O que você quer achar?" autocomplete="off" enterkeyhint="search" data-q>
+            <button type="submit" class="btn btn-red">Buscar</button>
+          </form>
+          <div class="chips" id="chips-hero" role="group" aria-label="Categorias"></div>
+          <p class="where">Garimpamos em Shopee, Mercado Livre, Hotmart, Eduzz e Monetizze.</p>
+        </div>
+        <div class="board" id="board" aria-label="Alguns achados em destaque"></div>
       </div>
     </section>
 
-    <section class="catalogue" id="catalogo" aria-labelledby="catalogo-titulo">
+    <section class="band" id="destaques" aria-labelledby="destaques-t" hidden>
       <div class="wrap">
-        <div class="section-head">
-          <h2 id="catalogo-titulo">Os achados</h2>
-          <p class="section-count" id="catalogo-total" aria-live="polite"></p>
+        <div class="head"><h2 id="destaques-t">Ofertas em destaque</h2><p class="sub" id="destaques-sub"></p></div>
+        <div class="rail" id="trilho"></div>
+      </div>
+    </section>
+
+    <section class="feed" id="achados" aria-labelledby="achados-t">
+      <div class="wrap">
+        <div class="head"><h2 id="achados-t">Todos os achados</h2><p class="sub" id="achados-total" aria-live="polite"></p></div>
+        <div class="tools">
+          <div class="chips" id="chips" role="group" aria-label="Filtrar por categoria"></div>
+          <div class="selects">
+            <label>Preço
+              <select id="f-preco"><option value="">Qualquer</option><option value="30">Até R$ 30</option><option value="60">Até R$ 60</option><option value="100">Até R$ 100</option><option value="200">Até R$ 200</option></select>
+            </label>
+            <label>Ordem
+              <select id="f-ordem"><option value="">Em destaque</option><option value="menor">Menor preço</option><option value="desconto">Maior desconto</option><option value="vendas">Mais vendidos</option></select>
+            </label>
+          </div>
         </div>
-        <nav class="index" id="indice" aria-label="Categorias"></nav>
-        <div id="categorias">
-          <p class="state" id="estado">Carregando os achados…</p>
-        </div>
+        <div class="cards" id="cards"><p class="state">Carregando os achados…</p></div>
+        <div class="more"><button type="button" class="btn btn-ink" id="mais" hidden>Ver mais achados</button></div>
         <noscript><p class="state">Esta vitrine precisa de JavaScript para mostrar os achados. Ative-o e recarregue a página.</p></noscript>
       </div>
     </section>
 
-    <section class="how" id="como" aria-labelledby="como-titulo">
-      <div class="wrap how-grid">
-        <h2 id="como-titulo">Como funciona</h2>
-        <div class="stage s1">
-          <div class="stage-art"><img data-stage alt="" width="400" height="400"></div>
-          <h3>Garimpado</h3>
-          <p>A gente procura nos marketplaces e fica só com o que tem boa avaliação e preço que faz sentido.</p>
-        </div>
-        <div class="stage s2">
-          <div class="stage-art"><img data-stage alt="" width="400" height="400"></div>
-          <h3>Guardado</h3>
-          <p>Você marca o que gostou na sacola. Ela fica no seu aparelho e não pede cadastro.</p>
-        </div>
-        <div class="stage s3">
-          <div class="stage-art"><img data-stage alt="" width="400" height="400"></div>
-          <h3>Na sua casa</h3>
-          <p>Cada achado abre direto na Shopee ou no Mercado Livre. Pagamento, entrega e troca são com eles.</p>
-        </div>
+    <section class="band" id="cursos" aria-labelledby="cursos-t" hidden>
+      <div class="wrap">
+        <div class="head"><h2 id="cursos-t">Cursos e conhecimento</h2><p class="sub">Oportunidades para aprender, de plataformas como Hotmart, Eduzz e Monetizze.</p></div>
+        <div class="cards" id="cards-cursos"></div>
       </div>
     </section>
 
-    <section class="faq" id="duvidas" aria-labelledby="duvidas-titulo">
-      <div class="wrap faq-grid">
-        <h2 id="duvidas-titulo">Dúvidas</h2>
+    <section class="follow" id="siga" aria-labelledby="siga-t" hidden>
+      <div class="wrap follow-in">
+        <div class="follow-copy">
+          <h2 id="siga-t">Ofertas novas toda semana no canal e nas redes.</h2>
+          <p>Siga o Mural na Web para ver os achados em vídeo e não perder as oportunidades do dia.</p>
+          <div class="socials" id="redes"></div>
+        </div>
+        <img class="follow-img" src="img/banner.webp" width="1672" height="941" loading="lazy" alt="Mural na Web: achadinhos com as melhores ofertas, com produtos de marketplaces e inscrição no canal">
+      </div>
+    </section>
+
+    <section class="how" id="como" aria-labelledby="como-t">
+      <div class="wrap how-in">
+        <h2 id="como-t">Como o Mural funciona</h2>
+        <ol class="steps">
+          <li><h3>A gente garimpa</h3><p>Procuramos nos marketplaces e plataformas digitais e ficamos só com o que tem boa avaliação, preço que faz sentido e procura real.</p></li>
+          <li><h3>Você compara e fixa</h3><p>Veja preço, nota e vendas, e fixe no seu mural o que gostou. A lista fica no seu aparelho, sem cadastro.</p></li>
+          <li><h3>Compra onde é seguro</h3><p>O botão leva direto à página do produto no marketplace. Pagamento, entrega e troca são com eles.</p></li>
+        </ol>
+        <p class="notice" id="aviso">Participamos de programas de afiliados e podemos receber comissão pelas compras feitas pelos links desta página, sem custo extra para você. Não somos loja nem parceiros oficiais dos marketplaces.</p>
+      </div>
+    </section>
+
+    <section class="faq" id="duvidas" aria-labelledby="duvidas-t">
+      <div class="wrap faq-in">
+        <h2 id="duvidas-t">Dúvidas</h2>
         <div class="faq-list">
           <details name="faq"><summary>Vocês vendem os produtos?</summary>
-            <p>Não. Mostramos produtos de outras lojas e levamos você até a página deles na Shopee ou no Mercado Livre. É lá que você compra, paga e acompanha a entrega.</p></details>
-          <details name="faq"><summary>Pago mais caro por comprar por aqui?</summary>
-            <p>Não. O preço é o mesmo do marketplace. Quando você compra pelo nosso link, o marketplace paga uma pequena comissão a nós, sem custo extra para você.</p></details>
-          <details name="faq"><summary>Os preços e o estoque são os mesmos do marketplace?</summary>
-            <p>O preço aqui é o que vimos no dia indicado em cada achado. Ele muda com frequência, então vale conferir na página do marketplace antes de finalizar.</p></details>
+            <p>Não. Mostramos produtos de outras lojas e levamos você até a página deles. É lá que você compra, paga e acompanha a entrega.</p></details>
+          <details name="faq"><summary>Pago mais caro por comprar pelo Mural?</summary>
+            <p>Não. O preço é o mesmo do marketplace. Quando você compra pelo nosso link, a plataforma paga uma pequena comissão ao Mural, sem custo extra para você.</p></details>
+          <details name="faq"><summary>Os preços são os mesmos do marketplace?</summary>
+            <p>O preço mostrado é o que vimos no dia indicado em cada achado. Ele muda com frequência, então confira na página do marketplace antes de finalizar.</p></details>
           <details name="faq"><summary>Como vocês escolhem os achados?</summary>
-            <p>Olhamos avaliação, quantidade de vendas, preço e se o produto está em alta. Não aceitamos pagamento para destacar um produto, e não inventamos avaliação.</p></details>
-          <details name="faq"><summary>A sacola funciona como um carrinho de compras?</summary>
-            <p>Ela é uma lista para você não perder os achados. Como a compra acontece no marketplace, cada item abre na loja de origem, e o carrinho e o pagamento de lá é que valem.</p></details>
+            <p>Olhamos avaliação, quantidade de vendas, preço e se o produto está em alta. Não inventamos avaliações e não destacamos produto por pagamento.</p></details>
+          <details name="faq"><summary>O que é o Meu mural?</summary>
+            <p>É a sua lista de achados fixados. Ela fica guardada no seu aparelho. Como a compra acontece no marketplace, cada item abre na loja de origem, onde valem o carrinho e o pagamento de lá.</p></details>
           <details name="faq"><summary>E se o produto chegar com problema?</summary>
-            <p>Troca, garantia e devolução são com o marketplace e o vendedor, seguindo as regras de cada um. Guarde o número do pedido e use o atendimento da Shopee ou do Mercado Livre.</p></details>
+            <p>Troca, garantia e devolução são com o marketplace e o vendedor, seguindo as regras de cada um. Guarde o número do pedido e use o atendimento da plataforma onde comprou.</p></details>
           <details name="faq"><summary>O que vocês guardam sobre mim?</summary>
             <p>Nada que identifique você: não usamos cookies de rastreamento nem pedimos cadastro. Contamos apenas o clique no link, sem IP. Detalhes na <a href="https://felixsystems.com.br/privacidade.html">política de privacidade</a>.</p></details>
         </div>
@@ -101,25 +141,28 @@
   </main>
 
   <footer class="foot">
-    <div class="foot-mark" id="marca" role="img" aria-label="Achados do Felix"></div>
-    <div class="wrap foot-body">
-      <div class="foot-links">
-        <a href="#catalogo">Os achados</a>
+    <div class="wrap foot-in">
+      <div class="foot-brand">
+        <img src="img/logo-192.png" width="120" height="120" loading="lazy" alt="Mural na Web">
+        <p>Achadinhos, ofertas e oportunidades. Boas descobertas começam aqui.</p>
+      </div>
+      <nav class="foot-links" aria-label="Rodapé">
+        <a href="#achados">Todos os achados</a>
         <a href="#como">Como funciona</a>
         <a href="#duvidas">Dúvidas</a>
         <a href="https://felixsystems.com.br/privacidade.html">Política de privacidade</a>
-      </div>
-      <p class="foot-note" id="aviso-afiliado">Participamos dos programas de afiliados da Shopee e do Mercado Livre e podemos receber comissão pelas compras feitas pelos links desta página, sem custo extra para você.</p>
-      <div class="foot-last">
-        <p>© <span id="ano">2026</span> Achados do Felix. Imagens e marcas dos produtos pertencem aos seus donos e aos marketplaces.</p>
-        <a class="btn btn-small" href="#topo">Voltar ao topo</a>
-      </div>
+      </nav>
+      <div class="foot-social" id="redes-rodape"></div>
+    </div>
+    <div class="wrap foot-note">
+      <p id="aviso-rodape">Participamos de programas de afiliados e podemos receber comissão pelas compras feitas pelos links desta página, sem custo extra para você. Não somos loja nem parceiros oficiais dos marketplaces.</p>
+      <p>© <span id="ano">2026</span> Mural na Web. Imagens e marcas dos produtos pertencem aos seus donos e às plataformas.</p>
     </div>
   </footer>
 
   <dialog id="produto" class="sheet" aria-labelledby="produto-titulo"></dialog>
   <dialog id="sacola" class="drawer" aria-labelledby="sacola-titulo"></dialog>
-  <div class="preview" id="previa" aria-hidden="true"><img alt="" width="240" height="240"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="loja.js" defer></script>
 </body>

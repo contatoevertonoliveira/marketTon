@@ -375,7 +375,7 @@ def storefront_update_item(product_id: int, category: str | None = None, blurb: 
 
     `blurb`: uma frase honesta (até 280 caracteres) sobre por que vale a pena — sem promessa de resultado nem avaliação inventada.
     `display_title`: nome curto e claro no lugar do título cheio de palavras-chave do marketplace.
-    `category`: Casa e cozinha, Moda fitness, Pet, Eletrônicos, Beleza ou Achados diversos. `highlight` destaca (bloco duplo).
+    `category`: Eletrônicos, Casa, Moda, Beleza, Games, Pet, Cursos ou Achados diversos. `highlight` destaca (bloco duplo).
     Só é publicado depois de `storefront_publish`.
     """
     return _run(lambda: _client.put(f"/storefront/items/{product_id}", {
