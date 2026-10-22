@@ -64,7 +64,7 @@ function OpportunityCard({ item, rank }) {
         <div style={{ fontWeight: 700, color: "#32325d", fontSize: 15 }}>{item.keyword}</div>
         <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
           {item.audience ? <Chip color="#5e72e4">{AUDIENCE[item.audience]} (inferido)</Chip> : <Chip>Público não identificado</Chip>}
-          {comp ? <Chip color={comp.color}>{comp.label} no Google</Chip> : <Chip>Concorrência —</Chip>}
+          {comp ? <Chip color={comp.color}>{comp.label} em anúncios</Chip> : <Chip>Concorrência —</Chip>}
         </div>
       </div>
       <Metric label="CPC" value={cpc} note={item.cpc_brl == null && item.cpc_usd != null ? "sem cotação p/ R$" : undefined} />

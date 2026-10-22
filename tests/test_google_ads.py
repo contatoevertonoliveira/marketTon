@@ -62,7 +62,9 @@ def test_config_normalizes_ids_and_reports_missing_fields():
 
     partial = GoogleAdsConfig.from_values({"client_id": "x"})
     assert not partial.is_complete()
-    assert "developer_token" in partial.missing()
+    assert "refresh_token" in partial.missing()
+    # O Google desativou o developer token em 9/9/2026: não é mais obrigatório.
+    assert "developer_token" not in partial.missing()
 
 
 def test_check_succeeds_and_reports_account_currency(monkeypatch):
@@ -135,6 +137,28 @@ def test_keyword_metrics_parses_volume_cpc_and_competition(monkeypatch):
     assert sent["headers"]["developer-token"] == "dev-token"
     assert sent["json"]["geoTargetConstants"] == [google_ads.BRAZIL_GEO]
     assert "login-customer-id" not in sent["headers"]
+
+
+def test_works_without_developer_token_and_omits_the_header(monkeypatch):
+    calls: list = []
+    _fake_google(monkeypatch, calls=calls)
+    values = {k: v for k, v in VALUES.items() if k != "developer_token"}
+    assert GoogleAdsConfig.from_values(values).is_complete()
+    GoogleAdsClient(GoogleAdsConfig.from_values(values)).check()
+    search = next(kw for url, kw in calls if url.endswith("googleAds:search"))
+    assert "developer-token" not in search["headers"]
+
+
+def test_surfaces_cloud_project_not_approved(monkeypatch):
+    body = {
+        "error": {
+            "message": "The Cloud project is not approved for production use.",
+            "details": [{"errors": [{"errorCode": {"authorizationError": "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION"}}]}],
+        }
+    }
+    _fake_google(monkeypatch, search=_Resp(403, body))
+    with pytest.raises(GoogleAdsError, match="CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION"):
+        GoogleAdsClient(GoogleAdsConfig.from_values(VALUES)).check()
 
 
 def test_manager_account_id_is_sent_as_login_customer(monkeypatch):

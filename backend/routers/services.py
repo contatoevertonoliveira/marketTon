@@ -29,7 +29,7 @@ SERVICES: dict[str, dict] = {
         "name": "Google Ads (Planejador de Palavras-chave)",
         "description": "Volume de busca mensal, CPC e concorrência no Google. O Trends não passa por aqui.",
         "fields": [
-            {"name": "developer_token", "label": "Developer Token (Central de API da conta MCC)", "secret": True},
+            {"name": "developer_token", "label": "Developer Token (opcional — o Google desativou em 09/09/2026)", "secret": True},
             {"name": "client_id", "label": "Client ID (OAuth)", "secret": False},
             {"name": "client_secret", "label": "Client Secret (OAuth)", "secret": True},
             {"name": "refresh_token", "label": "Refresh Token", "secret": True},

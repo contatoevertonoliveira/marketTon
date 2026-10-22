@@ -3,6 +3,11 @@
 Não é um marketplace; não implementa `MarketplaceAdapter`. Usa a interface REST
 (sem a biblioteca `google-ads`, que arrasta gRPC) com OAuth2 por refresh token.
 
+Autorização: desde 9/9/2026 o Google não exige mais developer token; o acesso
+(Teste, Exploração, Básico) é do projeto do Google Cloud das credenciais OAuth.
+Recusa de projeto sem acesso de produção volta como `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`
+(v25+) ou `ACTION_NOT_PERMITTED` (v24 e anteriores).
+
 Validação: o **fluxo OAuth** (refresh token -> access token) segue o endpoint
 padrão do Google e é testável sem developer token aprovado. A chamada
 `generateKeywordHistoricalMetrics` segue a documentação pública, mas **ainda não
@@ -23,11 +28,14 @@ logger = logging.getLogger(__name__)
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API_ROOT = "https://googleads.googleapis.com"
-DEFAULT_API_VERSION = "v23"
+DEFAULT_API_VERSION = "v25"
 BRAZIL_GEO = "geoTargetConstants/2076"
 PORTUGUESE = "languageConstants/1014"
 
-REQUIRED = ("developer_token", "client_id", "client_secret", "refresh_token", "customer_id")
+# O developer token foi desativado pelo Google em 9/9/2026: servidores o ignoram e o
+# nível de acesso passou a ser do projeto do Google Cloud. Continua aceito como
+# campo opcional (enviado só se preenchido) para contas/versões que ainda o usem.
+REQUIRED = ("client_id", "client_secret", "refresh_token", "customer_id")
 
 
 class GoogleAdsError(RuntimeError):
@@ -123,9 +131,10 @@ class GoogleAdsClient:
     def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         headers = {
             "Authorization": f"Bearer {self.access_token()}",
-            "developer-token": self.cfg.developer_token,
             "Content-Type": "application/json",
         }
+        if self.cfg.developer_token:
+            headers["developer-token"] = self.cfg.developer_token
         if self.cfg.login_customer_id:
             headers["login-customer-id"] = self.cfg.login_customer_id
         url = f"{API_ROOT}/{self.cfg.api_version}/customers/{self.cfg.customer_id}{path}"
