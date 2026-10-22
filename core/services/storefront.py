@@ -244,6 +244,7 @@ def list_admin(session: Session) -> dict:
     last = session.scalar(select(AppSetting).where(AppSetting.key == LAST_PUBLISH_KEY))
     return {
         "configured": cfg is not None, "public_url": cfg.public_url if cfg else None,
+        "feed_url": f"{cfg.public_url}/api/loja/feed.xml" if cfg else None,
         "meta": get_meta(session), "categories": list(CATEGORIES),
         "last_publish": last.value if last else None, "items": rows,
         "publishable": sum(1 for r in rows if r["eligible"]),

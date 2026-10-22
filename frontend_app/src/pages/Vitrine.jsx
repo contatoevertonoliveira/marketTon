@@ -166,6 +166,13 @@ export default function Vitrine() {
           </button>
         </div>
         {msg && <div style={{ marginTop: 10, fontSize: 12, padding: "8px 10px", borderRadius: 8, color: msg.ok ? "#1a7a54" : "#c31e3f", background: msg.ok ? "#e5faf1" : "#fef1f4" }}>{msg.text}</div>}
+        {data.feed_url && (
+          <div style={{ marginTop: 10, fontSize: 12, color: "#525f7f", background: "#f6f9fc", borderRadius: 8, padding: "8px 10px" }}>
+            <strong>Feed para o Facebook e o Instagram (Catálogo da Meta):</strong>{" "}
+            <a href={data.feed_url} target="_blank" rel="noreferrer" style={{ color: "#5e72e4", wordBreak: "break-all" }}>{data.feed_url}</a>
+            <div style={{ color: "#8898aa", marginTop: 3 }}>No Commerce Manager: Catálogo → Fontes de dados → Feed de dados → URL programado (a cada hora ou dia). Cada produto abre a página dele na loja, que leva ao link de afiliado.</div>
+          </div>
+        )}
         <div style={{ fontSize: 11, color: "#8898aa", marginTop: 10 }}>
           Entram todos os itens do portfólio (menos pausados), mais o que você adicionar aqui. Comissão, custo e pontuação nunca vão para a loja.
           Produtos de saúde sexual ou adulto são bloqueados e não podem ser liberados.

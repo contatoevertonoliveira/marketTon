@@ -79,7 +79,7 @@
   }
 
   async function share(it) {
-    const url = `${location.origin}${location.pathname}#${it.id}`;
+    const url = `${location.origin}/p/${it.id}`; // página própria do produto: tem prévia no Facebook, Instagram e WhatsApp
     try {
       if (navigator.share) { await navigator.share({ title: it.title, text: `${it.title} no Mural na Web`, url }); return; }
       await navigator.clipboard.writeText(url);
