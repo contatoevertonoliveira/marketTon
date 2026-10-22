@@ -13,7 +13,8 @@ credenciais nem usuários, e não edita anúncios dos marketplaces nem campanhas
 API do marketTon não expõe essas ações. Quando uma capacidade for criada na API,
 ela vira uma ferramenta aqui.
 """
-from __future__ import annotations
+# Sem `from __future__ import annotations` de propósito: versões antigas do SDK do MCP (1.12 e anteriores)
+# examinam a anotação dos parâmetros das ferramentas e quebram quando ela vira texto ("str | None").
 
 from collections.abc import Callable
 from pathlib import Path
@@ -61,7 +62,7 @@ def _slim(product: dict) -> dict:
     return {k: product.get(k) for k in _PRODUCT_FIELDS if k in product}
 
 
-def _run(fn: Callable[[], Any]) -> Any:
+def _run(fn: Callable[[], Any]):
     """Executa a chamada e transforma erro da API em texto que o agente entende."""
     try:
         return fn()
@@ -80,13 +81,13 @@ def _run(fn: Callable[[], Any]) -> Any:
 
 
 @mcp.tool(annotations=READ)
-def marketton_status() -> Any:
+def marketton_status():
     """Estado geral: modo agente, integrações (sem segredos) e contagens de catálogo, portfólio e vendas."""
     return _run(lambda: _client.get("/agent/status"))
 
 
 @mcp.tool(annotations=READ)
-def marketton_checklist() -> Any:
+def marketton_checklist():
     """O que falta fazer para vender: lacunas objetivas, da mais à menos grave, com como resolver."""
     return _run(lambda: _client.get("/agent/checklist"))
 
@@ -97,10 +98,10 @@ def list_products(
     search: str | None = None,
     min_commission_pct: float | None = None,
     limit: int = 20,
-) -> Any:
+):
     """Produtos do catálogo (sugeridos). `marketplace`: mercado_livre | shopee. `search` filtra pelo título."""
 
-    def go() -> Any:
+    def go():
         rows = _client.get(
             "/catalog/products", marketplace=marketplace, search=search,
             min_commission_pct=min_commission_pct, limit=max(1, min(limit, 100)),
@@ -112,13 +113,13 @@ def list_products(
 
 
 @mcp.tool(annotations=READ)
-def get_product(product_id: int) -> Any:
+def get_product(product_id: int):
     """Detalhe de um produto do catálogo (preço, vendedor, comissão, sinais de demanda)."""
     return _run(lambda: _slim(_client.get(f"/catalog/products/{product_id}")))
 
 
 @mcp.tool(annotations=READ)
-def product_funnel(product_id: int, keyword: str | None = None, conversion_pct: float = 1.5) -> Any:
+def product_funnel(product_id: int, keyword: str | None = None, conversion_pct: float = 1.5):
     """Funil de venda do produto: Google Trends + Google Ads (volume, CPC, disputa) + economia da comissão.
 
     Devolve dois vereditos separados: `demand_verdict` (o produto tem procura?) e `ads_verdict`
@@ -130,44 +131,44 @@ def product_funnel(product_id: int, keyword: str | None = None, conversion_pct: 
 
 
 @mcp.tool(annotations=READ)
-def search_opportunities(keywords: list[str] | None = None, limit: int = 5) -> Any:
+def search_opportunities(keywords: list[str] | None = None, limit: int = 5):
     """Oportunidades de busca: tendência do Google Trends (+ volume/CPC/disputa se o Google Ads estiver conectado)."""
     return _run(lambda: _client.get(
         "/trends/opportunities", keywords=",".join(keywords) if keywords else None, limit=limit))
 
 
 @mcp.tool(annotations=READ)
-def trending_abroad(sites: str = "MLM,MCO,MLC", limit_per_site: int = 10) -> Any:
+def trending_abroad(sites: str = "MLM,MCO,MLC", limit_per_site: int = 10):
     """Mais vendidos de México, Colômbia e Chile no Mercado Livre, com correspondência no catálogo brasileiro."""
     return _run(lambda: _client.get("/catalog/trending-abroad", sites=sites, limit_per_site=limit_per_site))
 
 
 @mcp.tool(annotations=READ)
-def sales_performance(marketplace: str | None = None) -> Any:
+def sales_performance(marketplace: str | None = None):
     """Vendas, receita e comissão (confirmada x pendente) por produto afiliado. Cliques não são rastreados."""
     return _run(lambda: _client.get("/performance/products", marketplace=marketplace))
 
 
 @mcp.tool(annotations=READ)
-def list_portfolio(marketplace: str | None = None) -> Any:
+def list_portfolio(marketplace: str | None = None):
     """Produtos já vinculados à conta, com o estado de cada um no funil de afiliação."""
     return _run(lambda: _client.get("/portfolio/items", marketplace=marketplace, limit=200))
 
 
 @mcp.tool(annotations=READ)
-def commission_proposals(marketplace: str | None = None, min_sales: int = 1) -> Any:
+def commission_proposals(marketplace: str | None = None, min_sales: int = 1):
     """Produtos sem comissão que já venderam, com a taxa observada nas vendas (não grava nada)."""
     return _run(lambda: _client.get("/agent/commissions/proposals", marketplace=marketplace, min_sales=min_sales))
 
 
 @mcp.tool(annotations=READ)
-def daily_review() -> Any:
+def daily_review():
     """Revisão diária em uma chamada: status, checklist, comissões aprendíveis e vendas por marketplace.
 
     Pensada para rodar todo dia (agendada ou manual) e abrir a conversa com um resumo do que importa.
     """
 
-    def go() -> Any:
+    def go():
         status = _client.get("/agent/status")
         checklist = _client.get("/agent/checklist")
         commissions = _client.get("/agent/commissions/proposals")
@@ -196,7 +197,7 @@ def daily_review() -> Any:
 
 
 @mcp.tool(annotations=WRITE)
-def add_to_portfolio(product_id: int, notes: str | None = None) -> Any:
+def add_to_portfolio(product_id: int, notes: str | None = None):
     """Vincula um produto do catálogo ao portfólio (estado inicial). EXIGE o modo agente ligado.
 
     Use depois de conferir o `product_funnel`; explique ao usuário o motivo da escolha.
@@ -206,7 +207,7 @@ def add_to_portfolio(product_id: int, notes: str | None = None) -> Any:
 
 
 @mcp.tool(annotations=WRITE)
-def move_portfolio_item(item_id: int, to_state: str, reason: str) -> Any:
+def move_portfolio_item(item_id: int, to_state: str, reason: str):
     """Move um item do portfólio para outro estado (ex.: AFFILIATION_PENDING, AFFILIATED, PAUSED, REMOVED).
 
     EXIGE o modo agente ligado. `reason` é obrigatório e vai para a trilha de auditoria. A API valida a
@@ -222,7 +223,7 @@ def set_manual_signals(
     affiliate_count: int | None = None,
     affiliate_count_period: str | None = None,
     manual_stock: int | None = None,
-) -> Any:
+):
     """Registra nº de afiliados (período: total | semana | mes) e estoque de um produto. EXIGE o modo agente ligado.
 
     São dados lidos no app de afiliados, que nenhuma API expõe: só registre o que o usuário informou.
@@ -233,7 +234,7 @@ def set_manual_signals(
 
 
 @mcp.tool(annotations=WRITE)
-def apply_observed_commissions(marketplace: str | None = None, min_sales: int = 1) -> Any:
+def apply_observed_commissions(marketplace: str | None = None, min_sales: int = 1):
     """Preenche a comissão dos produtos que não têm, usando a taxa observada nas vendas. EXIGE o modo agente ligado.
 
     Nunca sobrescreve comissão vinda da API ou digitada pelo operador. Mostre antes `commission_proposals`.
@@ -256,19 +257,19 @@ def agent_playbook() -> str:
 
 
 @mcp.tool(annotations=READ)
-def chat_inbox() -> Any:
+def chat_inbox():
     """Mensagens novas do operador e do sistema + tarefas abertas (ex.: rotina de ativação). Marca como lido."""
     return _run(lambda: _client.get("/agent/chat/inbox"))
 
 
 @mcp.tool(annotations=WRITE)
-def chat_send(text: str, kind: str = "message") -> Any:
+def chat_send(text: str, kind: str = "message"):
     """Escreve no chat do operador. `kind`: message (conversa) ou report (relatório curto). Funciona mesmo com o modo agente desligado."""
     return _run(lambda: _client.post("/agent/chat", {"text": text, "kind": kind if kind in ("message", "report") else "message"}))
 
 
 @mcp.tool(annotations=WRITE)
-def request_resource(resource: str, why: str, how_to_provide: str) -> Any:
+def request_resource(resource: str, why: str, how_to_provide: str):
     """Pede ao operador um recurso, acesso ou ferramenta que falta (aparece como cartão no chat).
 
     `resource`: o que precisa (ex.: "Chave da API do AI Studio"). `why`: o que isso destrava. `how_to_provide`:
@@ -280,25 +281,25 @@ def request_resource(resource: str, why: str, how_to_provide: str) -> Any:
 
 
 @mcp.tool(annotations=WRITE)
-def complete_task(task_id: int) -> Any:
+def complete_task(task_id: int):
     """Marca como concluída uma tarefa da caixa de entrada (ex.: a rotina de ativação), depois de postar o relatório."""
     return _run(lambda: _client.request("PATCH", f"/agent/chat/{task_id}", json={"status": "done"}))
 
 
 @mcp.tool(annotations=READ)
-def system_health() -> Any:
+def system_health():
     """Saúde do sistema: banco, frescor do catálogo e das vendas, integrações, jobs com falha e pedidos abertos."""
     return _run(lambda: _client.get("/agent/health"))
 
 
 @mcp.tool(annotations=READ)
-def capabilities() -> Any:
+def capabilities():
     """O que está pronto, o que falta o operador configurar e o que ainda não foi construído (base para pedir recursos)."""
     return _run(lambda: _client.get("/agent/capabilities"))
 
 
 @mcp.tool(annotations=WRITE)
-def sync_sales(since_days: int = 30) -> Any:
+def sync_sales(since_days: int = 30):
     """Busca as vendas dos marketplaces, aprende comissão e avisa cada venda nova no chat. EXIGE o modo agente ligado."""
     return _run(lambda: _client.post("/agent/sales/sync", since_days=since_days))
 

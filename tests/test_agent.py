@@ -644,3 +644,15 @@ def test_agent_actions_are_signed_with_its_own_username_whatever_the_body_says(a
     moved = api.post(f"/portfolio/items/{item_id}/transition",
                      json={"to_state": "ANALYZING", "actor": "everton", "reason": "vou testar"}, headers=agent)
     assert moved.status_code == 200 and moved.json()["actor"] == "agente"
+
+
+def test_mcp_server_module_keeps_real_annotations_for_old_sdk_versions():
+    """O SDK do MCP 1.12 e anterior quebra com anotações em texto; foi o que derrubou o servidor na máquina do operador."""
+    import inspect
+
+    from mcp_server import server
+
+    source = inspect.getsource(server)
+    assert not any(line.strip() == "from __future__ import annotations" for line in source.splitlines())
+    assert all(not isinstance(p.annotation, str) for fn in (server.list_products, server.product_funnel, server.request_resource)
+               for p in inspect.signature(fn).parameters.values())
