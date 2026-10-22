@@ -40,6 +40,14 @@ Publicação (quando a integração existir): no máximo **1 post pela manhã (�
 (≈ 19h–21h)**, com horário variando dentro da janela. Antes disso, entregue o conteúdo pronto no
 chat para o operador publicar.
 
+## 2.05 Metas (o seu placar)
+
+O operador define metas mensais (produtos na vitrine, posts, cliques, vendas, comissão). `goals_status` mostra o realizado, o
+ritmo esperado e a projeção. Em toda rotina: (1) leia o placar; (2) escolha **as ações que mais fecham a meta mais atrasada**
+(ex.: poucos produtos na vitrine → monte e publique; poucos cliques → mais ângulos e canais com links `vitrine`/redes); (3) diga
+no resumo do chat o número de cada meta e o que fará para recuperar as atrasadas. Você não muda as metas e não infla número:
+meta batida é o que o sistema mediu. Metas marcadas como *sugeridas* ainda não foram confirmadas pelo operador.
+
 ## 2.1 Economia (cada token custa)
 
 O operador paga cada rodada. Leia só a seção do manual de que precisa (`agent_playbook` com `section`), chame cada
@@ -94,7 +102,10 @@ A loja pública mostra os produtos do portfólio para quem vem das redes. Você 
 1. `storefront_status` — o que está na loja e o que ficou de fora (e o motivo).
 2. Para cada produto novo: `storefront_update_item` com nome curto (`display_title`), categoria e **uma** frase honesta
    (`blurb`). Sem promessa de resultado, sem avaliação inventada, sem preço ou estoque que você não viu.
-3. `storefront_publish` ao fim da rotina da manhã se algo mudou. Nada vai ao ar sem publicar.
+3. **Vitrine inicial / abastecer:** se há poucos produtos (veja `goals_status`), escolha no catálogo os de melhor nota, mais
+   vendas e comissão válida (`product_funnel`; nada de oferta `sem_oferta`/`expirada`, nada sensível) e adicione com
+   `storefront_update_item` (basta o `product_id`: ele entra na vitrine), com nome curto, categoria e uma frase honesta.
+4. `storefront_publish` ao fim da rotina da manhã se algo mudou. Nada vai ao ar sem publicar.
 O link da loja é o link curto rastreado (canal `vitrine`): os cliques da loja entram em `sync_clicks`. Comissão e custos
 nunca aparecem na loja. A compra e o pagamento acontecem no marketplace.
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { getJSON, patchJSON, postJSON } from "../lib/apiClient";
+import { getJSON, patchJSON, postJSON, putJSON } from "../lib/apiClient";
 
 const card = { background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)" };
 const STATUS = {
@@ -147,11 +147,71 @@ function RuntimePanel() {
   );
 }
 
+function GoalsPanel() {
+  const [g, setG] = useState(null);
+  const [canManage, setCanManage] = useState(false);
+  const [edit, setEdit] = useState(null);
+  const [msg, setMsg] = useState("");
+  const load = useCallback(() => getJSON("/agent/goals").then(setG).catch(() => {}), []);
+  useEffect(() => {
+    load();
+    getJSON("/auth/me").then((me) => setCanManage(!!me.permissions?.includes("users.manage"))).catch(() => {});
+  }, [load]);
+  if (!g) return null;
+  const COLORS = { adiantada: "#2dce89", no_ritmo: "#5e72e4", atrasada: "#f5365c", sem_meta: "#adb5bd" };
+  const LABELS = { adiantada: "adiantada", no_ritmo: "no ritmo", atrasada: "atrasada", sem_meta: "sem meta" };
+  const fmt = (m, v) => (m.unit === "R$" ? Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : Number(v).toLocaleString("pt-BR"));
+  async function save() {
+    setMsg("");
+    try {
+      const targets = Object.fromEntries(Object.entries(edit).map(([k, v]) => [k, Number(String(v).replace(",", "."))]));
+      setG(await putJSON("/agent/goals", { targets }));
+      setEdit(null);
+    } catch (e) { setMsg(e.message); }
+  }
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14 }}>Metas de {g.period}</div>
+        {canManage && !edit && <button onClick={() => setEdit(Object.fromEntries(g.metrics.map((m) => [m.key, m.target])))} style={{ border: "none", background: "transparent", color: "#5e72e4", fontSize: 12, cursor: "pointer" }}>editar</button>}
+      </div>
+      <div style={{ fontSize: 11, color: "#8898aa", marginBottom: 8 }}>{g.summary} Faltam {g.days_left} dia(s) no mês.</div>
+      {g.metrics.map((m) => (
+        <div key={m.key} style={{ padding: "6px 0", fontSize: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+            <strong style={{ color: "#32325d" }}>{m.label}{m.suggested ? " (sugerida)" : ""}</strong>
+            <span style={{ color: COLORS[m.status], fontWeight: 700 }}>{LABELS[m.status]}</span>
+          </div>
+          {edit ? (
+            <input value={edit[m.key]} onChange={(e) => setEdit({ ...edit, [m.key]: e.target.value })} style={{ width: "100%", boxSizing: "border-box", marginTop: 4, padding: "4px 8px", border: "1px solid #dee2e6", borderRadius: 6 }} />
+          ) : (
+            <>
+              <div style={{ height: 6, background: "#eef0f6", borderRadius: 999, margin: "5px 0", position: "relative" }}>
+                <div style={{ width: `${Math.min(100, m.pct || 0)}%`, height: "100%", background: COLORS[m.status], borderRadius: 999 }} />
+                {m.expected_pct < 100 && <div title="ritmo esperado hoje" style={{ position: "absolute", left: `${m.expected_pct}%`, top: -3, width: 2, height: 12, background: "#32325d" }} />}
+              </div>
+              <div style={{ color: "#8898aa" }}>{fmt(m, m.current)} de {fmt(m, m.target)}{m.projection != null ? ` · projeção do mês: ${fmt(m, m.projection)}` : ""}</div>
+            </>
+          )}
+        </div>
+      ))}
+      {edit && (
+        <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+          <button onClick={save} style={{ border: "none", background: "#2dce89", color: "#fff", borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer" }}>Salvar metas</button>
+          <button onClick={() => setEdit(null)} style={{ border: "none", background: "transparent", color: "#8898aa", fontSize: 12, cursor: "pointer" }}>cancelar</button>
+          {msg && <span style={{ fontSize: 11, color: "#c31e3f" }}>{msg}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SidePanel({ caps, health }) {
   const [open, setOpen] = useState(true);
   return (
     <div style={{ display: "grid", gap: 14, alignContent: "start" }}>
       <RuntimePanel />
+      <GoalsPanel />
       <div style={card}>
         <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14, marginBottom: 8 }}>
           Saúde do sistema{" "}

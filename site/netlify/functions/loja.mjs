@@ -10,7 +10,7 @@ const json = (body, status = 200, extra = {}) =>
 
 // Só o HASH SHA-256 do token fica no código (o marketTon guarda o token em Integrações > Vitrine pública).
 // Para trocar: gere outro token, troque este hash e publique de novo. `LOJA_ADMIN_TOKEN_SHA256` tem prioridade, se existir.
-const TOKEN_SHA256 = "__TOKEN_SHA256__";
+const TOKEN_SHA256 = "0204dd295ec43202d943a60f05efd3a0304028d54a103fff94a3f77033bf27c0";
 
 async function authorized(req) {
   const given = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");

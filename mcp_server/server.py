@@ -359,6 +359,16 @@ def sync_clicks():
 
 
 @mcp.tool(annotations=READ)
+def goals_status():
+    """As metas do mês definidas pelo operador e o quanto já foi feito (produtos na vitrine, posts, cliques, vendas, comissão).
+
+    Mostra o realizado, o ritmo esperado até hoje, a projeção para o fim do mês e quais metas estão atrasadas.
+    Consulte no começo de cada rotina e priorize o que fecha as metas atrasadas. Você não altera as metas: elas são do operador.
+    """
+    return _run(lambda: _client.get("/agent/goals"))
+
+
+@mcp.tool(annotations=READ)
 def storefront_status():
     """A vitrine pública (loja Mural na Web): produtos, categoria, o que pode ser publicado e por quê, último envio.
 

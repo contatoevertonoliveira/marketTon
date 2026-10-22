@@ -452,6 +452,35 @@ def sales_sync(
     return result
 
 
+# --- Metas ---------------------------------------------------------------------------------
+
+
+class GoalsUpdate(BaseModel):
+    targets: dict[str, float]
+
+
+@router.get("/goals", summary="Metas do mês e o quanto já foi feito")
+def get_goals(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
+    from core.services import agent_goals
+
+    return agent_goals.progress(session)
+
+
+@router.put("/goals", summary="Definir as metas do mês (só administrador: o agente persegue o número do operador)")
+def put_goals(payload: GoalsUpdate, principal: Principal = Depends(require("users.manage")),
+              session: Session = Depends(get_session)) -> dict:
+    from core.services import agent_goals
+
+    try:
+        agent_goals.set_targets(session, payload.targets, actor=principal.username)
+    except agent_goals.GoalsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_action(session, principal, action="agent.goals_set", resource_type="agent_goals",
+                  detail=", ".join(f"{k}={v:g}" for k, v in payload.targets.items()))
+    session.commit()
+    return agent_goals.progress(session)
+
+
 # --- Calibragem e autonomia ----------------------------------------------------------------
 
 

@@ -206,6 +206,8 @@ def _eligibility(product: Product, row: StorefrontItem | None, state: PortfolioS
         return "inativo no catálogo"
     if not (product.affiliate_url or "").startswith("https://"):
         return "sem link de afiliado"
+    if (product.attributes or {}).get("offer_not_found_at"):
+        return "a Shopee não devolve mais oferta de afiliado para este item"
     if not _first_image(product):
         return "sem foto"
     return None
