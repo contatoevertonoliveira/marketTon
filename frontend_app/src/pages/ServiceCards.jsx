@@ -122,7 +122,7 @@ function ServiceModal({ service, onClose, onSaved }) {
           {error && <div style={{ fontSize: 12, color: "#f5365c" }}>{error}</div>}
 
           <div style={{ fontSize: 11, color: "#8898aa", background: "#f6f9fc", padding: 10, borderRadius: 8 }}>
-            {service.service === "google_ads"
+            {service.help ? service.help : service.service === "google_ads"
               ? `O teste confirma o login OAuth e consulta a conta. O Developer Token não é mais necessário (o Google o
                 desativou em 09/09/2026); o acesso agora é do projeto do Google Cloud. Se o Google responder
                 "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION" (ou "ACTION_NOT_PERMITTED"), as credenciais estão certas e o

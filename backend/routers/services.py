@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from backend.deps import get_session
 from backend.security import require
 from core.db.service_credentials import ServiceCredential
-from core.services import link_shortener, storefront
+from core.services import ads_budget, link_shortener, meta_ads, storefront
 from integrations.google_ads import DEFAULT_API_VERSION, GoogleAdsClient, GoogleAdsConfig, GoogleAdsError
 
 router = APIRouter(
@@ -41,10 +41,44 @@ SERVICES: dict[str, dict] = {
             {"name": "api_version", "label": f"Versão da API (padrão {DEFAULT_API_VERSION})", "secret": False},
         ],
     },
+    "meta_ads": {
+        "icon": "📣",
+        "required": ["access_token", "ad_account_id", "page_id"],
+        "name": "Meta (Facebook, Instagram e Anúncios)",
+        "description": "Conecta o agente à Página do Mural na Web e à conta de anúncios para publicar, testar criativos e ler as métricas.",
+        "help": "Como pegar: (1) no Gerenciador de Negócios, crie um Usuário do sistema e dê a ele a Página e a conta de anúncios; "
+                "(2) gere o token com as permissões ads_management, ads_read e pages_read_engagement (escolha \"sem validade\"); "
+                "(3) cole o token aqui. O ID da conta de anúncios (act_…) fica no Gerenciador de Anúncios e o ID da Página em Sobre. "
+                "App ID e App Secret (opcionais) deixam o teste conferir as permissões. O teste só LÊ: nada é publicado nem gasto. "
+                "Criar campanhas e publicar posts vêm na próxima etapa, sempre dentro do orçamento definido em \"Orçamento de anúncios\".",
+        "fields": [
+            {"name": "access_token", "label": "Token de acesso do usuário do sistema", "secret": True},
+            {"name": "ad_account_id", "label": "ID da conta de anúncios (act_123… ou só os números)", "secret": False},
+            {"name": "page_id", "label": "ID da Página do Facebook (Mural na Web)", "secret": False},
+            {"name": "instagram_business_id", "label": "ID da conta profissional do Instagram (opcional)", "secret": False},
+            {"name": "app_id", "label": "ID do app da Meta (opcional, para conferir permissões)", "secret": False},
+            {"name": "app_secret", "label": "Chave secreta do app da Meta (opcional)", "secret": True},
+        ],
+    },
+    "ads_budget": {
+        "icon": "💰",
+        "required": ["weekly_brl", "daily_cap_brl"],
+        "name": "Orçamento de anúncios (travas de gasto)",
+        "description": "Quanto o agente pode gastar testando anúncios. Só você altera estes valores: o agente não tem acesso a este cartão.",
+        "help": "O agente propõe o plano da semana dentro destes limites e precisa da sua aprovação no chat antes de gastar. "
+                "Campanha nova sempre nasce pausada. O teto por dia não pode passar do valor da semana. \"Testar\" só confere os números.",
+        "fields": [
+            {"name": "weekly_brl", "label": "Valor por semana em R$ (ex.: 150)", "secret": False},
+            {"name": "daily_cap_brl", "label": "Teto por dia em R$ (ex.: 30)", "secret": False},
+            {"name": "max_products", "label": "Produtos testados por semana (padrão 3)", "secret": False},
+            {"name": "creatives_per_product", "label": "Criativos por produto (padrão 2)", "secret": False},
+        ],
+    },
     "storefront": {
         "icon": "🛍️",
         "required": ["base_url", "admin_token"],
         "name": "Vitrine pública (loja online)",
+        "help": "O teste confere o endereço e o token da vitrine. Depois de conectado, a página Vitrine do marketTon publica os produtos na loja.",
         "description": "A loja pública Mural na Web. O marketTon envia a ela a lista de "
                        "produtos escolhidos; ela fica no ar mesmo com o computador desligado.",
         "fields": [
@@ -57,6 +91,7 @@ SERVICES: dict[str, dict] = {
         "icon": "🔗",
         "required": ["base_url", "admin_token"],
         "name": "Encurtador de links (contador de cliques)",
+        "help": "O teste confere o endereço e o token junto ao redirecionador. Os links curtos ficam em endereço/r/código; cada clique de pessoa (não de robô) é contado sem guardar IP nem cookie.",
         "description": "Links curtos no seu domínio que contam os cliques das divulgações. O redirecionador roda no Netlify "
                        "(felixsystems.com.br/r/…), então conta mesmo com o computador desligado.",
         "fields": [
@@ -77,6 +112,7 @@ class ServiceStatusOut(BaseModel):
     name: str
     description: str
     icon: str = "🔌"
+    help: str = ""
     enabled: bool
     fields: list[dict[str, str | bool]]
     values_set: dict[str, bool]
@@ -101,6 +137,7 @@ def _status(service: str, row: ServiceCredential) -> ServiceStatusOut:
     return ServiceStatusOut(
         service=service,
         icon=meta["icon"],
+        help=meta.get("help", ""),
         name=meta["name"],
         description=meta["description"],
         enabled=row.enabled,
@@ -156,6 +193,10 @@ def test_service(service: str, session: Session = Depends(get_session)) -> Servi
     try:
         if service == "google_ads":
             message = GoogleAdsClient(GoogleAdsConfig.from_values(row.values)).check()
+        elif service == "meta_ads":
+            message = meta_ads.check(row.values or {})
+        elif service == "ads_budget":
+            message = ads_budget.check(row.values or {})
         elif service == "storefront":
             values = row.values or {}
             message = storefront.check(storefront.StoreConfig(
@@ -166,7 +207,8 @@ def test_service(service: str, session: Session = Depends(get_session)) -> Servi
             message = link_shortener.check(link_shortener.ShortenerConfig(
                 str(values.get("base_url") or "").strip().rstrip("/"), str(values.get("admin_token") or "").strip()))
         status = "ok"
-    except (GoogleAdsError, link_shortener.ShortenerError, storefront.StorefrontError) as exc:
+    except (GoogleAdsError, link_shortener.ShortenerError, storefront.StorefrontError, meta_ads.MetaError,
+            ads_budget.BudgetError) as exc:
         status, message = "error", str(exc)[:480]
     row.last_check_status = status
     row.last_check_message = message

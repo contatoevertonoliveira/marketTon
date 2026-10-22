@@ -77,6 +77,10 @@ def capabilities(session: Session) -> list[dict]:
 
     shortener = session.scalar(select(_SC).where(_SC.service == "link_shortener"))
     shortener_ok = bool(shortener and shortener.enabled and shortener.last_check_status == "ok")
+    meta = session.scalar(select(_SC).where(_SC.service == "meta_ads"))
+    meta_ok = bool(meta and meta.enabled and meta.last_check_status == "ok")
+    budget = session.scalar(select(_SC).where(_SC.service == "ads_budget"))
+    budget_ok = bool(budget and budget.enabled and budget.last_check_status == "ok")
     store = session.scalar(select(_SC).where(_SC.service == "storefront"))
     store_ok = bool(store and store.enabled and store.last_check_status == "ok")
     ads = states.get("google_ads", {})
@@ -102,12 +106,14 @@ def capabilities(session: Session) -> list[dict]:
              ["META_ACCESS_TOKEN (app da Meta com a Ads Library API)", "ferramenta MCP para consultar (a construir; o coletor existe em collectors/meta_ads/)"]),
         _cap("social_publishing", "Publicação nas redes (Instagram, TikTok, YouTube Shorts, Pinterest…)", "nao_construido",
              "publicar 1x de manhã e 1x à noite, com agendamento, pelas APIs oficiais",
-             ["conta de desenvolvedor e app aprovado em cada rede", "tokens de acesso de cada conta",
-              "integração construída no marketTon (hoje só existe o registro de publicações, sem conector)"]),
+             (([] if meta_ok else ["conectar a Meta em Integrações (token, Página e conta de anúncios) e testar"])
+              + ["ferramenta de publicação construída no marketTon (a conexão com a Meta é só a primeira metade)"]),
+             "Instagram e Facebook pela Meta; YouTube e TikTok ainda não têm conexão."),
         _cap("ads_management", "Gerenciar anúncios pagos", "nao_construido",
              "criar e ajustar campanhas",
-             ["escolher a plataforma (Google Ads, Meta, Shopee Ads…)", "permissão de escrita na conta e orçamento definido por você",
-              "integração construída"],
+             ([] if meta_ok else ["conectar a Meta em Integrações e testar"])
+             + ([] if budget_ok else ["definir o Orçamento de anúncios (valor por semana e teto por dia) em Integrações"])
+             + ["ferramentas de campanha (criar pausada, ler métricas, pausar/ajustar) construídas dentro das travas de orçamento"],
              "O Google Ads está conectado só para leitura do Planejador. Afiliado não edita o anúncio do vendedor."),
         _cap("link_clicks", "Contagem de cliques nos links de afiliado", "pronto" if shortener_ok else "configurar",
              "saber quais divulgações geram clique, não só venda (use create_tracked_link e sync_clicks)",
