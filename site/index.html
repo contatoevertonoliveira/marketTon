@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>marketTon — inteligência para afiliados</title>
+  <meta name="description" content="marketTon é uma ferramenta de pesquisa de produtos e palavras-chave para marketing de afiliados em Mercado Livre e Shopee.">
+  <style>
+    :root { --bg:#f6f9fc; --card:#fff; --ink:#32325d; --muted:#525f7f; --accent:#5e72e4; --line:#e9ecef; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#121826; --card:#1b2336; --ink:#e8ecf5; --muted:#a9b3c9; --accent:#8a9bff; --line:#2a3550; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); line-height:1.6; }
+    main { max-width: 760px; margin: 0 auto; padding: 48px 20px 64px; }
+    h1 { font-size: 2rem; margin: 0 0 8px; }
+    h2 { font-size: 1.15rem; margin: 32px 0 8px; }
+    p, li { color: var(--muted); }
+    .lead { font-size: 1.1rem; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; margin-top: 24px; }
+    a { color: var(--accent); }
+    footer { margin-top: 40px; font-size: .9rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>marketTon</h1>
+  <p class="lead">Ferramenta de inteligência para marketing de afiliados: reúne dados públicos de marketplaces e de busca para ajudar a decidir quais produtos vale a pena divulgar.</p>
+
+  <div class="card">
+    <h2 style="margin-top:0">O que o marketTon faz</h2>
+    <ul>
+      <li>Coleta preço, vendas, avaliações e comissão de produtos do <strong>Mercado Livre</strong> e da <strong>Shopee</strong> pelas APIs oficiais de afiliados.</li>
+      <li>Acompanha vendas e comissões da conta de afiliado do próprio operador.</li>
+      <li>Mostra a tendência de interesse de busca (Google Trends) e, usando a <strong>Google Ads API</strong>, o volume mensal de buscas, o CPC estimado e o nível de concorrência de palavras-chave (Planejador de Palavras-chave).</li>
+      <li>Ordena produtos por critérios explícitos e auditáveis, sem inventar dados: quando uma informação não existe, a tela mostra “—”.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Uso da Google Ads API</h2>
+    <p>O marketTon é de <strong>uso interno</strong>: é operado por uma única pessoa, que conecta a <strong>própria</strong> conta do Google Ads. Ele usa a API somente para <strong>consultar</strong> métricas de palavras-chave (volume, CPC, concorrência). Não cria nem altera campanhas, anúncios ou orçamentos, e não acessa dados de terceiros.</p>
+    <p>Os detalhes sobre dados e privacidade estão na <a href="privacidade.html">Política de Privacidade</a>.</p>
+  </div>
+
+  <footer>
+    <p>Operado por [SEU NOME]. Contato: <a href="mailto:[SEU E-MAIL]">[SEU E-MAIL]</a></p>
+    <p><a href="privacidade.html">Política de Privacidade</a></p>
+  </footer>
+</main>
+</body>
+</html>

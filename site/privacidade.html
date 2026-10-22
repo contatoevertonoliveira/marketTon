@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Política de Privacidade — marketTon</title>
+  <meta name="description" content="Como o marketTon trata os dados acessados pela Google Ads API e demais integrações.">
+  <style>
+    :root { --bg:#f6f9fc; --card:#fff; --ink:#32325d; --muted:#525f7f; --accent:#5e72e4; --line:#e9ecef; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#121826; --card:#1b2336; --ink:#e8ecf5; --muted:#a9b3c9; --accent:#8a9bff; --line:#2a3550; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); line-height:1.65; }
+    main { max-width: 760px; margin: 0 auto; padding: 48px 20px 64px; }
+    h1 { font-size: 1.8rem; margin: 0 0 4px; }
+    h2 { font-size: 1.1rem; margin: 28px 0 6px; }
+    p, li { color: var(--muted); }
+    a { color: var(--accent); }
+    .meta { font-size: .9rem; }
+    footer { margin-top: 40px; font-size: .9rem; border-top: 1px solid var(--line); padding-top: 16px; }
+  </style>
+</head>
+<body>
+<main>
+  <p><a href="index.html">← marketTon</a></p>
+  <h1>Política de Privacidade</h1>
+  <p class="meta">Última atualização: [DATA DE PUBLICAÇÃO]</p>
+
+  <p>Esta política descreve como o <strong>marketTon</strong> (“a ferramenta”) trata informações. O marketTon é uma ferramenta de uso interno, operada por uma única pessoa, [SEU NOME], para apoiar decisões de marketing de afiliados. Ela não é oferecida a outros usuários.</p>
+
+  <h2>1. Dados acessados</h2>
+  <p>Ao conectar a conta do Google Ads do próprio operador, a ferramenta acessa, pela Google Ads API e com o escopo <code>https://www.googleapis.com/auth/adwords</code>, <strong>apenas métricas do Planejador de Palavras-chave</strong> para palavras-chave pesquisadas pelo operador: volume médio mensal de buscas, CPC estimado e nível de concorrência, além da moeda da conta.</p>
+  <p>A ferramenta não cria, altera nem exclui campanhas, anúncios, orçamentos ou configurações da conta, e não lê dados de clientes ou de terceiros.</p>
+
+  <h2>2. Credenciais e armazenamento</h2>
+  <p>O token de acesso (refresh token) e as demais credenciais da integração ficam guardados no banco de dados da própria ferramenta, em servidor controlado pelo operador. Não são enviados, vendidos nem compartilhados com terceiros, e não aparecem na interface depois de salvos.</p>
+
+  <h2>3. Uso e compartilhamento</h2>
+  <p>As métricas obtidas são usadas exclusivamente para exibir ao operador a página de oportunidades de palavras-chave. Os dados <strong>não são vendidos, não são compartilhados com terceiros, não são usados para publicidade</strong> e não são transferidos a ninguém, salvo se exigido por lei.</p>
+  <p>O uso das informações recebidas das APIs do Google segue a <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de Dados do Usuário dos Serviços de API do Google</a>, incluindo os requisitos de Uso Limitado.</p>
+
+  <h2>4. Outras integrações</h2>
+  <p>A ferramenta também consulta as APIs oficiais de afiliados do Mercado Livre e da Shopee, usando as credenciais do próprio operador, para dados de produtos, vendas e comissões dessas contas. Cada serviço trata os dados conforme sua própria política.</p>
+
+  <h2>5. Retenção, revogação e exclusão</h2>
+  <p>As métricas de palavras-chave são mantidas apenas em memória temporária, por algumas horas, e não são gravadas de forma permanente. Para encerrar o acesso à conta do Google Ads, o operador pode revogar a permissão a qualquer momento em <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> e apagar as credenciais salvas na tela de Integrações da ferramenta.</p>
+
+  <h2>6. Contato</h2>
+  <p>Dúvidas sobre esta política: <a href="mailto:[SEU E-MAIL]">[SEU E-MAIL]</a>.</p>
+
+  <footer><a href="index.html">marketTon</a></footer>
+</main>
+</body>
+</html>
