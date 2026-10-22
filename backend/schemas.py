@@ -188,6 +188,9 @@ class ProductSummary(BaseModel):
     # Posição no ranking de mais vendidos (Mercado Livre) — sinal de demanda
     # de fallback quando o marketplace não expõe `sold_quantity` por item.
     ranking_position: int | None = None
+    affiliate_count: int | None = None
+    affiliate_count_period: str | None = None
+    manual_stock: int | None = None
 
     # Scores vigentes por dimensão. Ausente = não calculado.
     scores: dict[str, float] = Field(default_factory=dict)
@@ -288,6 +291,14 @@ class PortfolioItemOut(BaseModel):
     allowed_transitions: list[str] = Field(default_factory=list)
     # Materiais obrigatórios que faltam para publicar.
     missing_assets_for_publish: list[str] = Field(default_factory=list)
+
+
+class AffiliatedProductOut(BaseModel):
+    """Produto que o operador vinculou (item de portfólio + dados do catálogo)."""
+
+    item: PortfolioItemOut
+    product: ProductSummary
+    category_group: str
 
 
 class PortfolioItemDetail(PortfolioItemOut):

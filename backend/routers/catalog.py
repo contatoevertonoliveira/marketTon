@@ -6,8 +6,14 @@ caminho sem proveniência, e o briefing seção 4 exige origem para todo dado.
 """
 from __future__ import annotations
 
+import re
+from pathlib import Path
+from urllib.parse import urlparse
+
+import requests
 from datetime import UTC, datetime, timedelta
 
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -22,6 +28,7 @@ from backend.serializers import (
 )
 from backend.schemas import ProductDetail, ProductSummary, SourceRecordOut, TrendingAbroadProduct
 from core.db.base import Marketplace
+from config.settings import get_settings
 from core.db.catalog import Product, SourceRecord
 
 # Todas as rotas exigem `catalog.view`. O portão é declarado no router em vez de
@@ -109,6 +116,92 @@ def get_product(product_id: int, session: Session = Depends(get_session)) -> Pro
     if product is None:
         raise HTTPException(status_code=404, detail=f"produto {product_id} não encontrado")
     return product_detail(session, product)
+
+
+_MEDIA_HOSTS = ("susercontent.com", "shopee.com.br", "shopee.com")
+_MAX_IMAGE_BYTES = 15 * 1024 * 1024
+_EXT_BY_TYPE = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+
+
+@router.post(
+    "/products/{product_id}/download-images",
+    dependencies=[Depends(require("portfolio.manage"))],
+)
+def download_product_images(product_id: int, session: Session = Depends(get_session)) -> dict:
+    """Baixa as fotos que a API do marketplace devolveu para `data/media/<mp>/<id>/`.
+
+    Só baixa URLs já gravadas no produto (nunca uma URL vinda do cliente) e só
+    de domínios da própria Shopee — evita que o endpoint vire proxy aberto.
+    A API oficial de afiliados entrega apenas a foto principal; vídeo e
+    galeria completa não estão nela.
+    """
+    product = session.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail=f"produto {product_id} não encontrado")
+    urls = [u for u in (product.images or []) if isinstance(u, str)]
+    if not urls:
+        raise HTTPException(status_code=404, detail="produto sem foto registrada")
+
+    marketplace = product.marketplace.value if hasattr(product.marketplace, "value") else str(product.marketplace)
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", product.external_id)
+    folder = Path(get_settings().media_dir) / marketplace / safe_id
+    folder.mkdir(parents=True, exist_ok=True)
+
+    saved: list[str] = []
+    for index, url in enumerate(urls, start=1):
+        host = urlparse(url).hostname or ""
+        if not any(host == h or host.endswith("." + h) for h in _MEDIA_HOSTS):
+            continue
+        try:
+            response = requests.get(url, timeout=20, stream=True)
+            response.raise_for_status()
+            ext = _EXT_BY_TYPE.get(response.headers.get("content-type", "").split(";")[0], ".jpg")
+            data = response.raw.read(_MAX_IMAGE_BYTES + 1, decode_content=True)
+        except requests.RequestException:
+            continue
+        if len(data) > _MAX_IMAGE_BYTES:
+            continue
+        target = folder / f"foto_{index}{ext}"
+        target.write_bytes(data)
+        saved.append(str(target.resolve()))
+
+    if not saved:
+        raise HTTPException(status_code=502, detail="não foi possível baixar nenhuma foto")
+    return {"folder": str(folder.resolve()), "files": saved}
+
+
+class ManualSignalsIn(BaseModel):
+    affiliate_count: int | None = Field(None, ge=0, le=10_000_000)
+    affiliate_count_period: str | None = Field(None, pattern="^(total|semana|mes)$")
+    manual_stock: int | None = Field(None, ge=0, le=1_000_000_000)
+
+
+@router.put(
+    "/products/{product_id}/manual-signals",
+    response_model=ProductSummary,
+    dependencies=[Depends(require("portfolio.manage"))],
+)
+def set_manual_signals(
+    product_id: int, body: ManualSignalsIn, session: Session = Depends(get_session)
+) -> ProductSummary:
+    """Registra afiliados (e período) e estoque lidos no app de afiliados.
+
+    Nem a Affiliate Open API nem os feeds expõem esses números, então são
+    dados digitados, não coletados; `None` limpa o valor.
+    """
+    product = session.scalar(
+        select(Product).where(Product.id == product_id).options(selectinload(Product.seller))
+    )
+    if product is None:
+        raise HTTPException(status_code=404, detail=f"produto {product_id} não encontrado")
+    product.affiliate_count = body.affiliate_count
+    product.affiliate_count_period = body.affiliate_count_period if body.affiliate_count is not None else None
+    product.manual_stock = body.manual_stock
+    typed = body.affiliate_count is not None or body.manual_stock is not None
+    product.affiliate_count_updated_at = datetime.now(UTC) if typed else None
+    session.commit()
+    scores = latest_scores_by_dimension(session, [product.id])
+    return product_summary(product, scores.get(product.id))
 
 
 @router.get("/products/{product_id}/comparables", response_model=list[ProductSummary])

@@ -224,6 +224,9 @@ def product_summary(product: Product, scores: dict[str, float] | None = None) ->
         seller_reputation_level=product.seller.reputation_level if product.seller else None,
         seller_is_official_store=product.seller.is_official_store if product.seller else None,
         ranking_position=product.ranking_position,
+        affiliate_count=product.affiliate_count,
+        affiliate_count_period=product.affiliate_count_period,
+        manual_stock=product.manual_stock,
         scores=scores or {},
     )
 

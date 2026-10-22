@@ -126,3 +126,79 @@ export function demandComparator(a, b) {
 
   return (b.scores?.OPPORTUNITY ?? -1) - (a.scores?.OPPORTUNITY ?? -1);
 }
+
+// Concorrência entre afiliados. A Affiliate Open API da Shopee não expõe esse
+// número — ele é digitado pelo usuário (lido no Centro de Afiliados), então
+// só classifica quando existe. Os cortes são heurísticos, ajustáveis aqui.
+export function competitionLevel(product) {
+  const n = product.affiliate_count;
+  if (n == null) return null;
+  if (n <= 50) return { level: "low", label: "baixa concorrência", color: "#1a7a54", bg: "#e5faf1" };
+  if (n <= 300) return { level: "medium", label: "concorrência média", color: "#b8720a", bg: "#fff4e5" };
+  return { level: "high", label: "muita concorrência", color: "#c31e3f", bg: "#fef1f4" };
+}
+
+// "Oportunidade de live": boa comissão + poucos afiliados.
+export function isLiveOpportunity(product) {
+  return (
+    competitionLevel(product)?.level === "low" &&
+    product.affiliate_commission_pct != null &&
+    product.affiliate_commission_pct >= 8
+  );
+}
+
+const STOPWORDS = new Set([
+  "de", "da", "do", "das", "dos", "para", "com", "sem", "em", "e", "ou", "a", "o", "as", "os", "um", "uma",
+  "kit", "novo", "nova", "original", "premium", "promoção", "oferta", "unidade", "unidades", "pcs", "cm", "ml",
+]);
+
+function slug(word) {
+  return word
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+// Hashtags sugeridas por regra: palavras-chave do título + tags fixas de
+// vídeo/afiliado da Shopee. NÃO são medidas por visualização — a Shopee não
+// publica volume de hashtag por API, então a UI não pode afirmar popularidade.
+export function suggestHashtags(product, limit = 12) {
+  const words = (product.title || "")
+    .split(/[\s,.\-/|()+]+/)
+    .map(slug)
+    .filter((w) => w.length >= 4 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
+  const unique = [...new Set(words)].slice(0, 5);
+  const bigram = unique.length >= 2 ? [unique[0] + unique[1]] : [];
+  const fixed = ["shopeevideo", "achadinhosshopee", "shopeefinds", "shopeebrasil", "comprinhasshopee", "fyp"];
+  const brand = product.brand ? [slug(product.brand)].filter(Boolean) : [];
+  return [...new Set([...unique, ...bigram, ...brand, ...fixed])].slice(0, limit).map((t) => `#${t}`);
+}
+
+// Ordena para achar nicho de baixa concorrência: quem tem nº de afiliados
+// conhecido vem primeiro (menos afiliados, depois maior comissão); os sem
+// dado seguem a ordem de demanda.
+export function opportunityComparator(a, b) {
+  const an = a.affiliate_count;
+  const bn = b.affiliate_count;
+  if (an != null && bn == null) return -1;
+  if (an == null && bn != null) return 1;
+  if (an != null && bn != null && an !== bn) return an - bn;
+  if (an != null && bn != null) {
+    const c = (b.affiliate_commission_pct ?? -1) - (a.affiliate_commission_pct ?? -1);
+    if (c !== 0) return c;
+  }
+  return demandComparator(a, b);
+}
+
+export const AFFILIATE_PERIODS = { total: "no total", semana: "na semana", mes: "no mês" };
+
+// Estoque digitado (a API da Shopee não expõe). Corte heurístico: abaixo de
+// 100 unidades a oferta pode acabar antes de valer o esforço de um vídeo.
+export function stockLevel(product) {
+  const n = product.manual_stock;
+  if (n == null) return null;
+  if (n < 100) return { label: "estoque baixo", color: "#c31e3f", bg: "#fef1f4" };
+  if (n < 1000) return { label: "estoque médio", color: "#b8720a", bg: "#fff4e5" };
+  return { label: "estoque alto", color: "#1a7a54", bg: "#e5faf1" };
+}

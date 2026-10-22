@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import VisaoGeral from "./pages/VisaoGeral";
 import Dashboard from "./pages/Dashboard";
 import Portfolio from "./pages/Portfolio";
+import Produtos from "./pages/Produtos";
 import Integrations from "./pages/Integrations";
 import TrendingAbroad from "./pages/TrendingAbroad";
 import Opportunities from "./pages/Opportunities";
@@ -11,6 +12,7 @@ import { API_BASE, isLoggedIn, logout, setAuthExpiredHandler } from "./lib/apiCl
 const PAGES = [
   { id: "visao-geral", label: "Visão Geral", icon: "🏠" },
   { id: "daily-ops", label: "Daily Ops", icon: "🎯" },
+  { id: "produtos", label: "Produtos", icon: "📦" },
   { id: "portfolio", label: "Portfólio", icon: "🗂️" },
   { id: "oportunidades", label: "Oportunidades de Busca", icon: "🔥" },
   { id: "tendencias", label: "Tendências Internacionais", icon: "🌎" },
@@ -62,6 +64,13 @@ export default function App() {
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Daily Ops</h3>
             <VisaoGeral />
+          </div>
+        );
+      case "produtos":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Produtos vinculados</h3>
+            <Produtos />
           </div>
         );
       case "portfolio":
