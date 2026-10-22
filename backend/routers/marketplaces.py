@@ -57,6 +57,22 @@ CREDENTIAL_FIELDS: dict[str, list[dict[str, str | bool]]] = {
         {"name": "app_secret", "label": "App Secret", "secret": True},
         {"name": "shop_cipher", "label": "Shop Cipher", "secret": False},
     ],
+    # Hotmart: Ferramentas > Credenciais de desenvolvedor (gera client_id, client_secret e token Basic).
+    "hotmart": [
+        {"name": "client_id", "label": "Client ID", "secret": False},
+        {"name": "client_secret", "label": "Client Secret", "secret": True},
+        {"name": "basic_token", "label": "Token Basic", "secret": True},
+        {"name": "sandbox", "label": "Ambiente de testes? (deixe vazio para produção; escreva sim para sandbox)", "secret": False},
+    ],
+    # Monetizze: Ferramentas > API > Nova chave de API.
+    "monetizze": [
+        {"name": "consumer_key", "label": "Chave de API (consumer key)", "secret": True},
+    ],
+    # Eduzz: Console (console.eduzz.com) > Aplicativos.
+    "eduzz": [
+        {"name": "client_id", "label": "Client ID do aplicativo", "secret": False},
+        {"name": "client_secret", "label": "Client Secret do aplicativo", "secret": True},
+    ],
 }
 
 
@@ -180,6 +196,8 @@ def _test_connection(adapter, marketplace_slug: str) -> tuple[str, str]:
             return "ok", "token OAuth2 (Creators API) obtido com sucesso"
         if marketplace_slug == "tiktok_shop":
             return "error", "validação ao vivo ainda não implementada para TikTok Shop"
+        if marketplace_slug in ("hotmart", "monetizze", "eduzz"):
+            return "ok", adapter.check()
         return "error", "sem verificação implementada para este marketplace"
     except Exception as exc:  # noqa: BLE001 - o motivo da falha é o que interessa aqui
         return "error", str(exc)[:480]

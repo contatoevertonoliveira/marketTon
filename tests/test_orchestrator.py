@@ -80,11 +80,22 @@ class TestQueueIsFed:
     def test_enqueue_adds_work_to_a_running_pipeline(self, one_shot) -> None:
         """O método que existia e nunca era usado precisa funcionar."""
         calls: list[str] = []
+        hold = threading.Event()
+
+        def first_run(memory):
+            calls.append("first")
+            # Segura o pipeline "em execução" até o teste enfileirar a segunda tarefa. Sem isso, o
+            # modo one-shot encerra sozinho assim que a fila esvazia — e o teste, que só enfileira
+            # depois de ver "first" rodar, corria contra esse encerramento (falhava quase sempre).
+            hold.wait(timeout=5)
+            return TaskResult(task_id="first", ok=True, summary="first executou")
+
         one_shot.load_memory()
-        one_shot.start([_task("first", calls)])
+        one_shot.start([Task(id="first", name="First", run=first_run)])
         assert _wait_until(lambda: "first" in calls)
 
         one_shot.enqueue(_task("extra", calls))
+        hold.set()
         assert _wait_until(lambda: "extra" in calls), f"extra não executou: {calls}"
         one_shot.stop()
 

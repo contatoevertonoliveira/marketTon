@@ -440,9 +440,11 @@ def test_resource_requests_can_be_resolved_only_by_the_operator(api):
 def test_capabilities_never_present_unbuilt_things_as_ready(api):
     data = api.get("/agent/capabilities", headers=_as(api, "agente")).json()
     by_key = {c["key"]: c for c in data["capabilities"]}
-    for key in ("social_publishing", "ads_management", "link_clicks", "meta_ads_library",
-                "marketplace_hotmart", "marketplace_kirvano", "marketplace_monetizze"):
+    for key in ("social_publishing", "ads_management", "link_clicks", "meta_ads_library", "marketplace_kirvano"):
         assert by_key[key]["status"] == "nao_construido" and by_key[key]["needs"], key
+    # Hotmart, Monetizze e Eduzz já têm adaptador: falta só o operador configurar as credenciais.
+    for key in ("marketplace_hotmart", "marketplace_monetizze", "marketplace_eduzz"):
+        assert by_key[key]["status"] == "configurar" and by_key[key]["needs"], key
     assert by_key["google_trends"]["status"] == "pronto"
     assert by_key["google_ads_keyword_planner"]["status"] == "configurar"  # sem credencial no banco de teste
     assert by_key["ai_creatives"]["status"] == "configurar" and any("AI_API_KEY" in n for n in by_key["ai_creatives"]["needs"])

@@ -18,6 +18,9 @@ const MARKETPLACES = {
   shopee: { name: "Shopee", icon: "🛍️", color: "#ee4d2d" },
   amazon: { name: "Amazon", icon: "📦", color: "#ff9900" },
   tiktok_shop: { name: "TikTok Shop", icon: "🎵", color: "#010101" },
+  hotmart: { name: "Hotmart", icon: "🔥", color: "#f04e23" },
+  monetizze: { name: "Monetizze", icon: "💠", color: "#00a8e8" },
+  eduzz: { name: "Eduzz", icon: "🎓", color: "#ffd100" },
 };
 
 // verde = testado e funcionando · amarelo = configurado, ainda não validado
@@ -388,7 +391,7 @@ export default function Integrations() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(160px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
           gap: 16,
           marginTop: 16,
         }}

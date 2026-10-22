@@ -89,8 +89,7 @@ marketTon e o backend precisam estar no ar naquele horário).
 1. **Posicionamento orgânico por quem gasta em anúncio:** existe um coletor da Meta Ads Library
    (`collectors/meta_ads/`, `integrations/ads_meta/`) ainda sem endpoint nem credencial. Com
    `META_ACCESS_TOKEN`, vira ferramenta para listar anunciantes ativos por palavra-chave.
-2. **Novos marketplaces (Hotmart, Kirvano, Monetizze…):** cada um precisa de um *adapter*
-   (`integrations/marketplaces/`, interface `MarketplaceAdapter`) com credenciais e a API
-   conferida contra uma conta real. Plugado o adapter, `daily_review` e as demais ferramentas passam
-   a cobri-lo. Não foram escritos ainda para não inventar API que não foi validada.
+2. **Plataformas digitais:** Hotmart, Monetizze e Eduzz já têm adaptador e card em Integrações (veja
+   `docs/plataformas-digitais.md`; autenticação conforme a documentação oficial, formato das vendas ainda
+   sem validação em conta real). **Kirvano** segue pendente: precisa de adaptador e da documentação oficial.
 3. Endpoint de coleta e de link de afiliado (acima).

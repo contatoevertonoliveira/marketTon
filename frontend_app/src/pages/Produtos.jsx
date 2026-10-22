@@ -10,6 +10,9 @@ const MARKETPLACES = [
   { id: "shopee", name: "Shopee", icon: "🛍️" },
   { id: "amazon", name: "Amazon", icon: "📦" },
   { id: "tiktok_shop", name: "TikTok Shop", icon: "🎵" },
+  { id: "hotmart", name: "Hotmart", icon: "🔥" },
+  { id: "monetizze", name: "Monetizze", icon: "💠" },
+  { id: "eduzz", name: "Eduzz", icon: "🎓" },
 ];
 
 const STATE_LABELS = {

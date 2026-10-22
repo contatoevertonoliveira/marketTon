@@ -21,6 +21,9 @@ const MARKETPLACES = {
   shopee: { name: "Shopee", color: "#ee4d2d" },
   amazon: { name: "Amazon", color: "#fb6340" },
   tiktok_shop: { name: "TikTok Shop", color: "#11cdef" },
+  hotmart: { name: "Hotmart", color: "#f04e23" },
+  monetizze: { name: "Monetizze", color: "#00a8e8" },
+  eduzz: { name: "Eduzz", color: "#ffd100" },
   aliexpress: { name: "AliExpress", color: "#f6c944" },
 };
 

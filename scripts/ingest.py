@@ -52,7 +52,7 @@ def main() -> int:
     parser.add_argument(
         "--marketplace",
         default="all",
-        help="nome do adapter (ex.: mercado_livre, shopee, amazon, tiktok_shop) ou 'all'",
+        help="nome do adapter (ex.: mercado_livre, shopee, hotmart, monetizze, eduzz) ou 'all'",
     )
     parser.add_argument(
         "--keywords",

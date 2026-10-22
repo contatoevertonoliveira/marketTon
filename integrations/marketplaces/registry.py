@@ -43,11 +43,14 @@ def load_adapters() -> None:
     efeito de importação, para que os testes controlem o registro.
     """
     from integrations.marketplaces.amazon import AmazonAdapter
+    from integrations.marketplaces.digital_platforms import EduzzAdapter, HotmartAdapter, MonetizzeAdapter
     from integrations.marketplaces.mercado_livre import MercadoLivreAdapter
     from integrations.marketplaces.shopee import ShopeeAdapter
     from integrations.marketplaces.tiktok_shop import TikTokShopAdapter
 
-    for adapter_cls in (MercadoLivreAdapter, ShopeeAdapter, AmazonAdapter, TikTokShopAdapter):
+    for adapter_cls in (
+        MercadoLivreAdapter, ShopeeAdapter, AmazonAdapter, TikTokShopAdapter, HotmartAdapter, MonetizzeAdapter, EduzzAdapter
+    ):
         if adapter_cls.name in _REGISTRY:
             continue
         try:

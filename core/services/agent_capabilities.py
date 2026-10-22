@@ -78,6 +78,9 @@ def capabilities(session: Session) -> list[dict]:
     return [
         marketplace("mercado_livre", "Mercado Livre", "catálogo, concorrência por produto, tendências de outros países"),
         marketplace("shopee", "Shopee", "catálogo, comissão, vendas e comissão por pedido"),
+        marketplace("hotmart", "Hotmart", "vendas e comissão como afiliado (a API não lista produtos para afiliar)"),
+        marketplace("monetizze", "Monetizze", "produtos em que você é afiliado, vendas e comissão"),
+        marketplace("eduzz", "Eduzz", "vendas e ganho como afiliado (a API não lista produtos para afiliar)"),
         _cap("google_trends", "Google Trends", "pronto", "tendência de busca de cada produto e palavra-chave",
              note="Acesso não oficial (biblioteca trendspy); a API oficial ainda é alfa com inscrição."),
         _cap("google_ads_keyword_planner", "Google Ads — Planejador de Palavras-chave", "pronto" if ads_ok else "configurar",
@@ -111,7 +114,7 @@ def capabilities(session: Session) -> list[dict]:
             _cap(f"marketplace_{slug}", label, "nao_construido", "produtos, vendas e comissões da plataforma",
                  [f"credenciais da API do {label}", "adaptador construído e validado contra uma conta real"],
                  "Plataforma de produtos digitais: o modelo de comissão por oferta é diferente do de marketplace físico.")
-            for slug, label in (("hotmart", "Hotmart"), ("kirvano", "Kirvano"), ("monetizze", "Monetizze"))
+            for slug, label in (("kirvano", "Kirvano"),)
         ],
     ]
 

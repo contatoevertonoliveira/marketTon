@@ -7,6 +7,9 @@ const MARKETPLACES = {
   shopee: { name: "Shopee", icon: "🛍️" },
   amazon: { name: "Amazon", icon: "📦" },
   tiktok_shop: { name: "TikTok Shop", icon: "🎵" },
+  hotmart: { name: "Hotmart", icon: "🔥" },
+  monetizze: { name: "Monetizze", icon: "💠" },
+  eduzz: { name: "Eduzz", icon: "🎓" },
 };
 
 // Uma aba por marketplace ativado em Integrações, cada uma com o Daily Ops

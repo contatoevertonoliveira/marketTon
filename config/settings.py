@@ -124,6 +124,19 @@ class Settings(BaseSettings):
     amazon_api_url: str = "https://creatorsapi.amazon"
     amazon_marketplace: str = "www.amazon.com.br"
 
+    # --- Plataformas de produtos digitais ------------------------------------
+    # Hotmart: Ferramentas > Credenciais de desenvolvedor (client_id, client_secret e token Basic).
+    # `hotmart_sandbox` vazio = produção; "sim" = ambiente de testes (dados fictícios).
+    hotmart_client_id: str = ""
+    hotmart_client_secret: str = ""
+    hotmart_basic_token: str = ""
+    hotmart_sandbox: str = ""
+    # Monetizze: Ferramentas > API > chave de API (consumer key).
+    monetizze_consumer_key: str = ""
+    # Eduzz: Console > Aplicativos (client_id e client_secret do app).
+    eduzz_client_id: str = ""
+    eduzz_client_secret: str = ""
+
     # --- TikTok Shop ----------------------------------------------------------
     # https://partner.tiktokshop.com/ — Affiliate Open API.
     tiktokshop_app_key: str = ""
