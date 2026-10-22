@@ -24,6 +24,7 @@ def _parse(value) -> datetime | None:
 def offer_info(attributes: dict | None, now: datetime | None = None) -> dict | None:
     """Resumo da comissão extra de um produto, ou `None` se ele não tem comissão extra do vendedor.
 
+    `sem_oferta`: a Shopee deixou de devolver o item como oferta de afiliado (ver `offer_not_found_at`).
     `status`: `ativa` (dentro do prazo), `acabando` (poucos dias), `expirada`, `futura`, `sem_fim` (começou e a API não
     marca data de término — o vendedor pode encerrar quando quiser) ou `sem_prazo` (a API não informou o período: o
     catálogo precisa ser recoletado, não se chuta).
@@ -33,6 +34,8 @@ def offer_info(attributes: dict | None, now: datetime | None = None) -> dict | N
     if not extra or extra <= 0:
         return None
     now = now or datetime.now(UTC)
+    if attributes.get("offer_not_found_at"):  # a consulta por ID não devolveu oferta de afiliado para o item
+        return {"extra_pct": round(float(extra), 2), "starts_at": None, "ends_at": None, "status": "sem_oferta", "days_left": None}
     starts, ends = _parse(attributes.get("offer_starts_at")), _parse(attributes.get("offer_ends_at"))
     days_left = None
     if ends is None and starts is None:
@@ -70,6 +73,8 @@ def offer_note(info: dict | None) -> str | None:
         "acabando": f"A comissão extra de {info['extra_pct']:g}% acaba em {br} ({info['days_left']} dia(s)). "
                     "Conteúdo novo pode sair depois do fim da oferta.",
         "futura": f"A comissão extra de {info['extra_pct']:g}% só começa em {br or 'data futura'}.",
+        "sem_oferta": f"A Shopee não devolveu oferta de afiliado para este item na última verificação: a comissão de "
+                      f"{info['extra_pct']:g}% pode não valer mais. Confira no portal antes de investir conteúdo.",
         "sem_prazo": f"Comissão extra de {info['extra_pct']:g}% sem prazo informado: recolha o catálogo para saber até quando vale "
                      "e confira a taxa no portal antes de investir conteúdo.",
     }.get(info["status"])

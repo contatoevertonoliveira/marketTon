@@ -47,6 +47,8 @@ def test_status_follows_the_period():
     assert offer_info(_attrs(starts=NOW + 3 * day, ends=NOW + 9 * day), NOW)["status"] == "futura"
     open_ended = offer_info(_attrs(starts=NOW - 5 * day), NOW)  # começou e não tem fim marcado (caso comum na API real)
     assert open_ended["status"] == "sem_fim" and open_ended["days_left"] is None and offer_note(open_ended) is None
+    gone = offer_info({**_attrs(starts=NOW - 5 * day), "offer_not_found_at": NOW.isoformat()}, NOW)
+    assert gone["status"] == "sem_oferta" and "pode não valer mais" in offer_note(gone)
     assert offer_info(_attrs(), NOW)["status"] == "sem_prazo"  # catálogo antigo: diz que não sabe, não chuta
 
 
