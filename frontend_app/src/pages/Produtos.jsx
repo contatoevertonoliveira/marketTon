@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getJSON } from "../lib/apiClient";
 import ProductCard from "./ProductCard";
 import ProductCardModal from "./ProductCardModal";
+import ProdutosDesempenho from "./ProdutosDesempenho";
 
 const MARKETPLACES = [
   { id: "mercado_livre", name: "Mercado Livre", icon: "🛒" },
@@ -32,6 +33,7 @@ export default function Produtos() {
   const [error, setError] = useState("");
   const [active, setActive] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [mode, setMode] = useState("desempenho");
 
   function load() {
     getJSON("/portfolio/affiliated")
@@ -104,7 +106,30 @@ export default function Produtos() {
         })}
       </div>
 
-      {sections.length === 0 ? (
+      <div style={{ display: "inline-flex", borderRadius: 999, background: "#fff", padding: 3, marginBottom: 18, boxShadow: "0 0 1.5rem 0 rgba(136,152,170,.12)" }}>
+        {[["desempenho", "Desempenho"], ["categoria", "Por categoria"]].map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setMode(id)}
+            style={{
+              border: "none",
+              borderRadius: 999,
+              padding: "7px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: mode === id ? "#5e72e4" : "transparent",
+              color: mode === id ? "#fff" : "#525f7f",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "desempenho" ? (
+        active && <ProdutosDesempenho marketplace={active} />
+      ) : sections.length === 0 ? (
         <div style={{ background: "#fff", borderRadius: 10, padding: 20, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)", fontSize: 13, color: "#8898aa" }}>
           Nenhum produto vinculado neste marketplace ainda. Abra um produto em Portfólio e clique em "Afiliar-se a este produto".
         </div>
