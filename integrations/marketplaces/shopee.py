@@ -468,6 +468,9 @@ def _to_float(value: Any) -> float | None:
         return None
 
 
+OPEN_ENDED_EPOCH = 4102444800  # 01/01/2100: qualquer data além disso é "sem fim definido", não um prazo
+
+
 def _epoch_iso(value: Any) -> str | None:
     """Segundos (ou milissegundos) desde 1970 -> ISO em UTC; ausente, zero ou ilegível vira None."""
     number = _to_float(value)
@@ -475,6 +478,8 @@ def _epoch_iso(value: Any) -> str | None:
         return None
     if number > 1e11:  # milissegundos
         number /= 1000
+    if number >= OPEN_ENDED_EPOCH:  # a Shopee usa 32503651199 (31/12/2999) para "sem data de término"
+        return None
     try:
         return datetime.fromtimestamp(number, UTC).isoformat()
     except (OverflowError, OSError, ValueError):

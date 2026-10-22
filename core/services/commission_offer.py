@@ -24,8 +24,9 @@ def _parse(value) -> datetime | None:
 def offer_info(attributes: dict | None, now: datetime | None = None) -> dict | None:
     """Resumo da comissão extra de um produto, ou `None` se ele não tem comissão extra do vendedor.
 
-    `status`: `ativa` (dentro do prazo), `acabando` (poucos dias), `expirada`, `futura` ou `sem_prazo`
-    (a API não informou o período — o catálogo precisa ser recoletado, não se chuta).
+    `status`: `ativa` (dentro do prazo), `acabando` (poucos dias), `expirada`, `futura`, `sem_fim` (começou e a API não
+    marca data de término — o vendedor pode encerrar quando quiser) ou `sem_prazo` (a API não informou o período: o
+    catálogo precisa ser recoletado, não se chuta).
     """
     attributes = attributes or {}
     extra = attributes.get("seller_commission_pct")
@@ -38,6 +39,8 @@ def offer_info(attributes: dict | None, now: datetime | None = None) -> dict | N
         status = "sem_prazo"
     elif starts is not None and now < starts:
         status = "futura"
+    elif ends is None:
+        status = "sem_fim"
     elif ends is not None and now > ends:
         status = "expirada"
     else:

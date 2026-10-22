@@ -62,7 +62,7 @@ A rodada da noite só acontece se houve venda, clique ou mensagem nova: sem sina
 
 Regras práticas:
 - **Comissão Extra tem prazo.** `product_funnel` devolve `commission_offer` (extra %, `ends_at`, `status`) e `commission_note`.
-  Prefira oferta `ativa`; `acabando` (poucos dias) só serve para conteúdo que sai antes do fim; `expirada` e `sem_prazo`
+  Prefira oferta `ativa` ou `sem_fim` (começou e a Shopee não marca término — comum, mas o vendedor pode encerrar quando quiser); `acabando` (poucos dias) só serve para conteúdo que sai antes do fim; `expirada` e `sem_prazo`
   significam taxa incerta — não monte plano em cima dela e peça ao operador (`request_resource`, uma vez) para conferir a taxa
   no portal de afiliados, ou rode `refresh_catalog` para trazer o prazo. Nunca cite a taxa como certa se a nota diz o contrário.
 - **Demanda decide.** Anúncio caro (CPC alto, disputa alta) não elimina o produto no orgânico — mas é

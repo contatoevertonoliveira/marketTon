@@ -30,6 +30,7 @@ def test_adapter_stores_the_offer_period_from_epoch_seconds():
     assert product.attributes["seller_commission_pct"] == pytest.approx(80.0)
     assert product.attributes["offer_starts_at"].startswith("2026-10-14") and product.attributes["offer_ends_at"].startswith("2026-10-26")
     assert _epoch_iso(1793000000000) == _epoch_iso(1793000000)  # milissegundos também
+    assert _epoch_iso(32503651199) is None  # a Shopee usa o ano 2999 para "sem data de término"
     assert _epoch_iso(0) is None and _epoch_iso(None) is None and _epoch_iso("x") is None  # nunca inventa prazo
 
     bare = ShopeeAdapter(cfg=ShopeeConfig())._normalize_offer({"itemId": 2, "productName": "x", "sellerCommissionRate": "0.1"})
@@ -44,6 +45,8 @@ def test_status_follows_the_period():
     assert soon["status"] == "acabando" and soon["days_left"] == 2
     assert offer_info(_attrs(starts=NOW - 9 * day, ends=NOW - day), NOW)["status"] == "expirada"
     assert offer_info(_attrs(starts=NOW + 3 * day, ends=NOW + 9 * day), NOW)["status"] == "futura"
+    open_ended = offer_info(_attrs(starts=NOW - 5 * day), NOW)  # começou e não tem fim marcado (caso comum na API real)
+    assert open_ended["status"] == "sem_fim" and open_ended["days_left"] is None and offer_note(open_ended) is None
     assert offer_info(_attrs(), NOW)["status"] == "sem_prazo"  # catálogo antigo: diz que não sabe, não chuta
 
 

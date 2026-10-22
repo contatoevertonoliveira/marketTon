@@ -178,6 +178,7 @@ function ExtraCommissionChip({ attributes }) {
   const left = ends ? Math.ceil((ends - Date.now()) / 86400000) : null;
   let tone = ["#fff4e5", "#b8720a"];
   let label = "sem prazo informado";
+  if (!ends && attributes.offer_starts_at) { tone = ["#eef2ff", "#3b4fb8"]; label = "sem data de fim"; }
   if (ends) {
     if (left < 0) { tone = ["#fef1f4", "#c31e3f"]; label = `acabou em ${ends.toLocaleDateString("pt-BR")}`; }
     else if (left <= 3) { tone = ["#fff4e5", "#b8720a"]; label = `acaba em ${ends.toLocaleDateString("pt-BR")}`; }
