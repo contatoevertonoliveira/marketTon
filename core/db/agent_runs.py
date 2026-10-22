@@ -24,6 +24,12 @@ class AgentRun(Base, TimestampMixin):
     exit_code: Mapped[int | None] = mapped_column(Integer)
     output_tail: Mapped[str | None] = mapped_column(Text)
     error: Mapped[str | None] = mapped_column(String(500))
+    # Consumo da rodada (lido da saída do Claude Code): permite medir o custo-benefício de cada rotina.
+    model: Mapped[str | None] = mapped_column(String(48))
+    num_turns: Mapped[int | None] = mapped_column(Integer)
+    tokens_in: Mapped[int | None] = mapped_column(Integer)  # entrada total (inclui cache)
+    tokens_out: Mapped[int | None] = mapped_column(Integer)
+    cost_usd: Mapped[float | None] = mapped_column(Float)
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<AgentRun {self.id} {self.trigger} {self.status}>"

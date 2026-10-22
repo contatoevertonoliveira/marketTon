@@ -113,12 +113,16 @@ def test_daily_routines_only_in_independent_autonomy_and_once_per_period(ready):
 
     assert ar.decide_trigger(ready, now=at(3)) is None  # de madrugada não roda
     assert ar.decide_trigger(ready, now=at(9)) == "morning"
+    assert ar.decide_trigger(ready, now=at(20)) is None  # noite sem venda, clique nem mensagem: nada a analisar
+
+    agent_chat.post_message(ready, author="user", text="como foi o dia?")  # sinal novo...
+    agent_chat.mark_read(ready, "agent")  # ...que o agente já leu (senão seria uma rodada de chat)
+    ready.commit()
     assert ar.decide_trigger(ready, now=at(20)) == "evening"
 
     now_local = datetime.now(UTC).astimezone()
     _run(ready, "morning", started=now_local)
     assert ar.decide_trigger(ready, now=now_local.replace(hour=9, minute=0)) is None  # manhã de hoje já foi
-    assert ar.decide_trigger(ready, now=now_local.replace(hour=20, minute=0)) == "evening"  # a noite ainda não
 
 
 def test_only_one_run_at_a_time_and_stale_running_rows_do_not_block(ready):
@@ -153,6 +157,7 @@ class _Proc:
 @pytest.fixture
 def fake_claude(monkeypatch):
     monkeypatch.setattr(ar, "find_claude", lambda: "C:/fake/claude.exe")
+    monkeypatch.setattr(ar, "prefetch", lambda factory: None)  # a sincronização prévia não faz parte destes testes
 
 
 def test_a_run_gets_only_the_marketton_server_a_closed_tool_list_and_a_minimal_environment(ready, factory, fake_claude, monkeypatch):
@@ -257,3 +262,69 @@ def test_runtime_status_reports_the_last_runs_and_login_wait(ready, factory, fak
         status = ar.runtime_status(s)
     assert status["waiting_for_login"] is True and status["claude_found"] is True
     assert status["runs"][0]["status"] == "needs_login" and status["schedule"] == {"morning_from_hour": 8, "evening_from_hour": 19}
+    assert status["usage_today"]["runs"] == 1 and status["usage_today"]["cost_usd"] == 0
+
+
+# ----------------------------------------------------------------- custo-benefício ---------
+
+
+def test_command_is_lean_native_tools_off_json_usage_budget_and_effort(tmp_path):
+    cmd = ar.build_command("claude", "oi", tmp_path / "mcp.json", trigger="chat")
+    assert cmd[cmd.index("--tools") + 1] == ""  # sem ferramentas nativas: é o que derruba ~40 mil tokens por rodada
+    assert "--disable-slash-commands" in cmd and cmd[cmd.index("--setting-sources") + 1] == "project"
+    assert cmd[cmd.index("--output-format") + 1] == "json" and "--max-budget-usd" in cmd
+    assert cmd[cmd.index("--effort") + 1] == "low" and cmd[cmd.index("--model") + 1] == "sonnet"
+    assert ar.build_command("claude", "oi", tmp_path / "m.json", trigger="morning")[
+        ar.build_command("claude", "oi", tmp_path / "m.json", trigger="morning").index("--effort") + 1] == "medium"
+    assert ar.agent_cwd().is_dir()  # pasta própria e vazia: não carrega o CLAUDE.md do projeto
+
+
+def test_usage_is_read_from_the_json_output_and_stored_on_the_run(ready, factory, fake_claude):
+    import json
+    payload = {"type": "result", "is_error": False, "result": "Feito. 1 produto escolhido.", "num_turns": 7,
+               "total_cost_usd": 0.1234, "modelUsage": {"claude-sonnet-5-5": {}},
+               "usage": {"input_tokens": 10, "cache_creation_input_tokens": 3000, "cache_read_input_tokens": 500, "output_tokens": 800}}
+    run_id = ar.execute_run(factory, "chat", runner=lambda *a, **k: _Proc(out=json.dumps(payload)))
+    with factory() as s:
+        run = s.get(AgentRun, run_id)
+        assert run.status == "ok" and run.output_tail == "Feito. 1 produto escolhido."  # só o texto, não o JSON
+        assert (run.model, run.num_turns, run.tokens_in, run.tokens_out, run.cost_usd) == ("claude-sonnet-5-5", 7, 3510, 800, 0.1234)
+        assert ar.usage_today(s)["cost_usd"] == 0.1234
+
+
+def test_a_budget_stop_is_reported_as_a_failed_run_with_a_clear_reason(ready, factory, fake_claude):
+    import json
+    payload = {"type": "result", "is_error": True, "subtype": "error_max_budget_usd", "result": "", "total_cost_usd": 1.02}
+    run_id = ar.execute_run(factory, "chat", runner=lambda *a, **k: _Proc(out=json.dumps(payload), code=1))
+    with factory() as s:
+        run = s.get(AgentRun, run_id)
+        assert run.status == "failed" and "teto de custo" in run.error and run.cost_usd == 1.02
+
+
+def test_plain_text_output_still_works_and_has_no_usage():
+    assert ar.parse_output("rodada feita") == ("rodada feita", {})
+    assert ar.parse_output("") == ("", {})
+
+
+def test_daily_caps_stop_automatic_runs_but_not_the_manual_one(ready):
+    agent_chat.post_message(ready, author="user", text="oi")
+    ready.commit()
+    now = datetime.now(UTC).astimezone()
+    assert ar.decide_trigger(ready, now=now) == "chat"
+    for _ in range(8):  # teto de rodadas automáticas por dia
+        _run(ready, "evening", started=now - timedelta(minutes=30))
+    assert ar.decide_trigger(ready, now=now) is None and ar.budget_exhausted(ready, now)
+    assert ar.decide_trigger(ready, now=now, manual=True) == "manual"
+
+    ready.query(AgentRun).delete()
+    ready.add(AgentRun(trigger="morning", status="ok", started_at=now - timedelta(minutes=30), cost_usd=3.5))  # teto de custo
+    ready.commit()
+    assert ar.decide_trigger(ready, now=now) is None
+
+
+def test_new_signal_means_an_operator_message_a_sale_or_a_click_since_the_last_run(ready):
+    assert ar._has_new_signal(ready, datetime.now(UTC) - timedelta(hours=1)) is False
+    agent_chat.post_message(ready, author="user", text="x")
+    ready.commit()
+    assert ar._has_new_signal(ready, datetime.now(UTC) - timedelta(hours=1)) is True
+

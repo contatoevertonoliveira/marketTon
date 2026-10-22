@@ -17,6 +17,16 @@ Segurança — o que o Claude sem tela enxerga e pode fazer:
 * **ambiente mínimo**: o processo filho não herda variáveis do backend (banco, segredos);
 * a API continua aplicando papel `bot`, trava do modo agente e auditoria.
 
+Custo-benefício (o foco de quem paga cada token):
+
+* **contexto mínimo**: `--tools ""` tira as ferramentas nativas do Claude Code (a maior parte do prompt — de ~42 mil para
+  ~3 mil tokens por rodada), sem skills/plugins/configurações de usuário e numa pasta vazia (sem `CLAUDE.md`);
+* **modelo e esforço sob medida** (`AGENT_MODEL`, `AGENT_EFFORT*`): responder o chat usa esforço baixo;
+* **o código faz o que não precisa de IA**: vendas e cliques são sincronizados pelo backend antes da rodada;
+* **tetos**: orçamento por rodada (`--max-budget-usd`), por dia e número de rodadas por dia;
+* **não roda à toa**: a rotina da noite só roda se houve venda, clique ou mensagem desde a última rodada;
+* **medição**: custo, turnos e tokens de cada rodada ficam registrados e aparecem na tela.
+
 Login do Claude Code: acontece uma única vez, no terminal (`claude` → `/login`), e fica salvo na conta do
 Windows. Se expirar, a rodada falha com um sinal claro: o supervisor **pede no chat**, pausa as
 tentativas por um tempo e volta sozinho depois.
@@ -43,6 +53,7 @@ from config.settings import get_settings
 from core.db.agent_chat import AgentMessage
 from core.db.agent_runs import AgentRun
 from core.db.auth import Role, User
+from core.db.tracking import ClickEvent, Sale
 from core.services import agent_chat
 from core.services.app_settings import agent_autonomy, agent_mode_enabled
 from core.services.auth import issue_agent_session
@@ -54,6 +65,7 @@ TICK_SECONDS = 30
 CHAT_COOLDOWN = timedelta(minutes=5)
 LOGIN_RETRY = timedelta(minutes=15)
 OUTPUT_TAIL = 3000
+PREFETCH_EVERY = timedelta(minutes=30)  # no máximo uma sincronização "grátis" a cada tanto
 MORNING_UNTIL, EVENING_UNTIL = 14, 24  # a rotina de cada turno ainda vale até estas horas locais
 
 # Único servidor liberado. Os nomes das ferramentas ficam `mcp__marketton__<ferramenta>`.
@@ -67,30 +79,34 @@ _LOGIN_SIGNS = re.compile(
 COMMON = (
     "\n\nVocê roda em SEGUNDO PLANO, sem ninguém olhando o terminal. Não faça perguntas que exijam resposta imediata: "
     "deixe dúvidas e pedidos no chat (`chat_send`, `request_resource`). Use só as ferramentas do marketTon. "
-    "Termine com uma resposta de 1 a 3 linhas dizendo o que foi feito."
+    "Termine com uma resposta de 1 a 3 linhas dizendo o que foi feito.\n"
+    "SEJA ECONÔMICO (cada token custa): leia só a seção do manual de que precisa (`agent_playbook` com `section`), chame cada "
+    "ferramenta uma vez, use `limit` pequeno (até 10), não repita consulta nem pedido, e não reescreva o que já está no chat."
 )
 PROMPTS = {
     "activation": (
-        "Execute a rotina de ativação do marketTon: leia `agent_playbook` e `chat_inbox` e siga a tarefa aberta "
+        "Execute a rotina de ativação do marketTon: leia `agent_playbook` (completo, é a primeira vez) e `chat_inbox` e siga a tarefa aberta "
         "(saúde, vendas, análise do catálogo e do portfólio, escolha dos produtos, relatório no chat, pedidos de recurso). "
         "Ao terminar, conclua a tarefa com `complete_task`."
     ),
     "chat": (
-        "O operador deixou mensagens novas no chat do marketTon. Leia `agent_playbook` e `chat_inbox`, responda com "
-        "`chat_send` e faça o que ele pediu dentro das suas ferramentas e limites."
+        "O operador deixou mensagens novas no chat do marketTon. Leia `chat_inbox` (e `agent_playbook` com `section` "
+        "só se precisar de uma regra), responda com `chat_send` e faça o que ele pediu dentro das suas ferramentas e limites."
     ),
     "morning": (
-        "Rotina da MANHÃ do marketTon (`agent_playbook`, seção 2): `chat_inbox`, `system_health`, `sync_sales` e `sync_clicks` (resuma vendas "
-        "novas), `daily_review`, trate o que o checklist apontar, escolha o produto do dia e deixe o plano de conteúdo "
-        "no chat. Cobre os recursos pendentes mais importantes com `request_resource` (renova, não duplica)."
+        "Rotina da MANHÃ do marketTon (`agent_playbook` com section=\"1\" e section=\"2\"): `chat_inbox`, `system_health`, "
+        "`daily_review` (vendas e cliques já foram sincronizados pelo sistema: resuma as vendas novas), trate o que o "
+        "checklist apontar, escolha o produto do dia e deixe o plano de conteúdo no chat. Cobre os recursos pendentes mais "
+        "importantes com `request_resource` (renova, não duplica)."
     ),
     "evening": (
-        "Rotina da NOITE do marketTon (`agent_playbook`, seção 2): `chat_inbox`, `sync_clicks`, `sales_performance`, `sync_sales`, o que "
-        "performou e o que não, ajuste de ângulo/produto, plano do dia seguinte. Registre o resumo no chat."
+        "Rotina da NOITE do marketTon (`agent_playbook` com section=\"2\"): `chat_inbox`, `sales_performance` (vendas e "
+        "cliques já foram sincronizados pelo sistema), o que performou e o que não, ajuste de ângulo/produto, plano do dia "
+        "seguinte. Registre o resumo no chat."
     ),
     "manual": (
-        "O operador pediu uma rodada agora. Leia `agent_playbook` e `chat_inbox`, execute a rotina do período do dia "
-        "e registre o resultado no chat."
+        "O operador pediu uma rodada agora. Leia `chat_inbox` e `agent_playbook` (section=\"2\"), execute a rotina do "
+        "período do dia e registre o resultado no chat."
     ),
 }
 
@@ -140,6 +156,8 @@ def decide_trigger(session: Session, *, now: datetime | None = None, manual: boo
 
     if manual:
         return "manual"
+    if budget_exhausted(session, now_local):
+        return None  # teto do dia (rodadas ou custo): só o "rodar agora" manual passa
 
     open_activation = session.scalar(select(AgentMessage.id).where(
         AgentMessage.kind == "task", AgentMessage.status == "open", AgentMessage.meta["task"].as_string() == "activation_routine"))
@@ -162,10 +180,46 @@ def decide_trigger(session: Session, *, now: datetime | None = None, manual: boo
         done = {r.trigger for r in today}
         morning_from, evening_from = settings.agent_morning_hour, settings.agent_evening_hour
         if evening_from <= now_local.hour < EVENING_UNTIL and "evening" not in done:
-            return "evening"
+            since = max([midnight] + [_local(r.started_at) for r in today if r.status == "ok"])
+            if _has_new_signal(session, since):  # sem venda, clique nem mensagem nova, a noite não teria o que analisar
+                return "evening"
         if morning_from <= now_local.hour < MORNING_UNTIL and "morning" not in done:
             return "morning"
     return None
+
+
+def _aware(dt: datetime | None) -> datetime | None:
+    return None if dt is None else (dt if dt.tzinfo else dt.replace(tzinfo=UTC))
+
+
+def _has_new_signal(session: Session, since: datetime) -> bool:
+    """Houve venda, clique ou mensagem do operador desde `since`? (comparação em Python: precisão varia entre bancos)"""
+    user_msg = select(AgentMessage.created_at).where(AgentMessage.author == "user")
+    for query in (select(Sale.created_at), select(ClickEvent.created_at), user_msg):
+        stamp = _aware(session.scalar(query.order_by(query.selected_columns[0].desc()).limit(1)))
+        if stamp is not None and stamp >= since:
+            return True
+    return False
+
+
+def usage_today(session: Session, now_local: datetime | None = None) -> dict:
+    """Rodadas e custo de hoje (hora local), para os tetos e para a tela."""
+    now_local = now_local or _local(datetime.now(UTC))
+    midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    runs = _runs_since(session, midnight)
+    settings = get_settings()
+    return {
+        "runs": len([r for r in runs if r.trigger != "manual"]),
+        "max_runs": settings.agent_max_runs_per_day,
+        "cost_usd": round(sum(r.cost_usd or 0 for r in runs), 4),
+        "daily_budget_usd": settings.agent_daily_budget_usd,
+        "tokens": sum((r.tokens_in or 0) + (r.tokens_out or 0) for r in runs),
+    }
+
+
+def budget_exhausted(session: Session, now_local: datetime | None = None) -> bool:
+    u = usage_today(session, now_local)
+    return u["runs"] >= u["max_runs"] or u["cost_usd"] >= u["daily_budget_usd"]
 
 
 def _is_live(run: AgentRun) -> bool:
@@ -192,14 +246,81 @@ def find_claude() -> str | None:
     return None
 
 
-def build_command(claude_bin: str, prompt: str, mcp_config: Path) -> list[str]:
-    return [
+def effort_for(trigger: str) -> str:
+    settings = get_settings()
+    return settings.agent_effort_chat if trigger == "chat" else settings.agent_effort
+
+
+def build_command(claude_bin: str, prompt: str, mcp_config: Path, *, trigger: str = "manual") -> list[str]:
+    settings = get_settings()
+    command = [
         claude_bin, "-p", prompt,
         "--mcp-config", str(mcp_config), "--strict-mcp-config",
+        "--tools", "",  # nenhuma ferramenta nativa: só as do marketTon (e o prompt fica ~40 mil tokens menor)
         "--allowedTools", *ALLOWED_TOOLS,
         "--disallowedTools", *DENIED_TOOLS,
-        "--output-format", "text", "--no-session-persistence",
+        "--disable-slash-commands", "--setting-sources", "project",  # sem skills, plugins nem configuração do usuário
+        "--output-format", "json", "--no-session-persistence",
+        "--max-budget-usd", str(settings.agent_run_budget_usd),
+        "--effort", effort_for(trigger),
     ]
+    if settings.agent_model.strip():
+        command += ["--model", settings.agent_model.strip()]
+    return command
+
+
+def agent_cwd() -> Path:
+    """Pasta vazia e própria: o Claude Code não carrega o CLAUDE.md nem a memória do projeto a cada rodada."""
+    path = Path(tempfile.gettempdir()) / "marketton-agent-cwd"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def parse_output(raw: str | None) -> tuple[str, dict]:
+    """Separa o texto da resposta do consumo (a saída `json` do Claude Code). Se não for JSON, devolve o texto cru."""
+    text = (raw or "").strip()
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return text, {}
+    if not isinstance(data, dict) or "result" not in data and "usage" not in data:
+        return text, {}
+    usage = data.get("usage") or {}
+    models = list((data.get("modelUsage") or {}).keys())
+    meta = {
+        "model": models[0] if models else None,
+        "num_turns": data.get("num_turns"),
+        "tokens_in": sum(int(usage.get(k) or 0) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")) or None,
+        "tokens_out": usage.get("output_tokens"),
+        "cost_usd": data.get("total_cost_usd"),
+        "is_error": bool(data.get("is_error")),
+        "subtype": data.get("subtype"),
+    }
+    return str(data.get("result") or ""), meta
+
+
+def prefetch(session_factory: Callable[[], Session]) -> None:
+    """Sincroniza vendas e cliques por código (sem IA, sem custo de token) antes de uma rodada. Falha em silêncio."""
+    global _last_prefetch
+    now = datetime.now(UTC)
+    if _last_prefetch and now - _last_prefetch < PREFETCH_EVERY:
+        return
+    _last_prefetch = now
+    from backend.deps import get_adapters  # import tardio: a camada de serviços não depende da API
+    from core.services import link_shortener, sales_sync
+
+    with session_factory() as session:
+        for name, job in (("vendas", lambda: sales_sync.sync_sales(session, get_adapters(), since_days=30)),
+                          ("cliques", lambda: link_shortener.sync_clicks(session))):
+            try:
+                job()
+                session.commit()
+            except Exception as exc:  # noqa: BLE001 - serviço não configurado ou fora do ar não pode travar a rodada
+                session.rollback()
+                logger.info("sincronização prévia de %s não feita: %s", name, exc)
+
+
+_last_prefetch: datetime | None = None
 
 
 def child_env(token: str) -> dict[str, str]:
@@ -254,27 +375,36 @@ def execute_run(
         token = issue_agent_session(session, user)
         session.commit()
 
-    command = build_command(claude, PROMPTS[trigger] + COMMON, _write_mcp_config())
+    if trigger in ("morning", "evening", "manual"):
+        prefetch(session_factory)
+    command = build_command(claude, PROMPTS[trigger] + COMMON, _write_mcp_config(), trigger=trigger)
     started = datetime.now(UTC)
     try:
-        kwargs = {"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace",
-                  "timeout": get_settings().agent_run_timeout_minutes * 60, "env": child_env(token), "cwd": str(PROJECT_ROOT)}
+        kwargs = {"capture_output": True, "stdin": subprocess.DEVNULL, "text": True, "encoding": "utf-8", "errors": "replace",
+                  "timeout": get_settings().agent_run_timeout_minutes * 60, "env": child_env(token), "cwd": str(agent_cwd())}
         if os.name == "nt":
             kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW: nada de janela de terminal
         proc = runner(command, **kwargs)
         out, err, code = proc.stdout, proc.stderr, proc.returncode
-        status, error = ("ok", None) if code == 0 else ("failed", f"saída com código {code}")
+        out, usage = parse_output(out)
+        status, error = ("ok", None) if code == 0 and not usage.get("is_error") else ("failed", f"saída com código {code}")
+        if usage.get("subtype") == "error_max_budget_usd":
+            error = "o teto de custo da rodada foi atingido (AGENT_RUN_BUDGET_USD)"
         if code != 0 and _LOGIN_SIGNS.search(f"{out}\n{err}"):
             status, error = "needs_login", "o Claude Code não está logado"
     except subprocess.TimeoutExpired as exc:
         out, err, code, status, error = (exc.stdout or ""), (exc.stderr or ""), None, "timeout", "passou do tempo máximo"
+        usage = {}
     except OSError as exc:
         out, err, code, status, error = "", str(exc), None, "failed", f"não foi possível iniciar: {exc}"
+        usage = {}
 
     with session_factory() as session:
         run = session.get(AgentRun, run_id)
         _finish(session, run, status=status, error=error, exit_code=code,
                 output=(out if status == "ok" else f"{out}\n{err}"), started=started)
+        run.model, run.num_turns = usage.get("model"), usage.get("num_turns")
+        run.tokens_in, run.tokens_out, run.cost_usd = usage.get("tokens_in"), usage.get("tokens_out"), usage.get("cost_usd")
         if status == "needs_login":
             agent_chat.upsert_open_request(session, text=(
                 "**Entrar no Claude Code (uma vez)**\nPor quê: o agente roda em segundo plano pelo Claude Code, e o login "
@@ -376,10 +506,14 @@ def runtime_status(session: Session) -> dict:
         "claude_found": find_claude() is not None,
         "running_now": sup.current if sup else None,
         "waiting_for_login": blocked,
+        "usage_today": usage_today(session),
+        "settings": {"model": get_settings().agent_model or "padrão do Claude Code", "effort": get_settings().agent_effort,
+                     "effort_chat": get_settings().agent_effort_chat, "run_budget_usd": get_settings().agent_run_budget_usd},
         "schedule": {"morning_from_hour": get_settings().agent_morning_hour, "evening_from_hour": get_settings().agent_evening_hour},
         "runs": [{
             "id": r.id, "trigger": r.trigger, "status": r.status,
             "started_at": r.started_at.isoformat(), "finished_at": r.finished_at.isoformat() if r.finished_at else None,
             "duration_seconds": r.duration_seconds, "error": r.error, "output_tail": r.output_tail,
+            "model": r.model, "num_turns": r.num_turns, "tokens_in": r.tokens_in, "tokens_out": r.tokens_out, "cost_usd": r.cost_usd,
         } for r in runs],
     }

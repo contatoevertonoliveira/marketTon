@@ -16,6 +16,7 @@ ela vira uma ferramenta aqui.
 # Sem `from __future__ import annotations` de propósito: versões antigas do SDK do MCP (1.12 e anteriores)
 # examinam a anotação dos parâmetros das ferramentas e quebram quando ela vira texto ("str | None").
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,8 @@ AGENT_NAME = "claude_agent"
 INSTRUCTIONS = """\
 Você administra o marketTon, um sistema de inteligência para afiliados (Shopee, Mercado Livre).
 
-Comece SEMPRE por `agent_playbook` (seu manual de especialista) e `chat_inbox` (o que o operador pediu).
+Comece por `chat_inbox` (o que o operador pediu) e consulte `agent_playbook` (seu manual) só na seção de que precisa, com `section`.
+Seja econômico: cada chamada e cada token custam ao operador.
 Fale com o operador pelo chat (`chat_send`); peça recursos que faltam com `request_resource`.
 
 Princípios:
@@ -248,12 +250,22 @@ PLAYBOOK = Path(__file__).resolve().parent.parent / "docs" / "agent-playbook.md"
 
 
 @mcp.tool(annotations=READ)
-def agent_playbook() -> str:
-    """O manual do agente: regras, rotina diária, como escolher produto, conteúdo orgânico e recalibragem. Leia antes de agir."""
+def agent_playbook(section: str | None = None) -> str:
+    """O manual do agente (regras, rotina, escolha de produto, conteúdo, recalibragem).
+
+    Sem `section` devolve o manual inteiro; com `section` ("1", "2", "3.05"…) devolve só essa seção e economiza leitura.
+    """
     try:
-        return PLAYBOOK.read_text(encoding="utf-8")
+        text = PLAYBOOK.read_text(encoding="utf-8")
     except OSError:
         return "Manual não encontrado em docs/agent-playbook.md."
+    if not section:
+        return text
+    wanted = section.strip().rstrip(".")
+    blocks = re.split(r"(?m)^(?=## )", text)
+    titles = [b.splitlines()[0] for b in blocks if b.startswith("## ")]
+    picked = [b for b in blocks if b.startswith("## ") and b[3:].split()[0].rstrip(".") == wanted]
+    return "".join(picked).strip() or f"Seção '{section}' não existe. Seções: " + " | ".join(titles)
 
 
 @mcp.tool(annotations=READ)

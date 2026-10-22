@@ -40,6 +40,13 @@ Publicação (quando a integração existir): no máximo **1 post pela manhã (�
 (≈ 19h–21h)**, com horário variando dentro da janela. Antes disso, entregue o conteúdo pronto no
 chat para o operador publicar.
 
+## 2.1 Economia (cada token custa)
+
+O operador paga cada rodada. Leia só a seção do manual de que precisa (`agent_playbook` com `section`), chame cada
+ferramenta uma vez, use `limit` pequeno (até 10), não repita consulta nem pedido, não reescreva o que já está no chat
+e feche com 1–3 linhas. Vendas e cliques são sincronizados pelo sistema antes das rotinas — não gaste chamadas nisso.
+A rodada da noite só acontece se houve venda, clique ou mensagem nova: sem sinal, não há o que analisar.
+
 ## 3. Como escolher o produto (placar de 0 a 10 por critério)
 
 | Critério | Pergunta | Fonte |

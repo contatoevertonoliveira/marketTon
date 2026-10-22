@@ -64,6 +64,8 @@ function Bubble({ m, onStatus }) {
 
 
 const TRIGGERS = { activation: "ativação", chat: "chat", morning: "rotina da manhã", evening: "rotina da noite", manual: "manual" };
+const usd = (v) => (v == null ? null : `US$ ${Number(v).toFixed(v < 0.1 ? 3 : 2)}`);
+const kTokens = (n) => (n == null ? null : n >= 1000 ? `${Math.round(n / 1000)} mil` : String(n));
 const RUN_STATUS = {
   ok: ["✓", "#2dce89", "concluída"], failed: ["✗", "#f5365c", "falhou"], timeout: ["⏱", "#f5365c", "estourou o tempo"],
   needs_login: ["🔑", "#f6c944", "pediu login"], running: ["…", "#5e72e4", "em execução"],
@@ -106,6 +108,15 @@ function RuntimePanel() {
     <div style={card}>
       <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14, marginBottom: 8 }}>Agente em segundo plano</div>
       <div style={{ fontSize: 12, padding: "8px 10px", borderRadius: 8, color: state[0], background: state[1] }}>{state[2]}</div>
+      {rt.usage_today && (
+        <div style={{ marginTop: 8, fontSize: 12, color: rt.usage_today.cost_usd >= rt.usage_today.daily_budget_usd || rt.usage_today.runs >= rt.usage_today.max_runs ? "#c31e3f" : "#525f7f" }}>
+          Hoje: <strong>{rt.usage_today.runs}</strong> de {rt.usage_today.max_runs} rodadas · <strong>{usd(rt.usage_today.cost_usd) || "US$ 0"}</strong> de {usd(rt.usage_today.daily_budget_usd)} · {kTokens(rt.usage_today.tokens) || 0} tokens
+          <div style={{ fontSize: 11, color: "#8898aa" }}>
+            Modelo {rt.settings?.model}, esforço {rt.settings?.effort} (chat: {rt.settings?.effort_chat}); teto de {usd(rt.settings?.run_budget_usd)} por rodada.
+            Valores a preço de tabela da API — em plano de assinatura servem como medida do consumo. Ao bater o teto do dia, só o "Rodar agora" funciona.
+          </div>
+        </div>
+      )}
       {canManage && (
         <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
           <button onClick={runNow} style={{ border: "none", background: "#5e72e4", color: "#fff", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer" }}>Rodar agora</button>
@@ -121,7 +132,7 @@ function RuntimePanel() {
               <details key={r.id} style={{ fontSize: 12, padding: "3px 0", borderTop: "1px solid #f0f2f7" }}>
                 <summary style={{ cursor: "pointer", color: "#32325d" }}>
                   <span style={{ color, fontWeight: 900 }}>{icon}</span> {TRIGGERS[r.trigger] || r.trigger} · {label}
-                  <span style={{ color: "#8898aa" }}> · {time(r.started_at)}{r.duration_seconds ? ` · ${Math.round(r.duration_seconds)}s` : ""}</span>
+                  <span style={{ color: "#8898aa" }}> · {time(r.started_at)}{r.duration_seconds ? ` · ${Math.round(r.duration_seconds)}s` : ""}{r.cost_usd != null ? ` · ${usd(r.cost_usd)}` : ""}{r.num_turns ? ` · ${r.num_turns} passos` : ""}</span>
                 </summary>
                 <div style={{ color: "#525f7f", whiteSpace: "pre-wrap", margin: "4px 0 4px 14px", wordBreak: "break-word" }}>
                   {r.error && <div style={{ color: "#c31e3f" }}>{r.error}</div>}

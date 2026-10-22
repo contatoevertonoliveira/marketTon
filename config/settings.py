@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     agent_run_timeout_minutes: int = 25
     agent_morning_hour: int = 8  # a rotina da manhã roda a partir desta hora local
     agent_evening_hour: int = 19  # e a da noite a partir desta
+    # Custo-benefício: modelo/esforço sob medida, tetos por rodada e por dia (valores em US$, preço de tabela da API —
+    # em plano de assinatura servem como medida de consumo). Rodada que estoura o teto é encerrada.
+    agent_model: str = "sonnet"
+    agent_effort: str = "medium"  # rotinas e ativação
+    agent_effort_chat: str = "low"  # responder o chat não precisa pensar tanto
+    agent_run_budget_usd: float = 1.0
+    agent_daily_budget_usd: float = 3.0
+    agent_max_runs_per_day: int = 8  # rodadas automáticas por dia (o "rodar agora" manual não conta)
 
     # --- Meta Ads (Marketing API / Ads Library) --------------------------------
     meta_access_token: str = ""
