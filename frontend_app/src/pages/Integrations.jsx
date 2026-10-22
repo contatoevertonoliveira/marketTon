@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { API_BASE, getJSON, getTokens, postJSON, putJSON } from "../lib/apiClient";
+import ServiceCards from "./ServiceCards";
 
 const input = {
   padding: "8px 10px",
@@ -396,6 +397,8 @@ export default function Integrations() {
           <MarketplaceCard key={c.marketplace} credential={c} onOpen={() => setOpenMarketplace(c.marketplace)} />
         ))}
       </div>
+
+      <ServiceCards />
 
       {open && (
         <MarketplaceModal

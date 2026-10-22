@@ -10,9 +10,11 @@ Honestidade sobre o que vem de onde:
 * **Público** (feminino/masculino/infantil) é *inferido do texto* da palavra-
   chave por regras simples — está rotulado como inferência na API.
 * **Volume, CPC e concorrência** só existem no Planejador de Palavras-chave
-  do Google Ads, que não tem API gratuita. Vêm do DataForSEO *se* houver
-  credencial; sem ela ficam `None`. O CPC vem em dólar e só é convertido para
-  R$ se o operador informar a cotação — nenhum câmbio é embutido aqui.
+  do Google Ads. Vêm da API do Google Ads (credenciais em Integrações) ou, na
+  falta dela, do DataForSEO; sem nenhum dos dois ficam `None`. O CPC chega na
+  moeda da conta do Google Ads (BRL vira `cpc_brl` direto) ou em dólar pelo
+  DataForSEO, que só vira R$ se o operador informar a cotação — nenhum câmbio
+  é embutido aqui.
 """
 from __future__ import annotations
 
@@ -25,6 +27,7 @@ import requests
 
 from collectors.google_trends.client import fetch_keyword_interest
 from config.settings import get_settings
+from integrations.google_ads import GoogleAdsClient, GoogleAdsConfig, GoogleAdsError
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +76,7 @@ class KeywordMetrics:
     competition: str | None = None  # "LOW" | "MEDIUM" | "HIGH"
     competition_index: int | None = None
     planner_source: str | None = None
+    planner_error: str | None = None
 
     notes: list[str] = field(default_factory=list)
 
@@ -105,30 +109,87 @@ def _days(n: int):
     return pd.Timedelta(days=n)
 
 
-def _planner_metrics(keywords: list[str]) -> dict[str, dict[str, Any]]:
-    """Volume/CPC/concorrência via DataForSEO (Google Ads search_volume).
-
-    Sem credencial devolve `{}`. Formato da resposta montado a partir da
-    documentação pública do provedor e **ainda não validado com conta real** —
-    ajustar na primeira chamada de verdade, como foi feito com a Shopee.
-    """
-    settings = get_settings()
-    if not (settings.dataforseo_login and settings.dataforseo_password):
-        return {}
+def _google_ads_config() -> GoogleAdsConfig | None:
+    """Credenciais do Google Ads salvas em Integrações (só se ativas e completas)."""
     try:
-        response = requests.post(
-            "https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live",
-            auth=(settings.dataforseo_login, settings.dataforseo_password),
-            json=[{"keywords": keywords, "location_code": 2076, "language_code": "pt"}],
-            timeout=45,
-        )
-        response.raise_for_status()
-        tasks = response.json().get("tasks") or []
-        items = (tasks[0].get("result") or []) if tasks else []
-    except Exception as exc:  # noqa: BLE001 - falha do provedor não derruba a tela
-        logger.warning("DataForSEO falhou: %s", exc)
-        return {}
-    return {str(item.get("keyword", "")).lower(): item for item in items}
+        from sqlalchemy import select
+
+        from core.db.service_credentials import ServiceCredential
+        from core.db.session import session_scope
+
+        with session_scope() as session:
+            row = session.scalar(select(ServiceCredential).where(ServiceCredential.service == "google_ads"))
+            if row is None or not row.enabled:
+                return None
+            config = GoogleAdsConfig.from_values(row.values)
+            return config if config.is_complete() else None
+    except Exception as exc:  # noqa: BLE001 - banco indisponível não derruba a tela
+        logger.warning("não foi possível ler credenciais do Google Ads: %s", exc)
+        return None
+
+
+def _dataforseo_configured() -> bool:
+    settings = get_settings()
+    return bool(settings.dataforseo_login and settings.dataforseo_password)
+
+
+def planner_provider() -> str | None:
+    """Qual provedor de volume/CPC está configurado: "google_ads", "dataforseo" ou `None`."""
+    if _google_ads_config() is not None:
+        return "google_ads"
+    return "dataforseo" if _dataforseo_configured() else None
+
+
+def _planner_metrics(keywords: list[str]) -> tuple[dict[str, dict[str, Any]], str | None, str | None]:
+    """Volume/CPC/concorrência. Devolve `(métricas, provedor, erro)`.
+
+    Cada métrica vem normalizada: `search_volume`, `competition`,
+    `competition_index`, `cpc` e `currency`. Tenta o Google Ads primeiro; se ele
+    falhar, o erro volta para a tela (não some em silêncio) e o DataForSEO, se
+    configurado, é a alternativa.
+    """
+    error: str | None = None
+    config = _google_ads_config()
+    if config is not None:
+        try:
+            found, _currency = GoogleAdsClient(config).keyword_metrics(keywords)
+            return found, "google_ads", None
+        except GoogleAdsError as exc:
+            logger.warning("Google Ads falhou: %s", exc)
+            error = f"Google Ads: {exc}"
+
+    if _dataforseo_configured():
+        settings = get_settings()
+        try:
+            response = requests.post(
+                "https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live",
+                auth=(settings.dataforseo_login, settings.dataforseo_password),
+                json=[{"keywords": keywords, "location_code": 2076, "language_code": "pt"}],
+                timeout=45,
+            )
+            response.raise_for_status()
+            tasks = response.json().get("tasks") or []
+            items = (tasks[0].get("result") or []) if tasks else []
+            # Formato montado pela documentação do provedor, ainda não validado
+            # com conta real. O CPC do DataForSEO é sempre em dólar.
+            return (
+                {
+                    str(item.get("keyword", "")).lower(): {
+                        "search_volume": item.get("search_volume"),
+                        "competition": item.get("competition"),
+                        "competition_index": item.get("competition_index"),
+                        "cpc": item.get("cpc"),
+                        "currency": "USD",
+                    }
+                    for item in items
+                },
+                "dataforseo",
+                error,
+            )
+        except Exception as exc:  # noqa: BLE001 - falha do provedor não derruba a tela
+            logger.warning("DataForSEO falhou: %s", exc)
+            error = f"{error + ' · ' if error else ''}DataForSEO: {str(exc)[:160]}"
+    return {}, None, error
 
 
 def analyze_keywords(keywords: list[str], *, geo: str = "BR") -> list[KeywordMetrics]:
@@ -136,14 +197,18 @@ def analyze_keywords(keywords: list[str], *, geo: str = "BR") -> list[KeywordMet
     results: dict[str, KeywordMetrics] = {}
     pending: list[str] = []
 
+    provider = planner_provider()
     for keyword in keywords:
         cached = _cache.get((keyword.lower(), geo))
-        if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        fresh = cached and now - cached[0] < _CACHE_TTL_SECONDS
+        # Resultado guardado sem volume/CPC deixa de valer assim que um provedor
+        # é configurado — senão o operador salva a credencial e nada muda por 6h.
+        if fresh and not (cached[1].planner_source is None and provider is not None):
             results[keyword] = cached[1]
         else:
             pending.append(keyword)
 
-    planner = _planner_metrics(pending) if pending else {}
+    planner, source, planner_error = _planner_metrics(pending) if pending else ({}, None, None)
     settings = get_settings()
 
     for keyword in pending:
@@ -157,17 +222,24 @@ def analyze_keywords(keywords: list[str], *, geo: str = "BR") -> list[KeywordMet
         metrics.trend_direction = trend.get("trend_direction")
         metrics.trend_error = trend.get("error")
 
+        metrics.planner_error = planner_error
         item = planner.get(keyword.lower())
         if item:
-            metrics.planner_source = "dataforseo"
+            metrics.planner_source = source
             metrics.monthly_volume = item.get("search_volume")
             metrics.competition = item.get("competition")
             metrics.competition_index = item.get("competition_index")
-            cpc = item.get("cpc")
+            cpc, currency = item.get("cpc"), item.get("currency")
             if cpc is not None:
-                metrics.cpc_usd = float(cpc)
-                if settings.usd_brl_rate:
-                    metrics.cpc_brl = round(float(cpc) * settings.usd_brl_rate, 2)
+                if currency == "BRL":
+                    metrics.cpc_brl = round(float(cpc), 2)
+                elif currency == "USD":
+                    metrics.cpc_usd = float(cpc)
+                    if settings.usd_brl_rate:
+                        metrics.cpc_brl = round(float(cpc) * settings.usd_brl_rate, 2)
+                else:
+                    # Moeda da conta que não conhecemos: não converte no escuro.
+                    metrics.notes.append(f"CPC em {currency or 'moeda desconhecida'}, sem conversão para R$")
         _cache[(keyword.lower(), geo)] = (now, metrics)
         results[keyword] = metrics
 
@@ -192,4 +264,4 @@ def rank_opportunities(items: list[KeywordMetrics], limit: int = 5) -> tuple[lis
     return sorted(rising, key=lambda m: -(m.growth_pct_30d or 0))[:limit], "growth_only"
 
 
-__all__ = ["KeywordMetrics", "analyze_keywords", "infer_audience", "rank_opportunities"]
+__all__ = ["KeywordMetrics", "analyze_keywords", "infer_audience", "planner_provider", "rank_opportunities"]

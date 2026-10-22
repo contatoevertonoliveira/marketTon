@@ -156,10 +156,13 @@ export default function Opportunities() {
           {!useMock && !view.planner_configured && (
             <div style={{ ...card, marginBottom: 16, background: "#fff8e6", fontSize: 12, color: "#8a6d1d" }}>
               <strong>CPC, volume e concorrência não estão ativos.</strong> O Google só entrega esses números pelo
-              Planejador de Palavras-chave (Google Ads), sem API gratuita — hoje o ranking considera{" "}
-              <em>só o crescimento</em> do Trends, não o custo. Configure <code>DATAFORSEO_LOGIN</code> e{" "}
-              <code>DATAFORSEO_PASSWORD</code> (e <code>USD_BRL_RATE</code> para ver em R$) no <code>.env</code> para
-              ativar.
+              Planejador de Palavras-chave (Google Ads) — hoje o ranking considera <em>só o crescimento</em> do
+              Trends, não o custo. Conecte sua conta em <strong>Integrações → Google Ads</strong> para ativar.
+            </div>
+          )}
+          {!useMock && view.planner_error && (
+            <div style={{ ...card, marginBottom: 16, background: "#fef1f4", fontSize: 12, color: "#c31e3f" }}>
+              <strong>O provedor de CPC/volume falhou:</strong> {view.planner_error}
             </div>
           )}
           <h6 style={{ color: "#32325d", margin: "0 0 10px" }}>

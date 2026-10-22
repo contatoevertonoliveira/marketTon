@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from agents.product_hunter.agent import DEFAULT_KEYWORDS
 from backend.security import require
 from config.settings import get_settings
-from core.services.keyword_metrics import analyze_keywords, rank_opportunities
+from core.services.keyword_metrics import analyze_keywords, planner_provider, rank_opportunities
 
 router = APIRouter(prefix="/trends", tags=["tendências"], dependencies=[Depends(require("catalog.view"))])
 
@@ -34,11 +34,14 @@ class KeywordMetricsOut(BaseModel):
     competition: str | None = None
     competition_index: int | None = None
     planner_source: str | None = None
+    planner_error: str | None = None
 
 
 class OpportunitiesOut(BaseModel):
     ranking_basis: str  # "cpc_and_growth" | "growth_only"
     planner_configured: bool
+    planner_provider: str | None = None
+    planner_error: str | None = None
     fx_configured: bool
     top: list[KeywordMetricsOut] = Field(default_factory=list)
     analyzed: list[KeywordMetricsOut] = Field(default_factory=list)
@@ -53,10 +56,13 @@ def opportunities(
     analyzed = analyze_keywords(terms[:15])
     top, basis = rank_opportunities(analyzed, limit)
     settings = get_settings()
+    provider = planner_provider()
     to_out = lambda m: KeywordMetricsOut(**{k: v for k, v in asdict(m).items() if k != "notes"})  # noqa: E731
     return OpportunitiesOut(
         ranking_basis=basis,
-        planner_configured=bool(settings.dataforseo_login and settings.dataforseo_password),
+        planner_configured=provider is not None,
+        planner_provider=provider,
+        planner_error=next((m.planner_error for m in analyzed if m.planner_error), None),
         fx_configured=bool(settings.usd_brl_rate),
         top=[to_out(m) for m in top],
         analyzed=[to_out(m) for m in analyzed],

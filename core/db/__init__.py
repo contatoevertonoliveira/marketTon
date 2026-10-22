@@ -33,6 +33,7 @@ from core.db.jobs import Job, JobEvent
 from core.db.learning import PredictionOutcome, ScoreCalibration
 from core.db.commission_rates import CommissionRate
 from core.db.marketplace_credentials import MarketplaceCredential
+from core.db.service_credentials import ServiceCredential
 from core.db.portfolio import (
     PortfolioItem,
     PortfolioTransition,
@@ -101,6 +102,7 @@ __all__ = [
     # credenciais de marketplace
     "CommissionRate",
     "MarketplaceCredential",
+    "ServiceCredential",
     # ai
     "AIInterpretation",
     "AIInterpretationKind",

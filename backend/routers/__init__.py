@@ -15,6 +15,7 @@ from backend.routers import (
     performance,
     portfolio,
     scoring,
+    services,
     trends,
 )
 
@@ -29,6 +30,7 @@ API_ROUTERS = [
     marketplaces.router,
     trends.router,
     performance.router,
+    services.router,
 ]
 
 __all__ = [
@@ -42,5 +44,6 @@ __all__ = [
     "performance",
     "portfolio",
     "scoring",
+    "services",
     "trends",
 ]
