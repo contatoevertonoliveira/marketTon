@@ -271,10 +271,18 @@ def _apply_product_fields(product: Product, item: ConnectorProduct) -> None:
     expor um campo em uma chamada e expô-lo na seguinte, e sobrescrever com nulo
     destruiria informação boa.
     """
+    from core.services.commission_learning import LEARNED_KEYS, SOURCE
+
+    previous = product.attributes or {}
+    learned = previous.get("commission_source") == SOURCE
     for attr in _PRODUCT_FIELDS:
         value = getattr(item, attr)
         if value is not None:
             setattr(product, attr, value)
+    # `attributes` é substituído inteiro a cada coleta. Se a coleta não trouxe comissão
+    # própria, a que aprendemos nas vendas continua valendo — e sua procedência com ela.
+    if learned and item.attributes is not None and item.affiliate_commission_pct is None:
+        product.attributes = {**(product.attributes or {}), **{k: previous[k] for k in LEARNED_KEYS if k in previous}}
 
 
 def _changed(previous: object, current: object) -> bool:

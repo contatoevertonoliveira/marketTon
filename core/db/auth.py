@@ -35,7 +35,9 @@ class Role(str, enum.Enum):
     """Papéis do sistema, do mais ao menos privilegiado.
 
     `BOT` existe para integrações automatizadas: um token de bot não deve ser
-    confundido com um operador humano na trilha de auditoria.
+    confundido com um operador humano na trilha de auditoria. É o papel do agente
+    Claude (servidor MCP): consulta sempre; escreve só com o modo agente ligado. É o papel do agente
+    Claude (servidor MCP): consulta sempre; escreve só com o modo agente ligado.
     """
 
     ADMIN = "admin"

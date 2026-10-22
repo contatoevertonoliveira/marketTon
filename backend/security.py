@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from backend.deps import get_session
 from config.settings import get_settings
 from core.db.auth import Role, User
-from core.roles import has_permission, permissions_for
+from core.roles import AGENT_ROLE, has_permission, permissions_for
 from core.services.auth import (
     AccountInactive,
     AuthError,
@@ -126,6 +126,31 @@ def get_principal(
 CurrentUser = Annotated[Principal, Depends(get_principal)]
 
 
+def _agent_write_blocked(principal: "Principal", permission: str, session: Session) -> bool:
+    """True quando o agente (papel BOT) tenta uma ação de escrita com o modo agente desligado.
+
+    Qualquer permissão que não seja de leitura (`*.view`) conta como escrita. A trava
+    fica na API — não só na tela e no servidor MCP — para que nenhum cliente consiga
+    contorná-la: o interruptor da tela vale para quem quer que use o token do agente.
+    """
+    if principal.role != AGENT_ROLE or permission.endswith(".view"):
+        return False
+    from core.services.app_settings import agent_mode_enabled
+
+    return not agent_mode_enabled(session)
+
+
+def _agent_mode_off() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "message": "modo agente desligado: o agente só pode consultar. "
+            "Peça ao administrador para ativar a administração pelo agente.",
+            "agent_mode": False,
+        },
+    )
+
+
 def require(permission: str):
     """Cria a dependência que exige uma permissão.
 
@@ -133,7 +158,7 @@ def require(permission: str):
     endpoint — quem lê o código vê qual permissão protege o quê.
     """
 
-    def dependency(principal: CurrentUser) -> Principal:
+    def dependency(principal: CurrentUser, session: Session = Depends(get_session)) -> Principal:
         if not principal.can(permission):
             # 403 e não 401: o usuário está autenticado, apenas não tem o direito.
             raise HTTPException(
@@ -144,6 +169,8 @@ def require(permission: str):
                     "required_permission": permission,
                 },
             )
+        if _agent_write_blocked(principal, permission, session):
+            raise _agent_mode_off()
         return principal
 
     # O nome fica legível no /docs, que é onde o frontend descobre o contrato.
@@ -154,7 +181,7 @@ def require(permission: str):
 def require_any(*permissions: str):
     """Exige ao menos uma das permissões listadas."""
 
-    def dependency(principal: CurrentUser) -> Principal:
+    def dependency(principal: CurrentUser, session: Session = Depends(get_session)) -> Principal:
         if not any(principal.can(permission) for permission in permissions):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -163,6 +190,9 @@ def require_any(*permissions: str):
                     "role": principal.role.value,
                 },
             )
+        allowed = [p for p in permissions if principal.can(p)]
+        if all(_agent_write_blocked(principal, p, session) for p in allowed):
+            raise _agent_mode_off()
         return principal
 
     dependency.__name__ = "require_any_" + "_".join(p.replace(".", "_") for p in permissions)

@@ -7,6 +7,7 @@ import Integrations from "./pages/Integrations";
 import TrendingAbroad from "./pages/TrendingAbroad";
 import Opportunities from "./pages/Opportunities";
 import Profile from "./pages/Profile";
+import AgentSwitch from "./components/AgentSwitch";
 import Login from "./pages/Login";
 import { API_BASE, isLoggedIn, logout, setAuthExpiredHandler } from "./lib/apiClient";
 
@@ -183,9 +184,15 @@ export default function App() {
             padding: "14px 18px",
             boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)",
             marginBottom: 18,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
           }}
         >
           <div style={{ fontWeight: 600, color: "#32325d" }}>Painel marketTon</div>
+          <AgentSwitch />
         </header>
 
         {renderPage()}

@@ -6,6 +6,7 @@ registrar todos de uma vez.
 from __future__ import annotations
 
 from backend.routers import (
+    agent,
     auth,
     catalog,
     creative,
@@ -31,10 +32,12 @@ API_ROUTERS = [
     trends.router,
     performance.router,
     services.router,
+    agent.router,
 ]
 
 __all__ = [
     "API_ROUTERS",
+    "agent",
     "auth",
     "catalog",
     "creative",

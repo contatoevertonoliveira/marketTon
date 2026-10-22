@@ -35,27 +35,27 @@ class Permission:
 
 PERMISSIONS: tuple[Permission, ...] = (
     # --- Catálogo -------------------------------------------------------------
-    Permission("catalog.view", "Ver produtos e procedência", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
-    Permission("catalog.ingest", "Coletar catálogo dos marketplaces", (Role.ADMIN, Role.MANAGER, Role.OPERATOR)),
+    Permission("catalog.view", "Ver produtos e procedência", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER, Role.BOT)),
+    Permission("catalog.ingest", "Coletar catálogo dos marketplaces", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.BOT)),
     Permission("catalog.manage", "Inativar produtos e ajustar catálogo", (Role.ADMIN, Role.MANAGER)),
     # --- Scoring --------------------------------------------------------------
-    Permission("scoring.view", "Ver scores e explicações", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
-    Permission("scoring.compute", "Executar cálculo de score", (Role.ADMIN, Role.MANAGER, Role.OPERATOR)),
+    Permission("scoring.view", "Ver scores e explicações", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER, Role.BOT)),
+    Permission("scoring.compute", "Executar cálculo de score", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.BOT)),
     Permission("scoring.calibrate", "Publicar nova versão de algoritmo", (Role.ADMIN,)),
     # --- Portfólio ------------------------------------------------------------
-    Permission("portfolio.view", "Ver portfólio e trilha de estados", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
-    Permission("portfolio.manage", "Adicionar produtos e mover estados", (Role.ADMIN, Role.MANAGER, Role.OPERATOR)),
-    Permission("portfolio.affiliate", "Marcar afiliação e remover produto", (Role.ADMIN, Role.MANAGER)),
+    Permission("portfolio.view", "Ver portfólio e trilha de estados", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER, Role.BOT)),
+    Permission("portfolio.manage", "Adicionar produtos e mover estados", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.BOT)),
+    Permission("portfolio.affiliate", "Marcar afiliação e remover produto", (Role.ADMIN, Role.MANAGER, Role.BOT)),
     # --- Criativos ------------------------------------------------------------
-    Permission("creatives.view", "Ver materiais criativos", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
+    Permission("creatives.view", "Ver materiais criativos", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER, Role.BOT)),
     Permission("creatives.edit", "Criar e mover status de materiais", (Role.ADMIN, Role.MANAGER, Role.OPERATOR)),
     Permission("creatives.approve", "Aprovar material para publicação", (Role.ADMIN, Role.MANAGER)),
     # --- Publicação -----------------------------------------------------------
     Permission("publication.publish", "Publicar material aprovado", (Role.ADMIN, Role.MANAGER)),
     # --- Operação -------------------------------------------------------------
-    Permission("operations.view", "Ver painel diário e revisão semanal", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
+    Permission("operations.view", "Ver painel diário e revisão semanal", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER, Role.BOT)),
     Permission("agents.run", "Iniciar e parar agentes", (Role.ADMIN, Role.MANAGER)),
-    Permission("jobs.view", "Ver histórico de execução", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER)),
+    Permission("jobs.view", "Ver histórico de execução", (Role.ADMIN, Role.MANAGER, Role.OPERATOR, Role.VIEWER, Role.BOT)),
     # --- Administração --------------------------------------------------------
     Permission("connectors.manage", "Configurar credenciais de marketplace", (Role.ADMIN,)),
     Permission("users.manage", "Criar, desativar e alterar usuários", (Role.ADMIN,)),
@@ -64,6 +64,12 @@ PERMISSIONS: tuple[Permission, ...] = (
     Permission("support.manage", "Gerenciar feedback e grupos", (Role.ADMIN, Role.MANAGER)),
     Permission("billing.view", "Ver pagamentos", (Role.ADMIN, Role.MANAGER)),
 )
+
+# O papel BOT é o do agente Claude (servidor MCP). Fica de fora, de propósito:
+# credenciais (connectors.manage), usuários, auditoria, aprovação e publicação de
+# criativos, calibração de score e pagamentos. As demais permissões de escrita só
+# valem com o "modo agente" ligado (ver `backend/security.py`).
+AGENT_ROLE = Role.BOT
 
 PERMISSIONS_BY_NAME: dict[str, Permission] = {permission.name: permission for permission in PERMISSIONS}
 

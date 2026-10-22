@@ -37,3 +37,6 @@ pytest==8.3.4
 pytest-asyncio==0.25.0
 httpx==0.28.1
 ruff==0.8.6
+
+# Servidor MCP do agente Claude (mcp_server/). Abaixo de 2: a 2.x exige starlette 1.x, incompativel com o FastAPI fixado.
+mcp>=1.9,<2

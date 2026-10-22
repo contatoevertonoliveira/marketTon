@@ -15,7 +15,7 @@ const input = {
 const label = { fontSize: 12, color: "#8898aa", marginBottom: 4 };
 const primary = { background: "#5e72e4", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 
-const ROLE_LABELS = { admin: "Administrador", manager: "Gerente", operator: "Operador", viewer: "Leitor" };
+const ROLE_LABELS = { admin: "Administrador", manager: "Gerente", operator: "Operador", viewer: "Leitor", bot: "Agente (Claude)" };
 
 function Field({ title, children, hint }) {
   return (

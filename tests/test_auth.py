@@ -462,8 +462,15 @@ class TestPermissionMatrix:
         assert not has_permission(Role.OPERATOR, "connectors.manage")
         assert not has_permission(Role.OPERATOR, "creatives.approve")
 
-    def test_bot_has_no_human_permissions(self) -> None:
-        assert permissions_for(Role.BOT) == []
+    def test_bot_is_the_agent_role_with_minimal_permissions(self) -> None:
+        """O agente Claude consulta e age no portfólio — e nunca toca em segredo, usuário ou publicação."""
+        granted = set(permissions_for(Role.BOT))
+        assert {"catalog.view", "portfolio.view", "portfolio.manage", "portfolio.affiliate"} <= granted
+        for forbidden in (
+            "connectors.manage", "users.manage", "audit.view", "creatives.approve", "publication.publish",
+            "scoring.calibrate", "billing.view", "agents.run", "catalog.manage", "support.manage",
+        ):
+            assert forbidden not in granted, forbidden
 
     def test_unknown_permission_is_denied_by_default(self) -> None:
         """Negar por padrão: uma permissão que não existe não pode virar acesso."""

@@ -32,6 +32,7 @@ from core.db.creative import CreativeAsset, CreativeAssetEvent, Publication
 from core.db.jobs import Job, JobEvent
 from core.db.learning import PredictionOutcome, ScoreCalibration
 from core.db.commission_rates import CommissionRate
+from core.db.app_settings import AppSetting
 from core.db.marketplace_credentials import MarketplaceCredential
 from core.db.service_credentials import ServiceCredential
 from core.db.portfolio import (
@@ -101,6 +102,7 @@ __all__ = [
     "ScoreCalibration",
     # credenciais de marketplace
     "CommissionRate",
+    "AppSetting",
     "MarketplaceCredential",
     "ServiceCredential",
     # ai

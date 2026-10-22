@@ -41,6 +41,8 @@ sys.path.insert(0, str(ROOT))
 from agents.product_hunter.agent import DEFAULT_KEYWORDS, HunterOptions, run  # noqa: E402
 from backend.deps import get_adapters  # noqa: E402
 from core.db.session import session_scope  # noqa: E402
+from core.db.base import Marketplace  # noqa: E402
+from core.services.commission_learning import apply_commissions, propose_commissions  # noqa: E402
 from core.services.sales_ingestion import ingest_sales  # noqa: E402
 from integrations.marketplaces.registry import list_adapter_names, load_adapters  # noqa: E402
 
@@ -141,10 +143,14 @@ def _run_sales(adapter_names: list[str], args: argparse.Namespace) -> int:
                 continue
 
             stats = ingest_sales(session, records, name)
+            # Produto sem comissão que já vendeu: a taxa observada nas vendas preenche.
+            learned = apply_commissions(session, propose_commissions(session, marketplace=Marketplace(name)))
             if args.json:
                 print(json.dumps(stats.__dict__, ensure_ascii=False, indent=2, default=str))
             else:
                 print(stats.summary())
+                if learned:
+                    print(f"  comissão observada nas vendas aplicada a {learned} produto(s)")
                 for warning in stats.warnings[:10]:
                     print(f"  (aviso) {warning}")
 
