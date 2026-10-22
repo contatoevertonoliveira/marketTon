@@ -61,7 +61,7 @@ CREDENTIAL_FIELDS: dict[str, list[dict[str, str | bool]]] = {
     "hotmart": [
         {"name": "client_id", "label": "Client ID", "secret": False},
         {"name": "client_secret", "label": "Client Secret", "secret": True},
-        {"name": "basic_token", "label": "Token Basic", "secret": True},
+        {"name": "basic_token", "label": "Token Basic (opcional: o marketTon monta sozinho a partir do ID e do Secret)", "secret": True},
         {"name": "sandbox", "label": "Ambiente de testes? (deixe vazio para produção; escreva sim para sandbox)", "secret": False},
     ],
     # Monetizze: Ferramentas > API > Nova chave de API.

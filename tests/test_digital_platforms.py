@@ -72,8 +72,10 @@ def _hotmart_item(tx, status, value=100.0, product=("2125812", "Curso X"), appro
     }
 
 
-def test_hotmart_requires_all_three_credentials():
-    assert not HotmartAdapter(HotmartConfig(client_id="a", client_secret="b")).is_configured()
+def test_hotmart_needs_the_client_id_and_the_secret_but_the_basic_token_is_derived():
+    assert HotmartAdapter(HotmartConfig(client_id="a", client_secret="b")).is_configured()  # o Basic é montado sozinho
+    assert not HotmartAdapter(HotmartConfig(client_id="a")).is_configured()
+    assert not HotmartAdapter(HotmartConfig(client_secret="b")).is_configured()
     with pytest.raises(PlatformNotConfigured):
         HotmartAdapter(HotmartConfig()).check()
 
@@ -91,6 +93,32 @@ def test_hotmart_token_request_follows_the_official_flow_and_is_cached(monkeypat
     adapter._access_token()
     adapter._access_token()
     assert http.count("POST", "oauth/token") == 1  # o token vale 48 h: não se refaz a cada chamada
+
+
+def test_hotmart_derives_the_basic_token_and_survives_a_swapped_paste(monkeypatch):
+    import base64
+
+    cid, secret = "11111111-2222-3333-4444-555555555555", "99999999-8888-7777-6666-000000000000"
+    basic = base64.b64encode(f"{cid}:{secret}".encode()).decode()
+    seen = []
+
+    def run(**cfg):
+        http = _Http(monkeypatch, {("POST", "oauth/token"): HOTMART_TOKEN})
+        adapter = HotmartAdapter(HotmartConfig(client_id=cid, **cfg))
+        assert adapter.is_configured() is True
+        adapter.check()
+        _, _, kw = http.calls[0]
+        seen.append((kw["params"]["client_secret"], kw["headers"]["Authorization"]))
+
+    run(client_secret=secret)  # sem o campo Basic: o marketTon monta
+    run(client_secret=secret, basic_token=f"Basic {basic}")  # tudo certo, com o prefixo
+    run(client_secret=basic)  # o Basic foi colado no campo do secret (o que aconteceu de verdade)
+    run(client_secret="", basic_token=basic)  # só o Basic
+    assert seen == [(secret, f"Basic {basic}")] * 4
+
+    with pytest.raises(PlatformNotConfigured):
+        HotmartAdapter(HotmartConfig(client_id=cid)).check()  # sem secret nem Basic
+    assert HotmartAdapter(HotmartConfig(client_secret="x")).is_configured() is False  # sem client_id
 
 
 def test_hotmart_accepts_the_basic_token_pasted_with_its_prefix_and_uses_sandbox_on_request(monkeypatch):

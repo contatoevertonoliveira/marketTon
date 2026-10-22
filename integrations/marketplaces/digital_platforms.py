@@ -27,6 +27,8 @@ feito com a Shopee. A confiabilidade fica abaixo de 1.0 por isso.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import threading
 import time
@@ -161,7 +163,36 @@ class HotmartAdapter(_PlatformAdapter):
         )
 
     def is_configured(self) -> bool:
-        return bool(self.cfg.client_id and self.cfg.client_secret and self.cfg.basic_token)
+        return bool(self.cfg.client_id.strip() and (self.cfg.client_secret.strip() or self.cfg.basic_token.strip()))
+
+    def _credentials(self) -> tuple[str, str, str]:
+        """(client_id, client_secret, token Basic), tolerando os erros de colagem mais comuns.
+
+        O token Basic da Hotmart é `base64(client_id:client_secret)`: dá para derivá-lo quando falta, e quando o Basic foi
+        colado no campo do secret (que fica com ~100 caracteres) o secret verdadeiro sai de dentro dele.
+        """
+        def clean(value: str) -> str:
+            value = (value or "").strip()
+            return value[6:].strip() if value.lower().startswith("basic ") else value
+
+        cid, secret, basic = clean(self.cfg.client_id), clean(self.cfg.client_secret), clean(self.cfg.basic_token)
+
+        def unpack(token: str) -> str | None:
+            try:
+                decoded = base64.b64decode(token + "=" * (-len(token) % 4), validate=True).decode("utf-8")
+            except (binascii.Error, UnicodeDecodeError, ValueError):
+                return None
+            head, sep, tail = decoded.partition(":")
+            return tail if sep and head == cid and tail else None
+
+        inner = unpack(secret) if secret else None
+        if inner:  # o Basic foi colado no lugar do secret
+            basic, secret = basic or secret, inner
+        if not secret and basic:
+            secret = unpack(basic) or ""
+        if not basic and cid and secret:
+            basic = base64.b64encode(f"{cid}:{secret}".encode()).decode()
+        return cid, secret, basic
 
     @property
     def base_url(self) -> str:
@@ -169,17 +200,17 @@ class HotmartAdapter(_PlatformAdapter):
 
     def _access_token(self, *, force: bool = False) -> str:
         if not self.is_configured():
-            raise PlatformNotConfigured("Credenciais da Hotmart incompletas: client_id, client_secret e token Basic.")
+            raise PlatformNotConfigured("Credenciais da Hotmart incompletas: informe o Client ID e o Client Secret.")
         cached = None if force else self._token.get()
         if cached:
             return cached
-        basic = self.cfg.basic_token.strip()
-        if basic.lower().startswith("basic "):
-            basic = basic[6:].strip()
+        cid, secret, basic = self._credentials()
+        if not (cid and secret and basic):
+            raise PlatformNotConfigured("Credenciais da Hotmart incompletas: informe o Client ID e o Client Secret.")
         try:
             response = requests.post(
                 HOTMART_TOKEN_URL,
-                params={"grant_type": "client_credentials", "client_id": self.cfg.client_id, "client_secret": self.cfg.client_secret},
+                params={"grant_type": "client_credentials", "client_id": cid, "client_secret": secret},
                 headers={"Content-Type": "application/json", "Authorization": f"Basic {basic}"},
                 timeout=self.cfg.timeout,
             )
