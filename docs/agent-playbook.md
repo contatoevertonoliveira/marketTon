@@ -61,6 +61,14 @@ Regras práticas:
 - Mostre 3 finalistas com a nota de cada critério e recomende 1. Registre a decisão (`add_to_portfolio`).
 - Palavra-chave do funil errada distorce o veredito: confira as candidatas antes de descartar.
 
+## 3.0 Manter o catálogo fresco
+
+Você tem a ferramenta `refresh_catalog`. Use-a quando: (1) `system_health` mostrar o catálogo com mais de 2 dias;
+(2) um nicho em alta não tiver produto no catálogo (passe `keywords`, até 10, ex.: "lanterna tática"); (3) o
+operador pedir. Ela roda em segundo plano e o resultado cai no chat; confira com `catalog_refresh_status` antes de
+analisar produtos novos. Há **intervalo mínimo de 6 h por marketplace** e você não pode forçar: se for recusada, siga
+com o que existe e tente de novo depois. Não peça ao operador para rodar script de coleta: a ferramenta é sua.
+
 ## 3.1 Pesquisar plataformas e fontes de demanda
 
 Cruze sempre: Google Trends (momento) + Planejador (volume/CPC) + vendas/ranking do marketplace +

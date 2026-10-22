@@ -333,7 +333,7 @@ def test_mcp_exposes_exactly_the_intended_tools():
         "search_opportunities", "trending_abroad", "sales_performance", "list_portfolio", "commission_proposals",
         "daily_review", "add_to_portfolio", "move_portfolio_item", "set_manual_signals", "apply_observed_commissions",
         "agent_playbook", "chat_inbox", "chat_send", "request_resource", "complete_task", "system_health",
-        "capabilities", "sync_sales",
+        "capabilities", "sync_sales", "refresh_catalog", "catalog_refresh_status",
     }
     # Nada de credenciais, usuários ou anúncios: o agente só tem o que a API do portfólio oferece.
     assert not any(w in n for n in names for w in ("credential", "user", "password", "ads_", "campaign"))
@@ -685,3 +685,31 @@ def test_runtime_endpoint_is_readable_by_the_agent_and_run_now_is_admin_only(api
     assert api.post("/agent/runtime/run", headers=admin).status_code == 409  # modo desligado
     api.put("/agent/mode", json={"enabled": True}, headers=admin)
     assert api.post("/agent/runtime/run", headers=admin).status_code == 503  # supervisor não sobe nos testes (AGENT_AUTORUN=false)
+
+
+# --- atualização do catálogo: endpoint -------------------------------------------------------------
+
+
+def test_catalog_refresh_endpoint_respects_the_agent_mode_the_force_flag_and_validation(api, monkeypatch):
+    import core.services.catalog_refresh as cr
+
+    seen = []
+    monkeypatch.setattr(cr, "start_refresh", lambda session, adapters, **kw: seen.append(kw) or {"started": True, "marketplaces": ["shopee"], "skipped": {}})
+    admin, agent = _as(api, "dono"), _as(api, "agente")
+
+    assert api.post("/agent/catalog/refresh", json={}, headers=agent).status_code == 403  # modo manual: só consulta
+    assert api.get("/agent/catalog/refresh", headers=agent).status_code == 200  # o estado, sim
+
+    api.put("/agent/mode", json={"enabled": True}, headers=admin)
+    ok = api.post("/agent/catalog/refresh", json={"keywords": ["  lanterna tática ", ""], "marketplaces": ["shopee"]}, headers=agent)
+    assert ok.status_code == 202 and ok.json()["started"] is True
+    assert seen[-1]["keywords"] == ["lanterna tática"] and seen[-1]["force"] is False
+
+    forced = api.post("/agent/catalog/refresh", json={"force": True}, headers=agent)
+    assert forced.status_code == 403 and "forçar" in forced.json()["detail"]  # o agente não ignora o intervalo
+    assert api.post("/agent/catalog/refresh", json={"force": True}, headers=admin).status_code == 202  # o operador pode
+
+    too_many = api.post("/agent/catalog/refresh", json={"keywords": [f"k{i}" for i in range(11)]}, headers=agent)
+    assert too_many.status_code == 422
+    audit = [a["action"] for a in api.get("/auth/audit", headers=admin).json()]
+    assert "agent.catalog_refresh" in audit

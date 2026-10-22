@@ -304,6 +304,26 @@ def sync_sales(since_days: int = 30):
     return _run(lambda: _client.post("/agent/sales/sync", since_days=since_days))
 
 
+@mcp.tool(annotations=WRITE)
+def refresh_catalog(marketplaces: list[str] | None = None, keywords: list[str] | None = None, limit: int = 50):
+    """Atualiza o catálogo (coleta de produtos + score) em segundo plano. EXIGE o modo agente ligado.
+
+    Use quando `system_health` mostrar o catálogo velho (mais de 2 dias) ou quando precisar de produtos de um nicho
+    novo (passe `keywords`, até 10, ex.: ["lanterna tática"]). `marketplaces` opcional (mercado_livre, shopee,
+    monetizze). Há intervalo mínimo de 6 h por marketplace: se a API recusar por isso, siga trabalhando com o que há
+    e tente de novo depois; você não pode forçar. Ao terminar, o resultado cai no chat; confira com
+    `catalog_refresh_status`.
+    """
+    return _run(lambda: _client.post("/agent/catalog/refresh", {
+        "marketplaces": marketplaces, "keywords": keywords, "limit": limit, "force": False}))
+
+
+@mcp.tool(annotations=READ)
+def catalog_refresh_status():
+    """Estado da última atualização do catálogo: em andamento, quando terminou, resultado e intervalo mínimo."""
+    return _run(lambda: _client.get("/agent/catalog/refresh"))
+
+
 @mcp.prompt(name="ativacao", description="Roda a rotina completa de ativação do agente no marketTon.")
 def ativacao() -> str:
     return (

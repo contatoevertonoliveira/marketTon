@@ -105,8 +105,9 @@ def capabilities(session: Session) -> list[dict]:
              "O Google Ads está conectado só para leitura do Planejador. Afiliado não edita o anúncio do vendedor."),
         _cap("link_clicks", "Contagem de cliques nos links de afiliado", "nao_construido",
              "saber quais divulgações geram clique, não só venda", ["encurtador de links com contador (a construir)"]),
-        _cap("catalog_collect_api", "Coletar catálogo pelo agente", "nao_construido",
-             "atualizar produtos sem depender de script", ["endpoint de coleta (a construir; hoje é scripts/ingest.py)"]),
+        _cap("catalog_collect_api", "Atualizar o catálogo pelo agente", "pronto",
+             "coletar produtos e recalcular scores quando o catálogo envelhecer ou para um nicho novo",
+             note="Intervalo mínimo de 6 h por marketplace; precisa de credencial testada."),
         _cap("sales_sync", "Sincronizar vendas e avisar", "pronto" if states.get("shopee", {}).get("last_check_status") == "ok" else "configurar",
              "trazer vendas novas, aprender comissão e avisar no chat", [] if states.get("shopee", {}).get("last_check_status") == "ok"
              else ["conectar a Shopee em Integrações"]),
@@ -146,7 +147,7 @@ def health(session: Session) -> dict:
     if not products:
         add("catalogo", "aviso", "catálogo vazio")
     elif age is not None and age > 2:
-        add("catalogo", "aviso", f"{products} produtos; última atualização há {age:.0f} dias — rodar a coleta")
+        add("catalogo", "aviso", f"{products} produtos; última atualização há {age:.0f} dias — use refresh_catalog")
     else:
         add("catalogo", "ok", f"{products} produtos; atualizado há {0 if age is None else age:.1f} dia(s)")
 

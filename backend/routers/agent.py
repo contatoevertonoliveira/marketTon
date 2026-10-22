@@ -233,7 +233,7 @@ def checklist(
         products = session.scalar(select(func.count()).select_from(Product).where(Product.marketplace == mp)) or 0
         if products == 0:
             add("alta", f"{mp}_catalog_empty", f"Catálogo de {mp} vazio",
-                f"Coletar produtos: scripts/ingest.py --marketplace {mp}.")
+                f"Atualizar o catálogo: ferramenta refresh_catalog (ou scripts/ingest.py --marketplace {mp}).")
         linked = session.scalar(
             select(func.count()).select_from(PortfolioItem).where(
                 PortfolioItem.marketplace == mp, PortfolioItem.state != PortfolioState.REMOVED
@@ -521,3 +521,46 @@ def run_now(principal: Principal = Depends(require("users.manage")), session: Se
     session.commit()
     supervisor.request_manual()
     return {"accepted": True}
+
+
+# --- Atualização do catálogo ---------------------------------------------------------------------
+
+
+class CatalogRefreshBody(BaseModel):
+    marketplaces: list[str] | None = None
+    keywords: list[str] | None = None
+    limit: int = 50
+    force: bool = False
+
+
+@router.post("/catalog/refresh", summary="Atualizar o catálogo (coleta + score) em segundo plano", status_code=202)
+def catalog_refresh(
+    payload: CatalogRefreshBody,
+    principal: Principal = Depends(require("catalog.ingest")),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Mesma coleta do `scripts/ingest.py`. Uma por vez e com intervalo mínimo por marketplace (6 h);
+    `force` ignora o intervalo e é só do operador (o agente não força)."""
+    from core.services.catalog_refresh import start_refresh
+
+    keywords = [k.strip() for k in (payload.keywords or []) if k and k.strip()]
+    if len(keywords) > 10 or any(len(k) > 60 for k in keywords):
+        raise HTTPException(status_code=422, detail="no máximo 10 palavras-chave de até 60 caracteres")
+    if payload.force and principal.role == AGENT_ROLE:
+        raise HTTPException(status_code=403, detail="o agente não pode forçar a atualização antes do intervalo mínimo")
+    result = start_refresh(session, get_adapters(), marketplaces=payload.marketplaces, keywords=keywords or None,
+                           limit=payload.limit, force=payload.force)
+    if result["started"]:
+        record_action(session, principal, action="agent.catalog_refresh", resource_type="catalog",
+                      detail=f"{','.join(result['marketplaces'])} | palavras-chave: {','.join(keywords) or 'padrão'}")
+        session.commit()
+    return result
+
+
+@router.get("/catalog/refresh", summary="Estado da atualização do catálogo")
+def catalog_refresh_status(
+    principal: Principal = Depends(require("operations.view")), session: Session = Depends(get_session)
+) -> dict:
+    from core.services.catalog_refresh import status as refresh_status
+
+    return refresh_status(session)
