@@ -30,7 +30,8 @@ from core.db.tracking import Sale
 from core.db.base import Marketplace
 from core.services.agent_capabilities import capabilities, health, integration_states
 from core.services import agent_chat
-from core.services.app_settings import agent_mode_info, set_agent_mode
+from core.services.app_settings import agent_autonomy, agent_mode_info, set_agent_autonomy, set_agent_mode
+from core.services.agent_calibration import calibration_report
 from core.services.sales_sync import sync_sales
 from core.services.auth import create_user, get_user_by_username, set_password
 from core.services.security import validate_password_strength
@@ -54,6 +55,7 @@ class AgentModeOut(BaseModel):
     # usa para dizer "Claude conectado" — o login do agente acontece quando o servidor MCP sobe.
     agent_user_exists: bool = False
     agent_last_login_at: str | None = None
+    autonomy: str = "supervised"  # "supervised" | "independent"
 
 
 class AgentModeUpdate(BaseModel):
@@ -71,6 +73,7 @@ def _mode_out(session: Session) -> AgentModeOut:
         **agent_mode_info(session),
         agent_user_exists=agent is not None and agent.role == Role.BOT,
         agent_last_login_at=agent.last_login_at.isoformat() if agent is not None and agent.last_login_at else None,
+        autonomy=agent_autonomy(session),
     )
 
 
@@ -152,7 +155,7 @@ def status(
 ) -> dict:
     since = datetime.now(UTC) - timedelta(days=SALES_WINDOW_DAYS)
     return {
-        "agent_mode": agent_mode_info(session),
+        "agent_mode": {**agent_mode_info(session), "autonomy": agent_autonomy(session)},
         "integrations": _integrations(session),
         "counts": {
             "products_in_catalog": session.scalar(select(func.count()).select_from(Product)) or 0,
@@ -339,12 +342,39 @@ def chat_send(
         author = "user"
         if payload.kind != "message":
             raise HTTPException(status_code=422, detail="o operador envia apenas mensagens")
+    if author == "agent" and payload.kind == "request":
+        again = _remind_open_request(session, payload)
+        if again is not None:
+            session.commit()
+            return {**agent_chat.serialize(again), "deduplicated": True}
     try:
         message = agent_chat.post_message(session, author=author, text=payload.text, kind=payload.kind, meta=payload.meta)
     except agent_chat.ChatError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()
     return agent_chat.serialize(message)
+
+
+def _remind_open_request(session: Session, payload: "ChatPost"):
+    """Pedido repetido do mesmo recurso: em vez de criar outro cartão, renova o aberto.
+
+    É a "cobrança diária" sem spam: o cartão volta a contar como não lido (o aviso do menu
+    reaparece), acumula `reminders` e guarda a data da última cobrança.
+    """
+    resource = ((payload.meta or {}).get("resource") or "").strip().lower()
+    if not resource:
+        return None
+    for message in session.scalars(select(agent_chat.AgentMessage).where(
+            agent_chat.AgentMessage.kind == "request", agent_chat.AgentMessage.status == "open")):
+        if ((message.meta or {}).get("resource") or "").strip().lower() == resource:
+            message.meta = {**(message.meta or {}), **(payload.meta or {}),
+                            "reminders": int((message.meta or {}).get("reminders", 0)) + 1,
+                            "last_reminded_at": datetime.now(UTC).isoformat()}
+            message.text = payload.text
+            message.read_by_user = False
+            session.flush()
+            return message
+    return None
 
 
 @router.post("/chat/read", summary="Marcar como lido (para quem chama)")
@@ -426,3 +456,47 @@ def sales_sync(
     )
     session.commit()
     return result
+
+
+# --- Calibragem e autonomia ----------------------------------------------------------------
+
+
+@router.get("/calibration", summary="Relatório de calibragem do agente (só administrador)")
+def get_calibration(
+    principal: Principal = Depends(require("audit.view")), session: Session = Depends(get_session)
+) -> dict:
+    return calibration_report(session)
+
+
+class AutonomyUpdate(BaseModel):
+    level: str
+    force: bool = False
+
+
+@router.put("/autonomy", summary="Liberar o agente para trabalhar de forma independente (ou voltar a supervisionado)")
+def put_autonomy(
+    payload: AutonomyUpdate,
+    principal: Principal = Depends(require("users.manage")),
+    session: Session = Depends(get_session),
+) -> dict:
+    """`independent` só com a calibragem aprovada, a menos que o administrador force (fica registrado)."""
+    if payload.level not in ("supervised", "independent"):
+        raise HTTPException(status_code=422, detail="nível deve ser 'supervised' ou 'independent'")
+    report = calibration_report(session)
+    if payload.level == "independent" and not report["ready_for_independence"] and not payload.force:
+        raise HTTPException(status_code=409, detail={
+            "message": "o agente ainda não passou na calibragem: " + report["summary"], "stage": report["stage"]})
+    level = set_agent_autonomy(session, level=payload.level, actor=principal.username)
+    record_action(session, principal, action="agent.autonomy_changed", resource_type="setting",
+                  resource_id="agent_autonomy",
+                  detail=f"{level}" + (" (forçado, sem calibragem aprovada)" if payload.force and not report["ready_for_independence"] else ""))
+    text = (
+        "Agente LIBERADO para trabalhar de forma independente: roda as rotinas da manhã e da noite sozinho, cobra os "
+        "recursos pendentes uma vez por dia e só interrompe você quando precisar de uma decisão ou de um acesso."
+        if level == "independent"
+        else "Agente voltou ao modo SUPERVISIONADO: explique cada decisão no chat e espere a sua aprovação antes de "
+        "ações com efeito (vincular, mover estado, remover)."
+    )
+    agent_chat.post_message(session, author="system", kind="message", text=text)
+    session.commit()
+    return {"autonomy": level, "calibration": report}

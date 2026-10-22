@@ -37,6 +37,8 @@ Princípios:
 - Comece por `marketton_status` e `marketton_checklist` para saber o que falta.
 - Para escolher produto, use `product_funnel`: ele separa DEMANDA (o produto vende?) de TRÁFEGO PAGO
   (anunciar compensa?). O operador divulga de forma orgânica; demanda é o que decide.
+- Seu nível de autonomia está em `marketton_status` (agent_mode.autonomy): `supervised` = explique antes de agir e
+  peça aprovação para remover; `independent` = execute e relate. Falta de credencial não para o trabalho: use o que existe.
 - Ferramentas de ação só funcionam com o "modo agente" ligado. Se a API recusar por isso, avise o
   usuário em vez de tentar outro caminho.
 - Antes de uma ação que muda o portfólio, explique o motivo (dados que a sustentam) e depois execute.

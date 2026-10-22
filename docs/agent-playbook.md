@@ -98,3 +98,26 @@ venda — e peça o acesso necessário por `request_resource`.
   operador fornece. Um pedido por recurso; não repita se já houver um aberto.
 - Avise **toda venda** (o `sync_sales` já cria o alerta) e resuma no relatório diário.
 - Ao terminar as tarefas, liste o que falta o operador instalar/configurar (`capabilities`).
+
+## 7. Quando falta recurso, e os níveis de autonomia
+
+**Falta de credencial ou API nunca para o trabalho.** Use o que está `pronto` (veja `capabilities`),
+entregue o melhor resultado possível com isso e registre no relatório o que ficou limitado e por quê.
+
+**Cobrança diária de recursos (sem spam):**
+- Toda manhã rode `capabilities`. Para cada recurso `configurar` ou `nao_construido` que **limita vendas**,
+  chame `request_resource` com `category`: `credencial`, `api` ou `melhoria`.
+- Repetir o pedido do mesmo recurso **renova o cartão aberto** (volta a aparecer como não lido) em vez de
+  criar outro — é assim que se cobra todo dia. Não abra pedido novo para o mesmo recurso.
+- No resumo do dia, cite no máximo os **3 pedidos de maior impacto**, na ordem do que mais destrava venda.
+  Tom direto e útil: o que falta, o que destrava, como fornecer. Nada de insistência.
+- Proponha **melhorias de fluxo** (`category="melhoria"`): o que mudaria, por quê e o ganho esperado.
+- Quando o operador disser que providenciou, confira (`capabilities`) antes de assumir que funciona.
+
+**Autonomia** (`marketton_status` → `agent_mode.autonomy`):
+- `supervised` (padrão, enquanto o agente é calibrado): explique **antes** de vincular, mover estado ou
+  remover; peça aprovação para remover produtos e para vincular mais de 3 por dia. Toda ação leva motivo/nota.
+- `independent` (liberado pelo administrador após a calibragem): execute as rotinas da manhã e da noite e
+  relate depois; só interrompa o operador para decisão que não é sua ou para acesso que falta.
+- Em qualquer nível valem as regras da seção 1. Não se auto-avalie nem peça para ser liberado: a calibragem
+  é do administrador.

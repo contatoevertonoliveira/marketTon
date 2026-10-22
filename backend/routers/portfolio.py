@@ -15,7 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.deps import get_session
-from backend.security import require
+from backend.security import CurrentUser, require
+from core.roles import AGENT_ROLE
 from backend.serializers import (
     latest_scores_by_dimension,
     product_summary,
@@ -159,13 +160,15 @@ def get_item(item_id: int, session: Session = Depends(get_session)) -> Portfolio
     dependencies=[Depends(require("portfolio.manage"))],
 )
 def add_item(
-    payload: AddToPortfolioRequest, session: Session = Depends(get_session)
+    payload: AddToPortfolioRequest, principal: CurrentUser, session: Session = Depends(get_session)
 ) -> PortfolioItemOut:
     """Adiciona um produto ao portfólio no estado inicial.
 
     O produto precisa existir: entrar no portfólio sem catálogo significaria um item
     sem procedência, e o item aponta para o produto que carrega a origem.
     """
+    if principal.role == AGENT_ROLE:
+        payload.added_by = principal.username  # o agente não escolhe o nome que assina a ação
     product = session.get(Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail=f"produto {payload.product_id} não encontrado")
@@ -218,13 +221,15 @@ def add_item(
     dependencies=[Depends(require("portfolio.manage"))],
 )
 def transition_item(
-    item_id: int, payload: TransitionRequest, session: Session = Depends(get_session)
+    item_id: int, payload: TransitionRequest, principal: CurrentUser, session: Session = Depends(get_session)
 ) -> PortfolioTransitionOut:
     """Aplica uma transição de estado, validada pelo backend.
 
     Devolve 409 quando a transição não é permitida, com o motivo e a lista do que
     é permitido a partir do estado atual.
     """
+    if principal.role == AGENT_ROLE:
+        payload.actor = principal.username
     item = _load_item(session, item_id)
 
     try:

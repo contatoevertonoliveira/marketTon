@@ -140,6 +140,16 @@ def _agent_write_blocked(principal: "Principal", permission: str, session: Sessi
     return not agent_mode_enabled(session)
 
 
+def _log_blocked(principal: "Principal", permission: str, session: Session) -> None:
+    """Deixa na auditoria a tentativa do agente (insumo da calibragem). Commit próprio: a requisição vai falhar."""
+    from core.services.auth import audit
+
+    audit(session, actor=principal.username, actor_role=principal.role.value, action="agent.write_blocked",
+          outcome="denied", detail=f"tentou {permission} com o modo agente desligado",
+          client_ip=principal.client_ip, user_agent=principal.user_agent)
+    session.commit()
+
+
 def _agent_mode_off() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -170,6 +180,7 @@ def require(permission: str):
                 },
             )
         if _agent_write_blocked(principal, permission, session):
+            _log_blocked(principal, permission, session)
             raise _agent_mode_off()
         return principal
 
@@ -192,6 +203,7 @@ def require_any(*permissions: str):
             )
         allowed = [p for p in permissions if principal.can(p)]
         if all(_agent_write_blocked(principal, p, session) for p in allowed):
+            _log_blocked(principal, ",".join(allowed), session)
             raise _agent_mode_off()
         return principal
 

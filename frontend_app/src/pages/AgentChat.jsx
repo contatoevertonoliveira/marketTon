@@ -35,7 +35,10 @@ function Bubble({ m, onStatus }) {
     const open = m.status === "open";
     return (
       <div style={{ alignSelf: "flex-start", maxWidth: "88%", border: `1px solid ${open ? "#f6c944" : "#e9ecef"}`, background: open ? "#fffaf0" : "#fafbfc", borderRadius: 12, padding: "10px 14px", fontSize: 13 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#8a6d1d", marginBottom: 4 }}>🙋 PEDIDO DO AGENTE · {time(m.created_at)}</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#8a6d1d", marginBottom: 4 }}>
+          🙋 PEDIDO DO AGENTE{m.meta?.category ? ` · ${m.meta.category}` : ""} · {time(m.created_at)}
+          {m.meta?.reminders > 0 && ` · cobrado ${m.meta.reminders}x (última ${time(m.meta.last_reminded_at)})`}
+        </div>
         <div style={{ whiteSpace: "pre-wrap", color: "#32325d" }}>{m.text}</div>
         {open ? (
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>

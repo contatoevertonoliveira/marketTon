@@ -513,3 +513,132 @@ def test_sales_sync_endpoint_requires_the_mode_for_the_agent(api):
     assert api.post("/agent/sales/sync", headers=agent).status_code == 403
     api.put("/agent/mode", json={"enabled": True}, headers=_as(api, "dono"))
     assert api.post("/agent/sales/sync", headers=agent).status_code == 200
+
+
+# --- calibragem, autonomia e cobrança diária ------------------------------------------------------
+
+
+def _check(report, key):
+    return next(c for c in report["checks"] if c["key"] == key)
+
+
+def _agent_session(api):
+    """Liga o modo agente e devolve (admin, agent) já autenticados."""
+    admin, agent = _as(api, "dono"), _as(api, "agente")
+    api.put("/agent/mode", json={"enabled": True}, headers=admin)
+    return admin, agent
+
+
+def test_calibration_before_any_activation(api):
+    report = api.get("/agent/calibration", headers=_as(api, "dono")).json()
+    assert report["stage"] == "sem_ativacao" and report["ready_for_independence"] is False
+    # O agente não corrige a própria nota.
+    assert api.get("/agent/calibration", headers=_as(api, "agente")).status_code == 403
+
+
+def test_calibration_tracks_progress_and_blocks_release_until_the_activation_routine_is_done(api):
+    admin, agent = _agent_session(api)
+    first = api.get("/agent/calibration", headers=admin).json()
+    assert first["stage"] == "em_andamento" and first["ready_for_independence"] is False
+    assert _check(first, "relatorio")["status"] == "pendente"
+
+    refused = api.put("/agent/autonomy", json={"level": "independent"}, headers=admin)
+    assert refused.status_code == 409 and "calibragem" in refused.json()["detail"]["message"]
+    assert api.get("/agent/mode", headers=admin).json()["autonomy"] == "supervised"
+
+    # O agente faz a rotina: lê a caixa, pede os recursos que faltam, posta o relatório, conclui a tarefa.
+    inbox = api.get("/agent/chat/inbox", headers=agent).json()
+    task = inbox["open_tasks"][0]
+    api.post("/agent/chat", json={"text": "Chave do AI Studio", "kind": "request", "meta": {"resource": "ai_studio_key"}}, headers=agent)
+    api.post("/agent/chat", json={"text": "Relatório: catálogo vazio, sem produtos para escolher.", "kind": "report"}, headers=agent)
+    api.patch(f"/agent/chat/{task['id']}", json={"status": "done"}, headers=agent)
+
+    done = api.get("/agent/calibration", headers=admin).json()
+    assert done["ready_for_independence"] is True and done["stage"] == "pronto_para_independente", done["summary"]
+
+    released = api.put("/agent/autonomy", json={"level": "independent"}, headers=admin)
+    assert released.status_code == 200 and released.json()["autonomy"] == "independent"
+    assert api.get("/agent/mode", headers=agent).json()["autonomy"] == "independent"
+    assert api.get("/agent/status", headers=agent).json()["agent_mode"]["autonomy"] == "independent"
+    texts = [m["text"] for m in api.get("/agent/chat", headers=admin).json()["messages"]]
+    assert any("LIBERADO" in t for t in texts)
+
+    back = api.put("/agent/autonomy", json={"level": "supervised"}, headers=admin)
+    assert back.json()["autonomy"] == "supervised"
+
+
+def test_autonomy_is_admin_only_and_force_is_recorded(api):
+    admin, agent = _agent_session(api)
+    assert api.put("/agent/autonomy", json={"level": "independent", "force": True}, headers=agent).status_code == 403
+    assert api.put("/agent/autonomy", json={"level": "talvez"}, headers=admin).status_code == 422
+    forced = api.put("/agent/autonomy", json={"level": "independent", "force": True}, headers=admin)
+    assert forced.status_code == 200
+    audit = [a["detail"] for a in api.get("/auth/audit", headers=admin).json() if a["action"] == "agent.autonomy_changed"]
+    assert any("forçado" in d for d in audit)
+
+
+def test_calibration_fails_when_the_agent_does_not_ask_for_missing_resources_or_leaks_a_secret(api):
+    admin, agent = _agent_session(api)
+    task = api.get("/agent/chat/inbox", headers=agent).json()["open_tasks"][0]
+    api.post("/agent/chat", json={"text": "Tudo certo. A senha é Xk29fQ8vLm3PzR7tYb1WcN5hD0sJ4aGu", "kind": "report"}, headers=agent)
+    api.patch(f"/agent/chat/{task['id']}", json={"status": "done"}, headers=agent)
+
+    report = api.get("/agent/calibration", headers=admin).json()
+    assert report["ready_for_independence"] is False and report["stage"] == "ajustar"
+    assert _check(report, "cobrou_recursos")["status"] == "falha"
+    assert _check(report, "sem_segredos_no_chat")["status"] == "falha"
+
+
+def test_blocked_write_attempts_are_audited_and_counted(api):
+    admin = _as(api, "dono")
+    agent = _as(api, "agente")
+    api.put("/agent/mode", json={"enabled": True}, headers=admin)   # ativação
+    api.put("/agent/mode", json={"enabled": False}, headers=admin)  # o operador desliga
+    assert api.post("/portfolio/items", json={"product_id": 1}, headers=agent).status_code == 403
+
+    audit = api.get("/auth/audit", headers=admin).json()
+    blocked = [a for a in audit if a["action"] == "agent.write_blocked"]
+    assert len(blocked) == 1 and blocked[0]["actor"] == "agente" and blocked[0]["outcome"] == "denied"
+    assert _check(api.get("/agent/calibration", headers=admin).json(), "respeitou_o_modo")["status"] == "aviso"
+
+
+def test_repeating_a_resource_request_refreshes_the_open_card_instead_of_duplicating(api):
+    admin, agent = _as(api, "dono"), _as(api, "agente")
+    body = {"text": "Chave do AI Studio", "kind": "request", "meta": {"resource": "AI_Studio_Key", "category": "api"}}
+    first = api.post("/agent/chat", json=body, headers=agent).json()
+    api.post("/agent/chat/read", headers=admin)  # o operador viu
+    assert api.get("/agent/chat", headers=admin).json()["counts"]["unread_for_user"] == 0
+
+    again = api.post("/agent/chat", json={**body, "text": "Ainda preciso da chave do AI Studio"}, headers=agent).json()
+    assert again["deduplicated"] is True and again["id"] == first["id"]
+    assert again["meta"]["reminders"] == 1 and again["meta"]["category"] == "api" and again["meta"]["last_reminded_at"]
+    counts = api.get("/agent/chat", headers=admin).json()["counts"]
+    assert counts["open_requests"] == 1 and counts["unread_for_user"] == 1  # o aviso do menu volta
+
+    # Depois de resolvido, um novo pedido do mesmo recurso abre um cartão novo.
+    api.patch(f"/agent/chat/{first['id']}", json={"status": "done"}, headers=admin)
+    fresh = api.post("/agent/chat", json=body, headers=agent).json()
+    assert fresh["id"] != first["id"] and "deduplicated" not in fresh
+
+
+def test_agent_actions_are_signed_with_its_own_username_whatever_the_body_says(api, factory):
+    from core.db.portfolio import PortfolioItem
+
+    session = factory()
+    product = _product(session, "888")
+    session.commit()
+    session.close()
+
+    api.put("/agent/mode", json={"enabled": True}, headers=_as(api, "dono"))
+    agent = _as(api, "agente")
+    created = api.post("/portfolio/items", json={"product_id": product.id, "added_by": "everton", "notes": "demanda em alta"}, headers=agent)
+    assert created.status_code == 201
+    session = factory()
+    item = session.query(PortfolioItem).one()
+    assert item.added_by == "agente"  # assina com o próprio usuário; não deu para assinar como outra pessoa
+    item_id = item.id
+    session.close()
+
+    moved = api.post(f"/portfolio/items/{item_id}/transition",
+                     json={"to_state": "ANALYZING", "actor": "everton", "reason": "vou testar"}, headers=agent)
+    assert moved.status_code == 200 and moved.json()["actor"] == "agente"

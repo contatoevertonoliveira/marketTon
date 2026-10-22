@@ -29,6 +29,69 @@ function fmtAgo(iso) {
   return new Date(iso).toLocaleString("pt-BR");
 }
 
+function CalibrationPanel({ mode, onRefresh }) {
+  const [report, setReport] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(() => {
+    getJSON("/agent/calibration").then(setReport).catch(() => setReport(null));
+  }, []);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 6000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  async function setLevel(level) {
+    if (level === "independent" && !window.confirm("Liberar o agente para trabalhar de forma independente? Ele passa a rodar as rotinas e só interrompe você para decisão ou acesso que falta.")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await putJSON("/agent/autonomy", { level });
+      onRefresh();
+      load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!report) return null;
+  const MARK = { ok: ["✓", "#2dce89"], falha: ["✗", "#f5365c"], aviso: ["!", "#f6c944"], pendente: ["…", "#c1c9d6"] };
+  const independent = mode.autonomy === "independent";
+
+  return (
+    <div style={{ marginTop: 18, borderTop: "1px solid #f0f2f7", paddingTop: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 13, color: "#32325d" }}>
+        Calibragem · autonomia: {independent ? "independente" : "supervisionada"}
+      </div>
+      <div style={{ fontSize: 12, color: "#525f7f", margin: "4px 0 8px" }}>{report.summary}</div>
+      {report.checks.map((c) => {
+        const [mark, color] = MARK[c.status] || MARK.pendente;
+        return (
+          <div key={c.key} style={{ display: "flex", gap: 8, fontSize: 12, padding: "2px 0" }}>
+            <span style={{ color, fontWeight: 900, width: 14, textAlign: "center" }}>{mark}</span>
+            <span style={{ color: "#32325d" }}>{c.label}{!c.critical && " (aviso)"} <span style={{ color: "#8898aa" }}>— {c.detail}</span></span>
+          </div>
+        );
+      })}
+      <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+        {independent ? (
+          <button onClick={() => setLevel("supervised")} disabled={busy} style={{ ...btn, background: "#f6f9fc", color: "#32325d", border: "1px solid #dee2e6" }}>Voltar a supervisionado</button>
+        ) : (
+          <button onClick={() => setLevel("independent")} disabled={busy || !report.ready_for_independence} style={{ ...btn, background: report.ready_for_independence ? "#2dce89" : "#cbd5e1", color: "#fff" }}>
+            Liberar para independente
+          </button>
+        )}
+        {!independent && !report.ready_for_independence && <span style={{ fontSize: 11, color: "#8898aa" }}>só libera quando as verificações críticas passarem</span>}
+        {error && <span style={{ fontSize: 12, color: "#f5365c" }}>{error}</span>}
+      </div>
+    </div>
+  );
+}
+
 function ConnectModal({ mode, onClose, onRefresh }) {
   const [access, setAccess] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -114,6 +177,8 @@ function ConnectModal({ mode, onClose, onRefresh }) {
           <span style={{ fontSize: 11, color: "#8898aa", marginLeft: 10 }}>Se pedir, entre com a sua conta do Claude.</span>
         </div>
 
+        <CalibrationPanel mode={mode} onRefresh={onRefresh} />
+
         <div style={{ fontSize: 11, color: "#8898aa", marginTop: 16, lineHeight: 1.5 }}>
           Com o modo agente <strong>ligado</strong>, o Claude pode agir no portfólio. Com ele <strong>desligado</strong>, só
           consulta. O interruptor vale na hora, mesmo com o Claude conectado.
@@ -171,7 +236,7 @@ export default function AgentSwitch() {
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       {error && <span style={{ fontSize: 11, color: "#f5365c" }}>{error}</span>}
       <span style={{ fontSize: 12, color: on ? "#1a7a54" : "#8898aa", fontWeight: 600 }}>
-        🤖 Agente Claude: {on ? "ativo" : "manual"}
+        🤖 Agente Claude: {on ? `ativo · ${mode.autonomy === "independent" ? "independente" : "supervisionado"}` : "manual"}
       </span>
       <button
         role="switch"

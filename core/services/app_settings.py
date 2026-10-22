@@ -44,3 +44,28 @@ def set_agent_mode(session: Session, *, enabled: bool, actor: str) -> dict:
     row.changed_at = datetime.now(UTC)
     session.flush()
     return agent_mode_info(session)
+
+
+AUTONOMY_KEY = "agent_autonomy"
+AUTONOMY_LEVELS = ("supervised", "independent")
+
+
+def agent_autonomy(session: Session) -> str:
+    """`supervised` (padrão) ou `independent`. O agente nasce sob supervisão."""
+    row = _row(session, AUTONOMY_KEY)
+    level = row.value.get("level") if row else None
+    return level if level in AUTONOMY_LEVELS else "supervised"
+
+
+def set_agent_autonomy(session: Session, *, level: str, actor: str) -> str:
+    if level not in AUTONOMY_LEVELS:
+        raise ValueError(f"nível de autonomia inválido: {level}")
+    row = _row(session, AUTONOMY_KEY)
+    if row is None:
+        row = AppSetting(key=AUTONOMY_KEY, value={})
+        session.add(row)
+    row.value = {"level": level}
+    row.updated_by = actor
+    row.changed_at = datetime.now(UTC)
+    session.flush()
+    return level
