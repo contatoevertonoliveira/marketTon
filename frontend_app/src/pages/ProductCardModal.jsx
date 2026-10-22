@@ -172,6 +172,27 @@ function CompetitionAndHashtags({ product }) {
 // portfólio. Fora: mostra os dados reais extraídos do marketplace + o botão
 // de afiliação. Dentro: abre direto o drawer de gestão do funil, que já sabe
 // quais transições de estado são válidas a partir de onde o item está.
+// Comissão Extra do vendedor (Shopee): campanha com prazo. Sem prazo informado a gente diz isso, não chuta.
+function ExtraCommissionChip({ attributes }) {
+  const ends = attributes.offer_ends_at ? new Date(attributes.offer_ends_at) : null;
+  const left = ends ? Math.ceil((ends - Date.now()) / 86400000) : null;
+  let tone = ["#fff4e5", "#b8720a"];
+  let label = "sem prazo informado";
+  if (ends) {
+    if (left < 0) { tone = ["#fef1f4", "#c31e3f"]; label = `acabou em ${ends.toLocaleDateString("pt-BR")}`; }
+    else if (left <= 3) { tone = ["#fff4e5", "#b8720a"]; label = `acaba em ${ends.toLocaleDateString("pt-BR")}`; }
+    else { tone = ["#eef2ff", "#3b4fb8"]; label = `até ${ends.toLocaleDateString("pt-BR")}`; }
+  }
+  return (
+    <span
+      title="Comissão Extra paga pelo vendedor (campanha com prazo). Quando acaba, a taxa cai: confira no portal de afiliados antes de investir conteúdo."
+      style={{ background: tone[0], color: tone[1], fontSize: 12, fontWeight: 700, borderRadius: 999, padding: "3px 10px" }}
+    >
+      Comissão Extra {Number(attributes.seller_commission_pct).toFixed(0)}% · {label}
+    </span>
+  );
+}
+
 export default function ProductCardModal({ product, portfolioItem, onClose, onChanged }) {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
@@ -303,6 +324,7 @@ export default function ProductCardModal({ product, portfolioItem, onClose, onCh
               ) : (
                 <span style={{ fontSize: 12, color: "#8898aa" }}>comissão não informada pela API deste marketplace</span>
               )}
+              {product.attributes?.seller_commission_pct > 0 && <ExtraCommissionChip attributes={product.attributes} />}
               {product.seller_is_official_store && (
                 <span style={{ background: "#eef2ff", color: "#5e72e4", fontSize: 12, fontWeight: 700, borderRadius: 999, padding: "3px 10px" }}>
                   loja oficial

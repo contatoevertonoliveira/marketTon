@@ -114,6 +114,11 @@ export default function ProductFunnel({ product }) {
       </div>
       <div style={{ fontSize: 12, color: "#525f7f", margin: "8px 0 10px" }}>{data.summary}</div>
 
+      {data.commission_note && (
+        <div style={{ fontSize: 11, color: data.commission_offer?.status === "expirada" ? "#c31e3f" : "#8a6d1d", background: data.commission_offer?.status === "expirada" ? "#fef1f4" : "#fff8e6", padding: "6px 10px", borderRadius: 8, marginBottom: 8 }}>
+          {data.commission_note}
+        </div>
+      )}
       {data.planner_error && (
         <div style={{ fontSize: 11, color: "#c31e3f", background: "#fef1f4", padding: "6px 10px", borderRadius: 8, marginBottom: 8 }}>
           Google Ads falhou: {data.planner_error}

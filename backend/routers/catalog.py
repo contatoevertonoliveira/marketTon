@@ -31,6 +31,7 @@ from core.db.base import Marketplace
 from config.settings import get_settings
 from core.db.catalog import Product, SourceRecord
 from core.services.keyword_metrics import analyze_keywords, planner_provider, planner_volumes
+from core.services.commission_offer import offer_info, offer_note
 from core.services.product_funnel import DEFAULT_CONVERSION_PCT, compute_funnel, suggest_candidates
 
 # Todas as rotas exigem `catalog.view`. O portão é declarado no router em vez de
@@ -439,6 +440,9 @@ class ProductFunnelOut(BaseModel):
     ads_verdict: str = "insufficient"
     summary: str
     checks: list[FunnelCheckOut] = Field(default_factory=list)
+    # Comissão extra do vendedor e até quando vale (None = produto sem comissão extra).
+    commission_offer: dict | None = None
+    commission_note: str | None = None
 
 
 @router.get("/products/{product_id}/funnel", response_model=ProductFunnelOut)
@@ -459,6 +463,7 @@ def product_funnel(
     if product is None:
         raise HTTPException(status_code=404, detail=f"produto {product_id} não encontrado")
 
+    offer = offer_info(product.attributes)
     manual = bool(keyword and keyword.strip())
     candidates = suggest_candidates(product.title)
     volumes = planner_volumes(candidates) if candidates else {}
@@ -474,6 +479,7 @@ def product_funnel(
         return ProductFunnelOut(
             product_id=product_id, keyword=None, keyword_source="title", conversion_pct=conversion_pct,
             verdict="insufficient", summary="Não foi possível sugerir uma palavra-chave a partir do título. Informe uma.",
+            commission_offer=offer, commission_note=offer_note(offer),
         )
 
     (metrics,) = analyze_keywords([term])
@@ -502,4 +508,6 @@ def product_funnel(
         ads_verdict=funnel.ads_verdict,
         summary=funnel.summary,
         checks=[FunnelCheckOut(**asdict(c)) for c in funnel.checks],
+        commission_offer=offer,
+        commission_note=offer_note(offer),
     )

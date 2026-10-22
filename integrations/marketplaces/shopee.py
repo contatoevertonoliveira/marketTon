@@ -333,6 +333,9 @@ class ShopeeAdapter(MarketplaceAdapter):
                 "commission_channel": "shopee_video" if seller_rate is not None else "api_default",
                 "commission_api_pct": max_pct,
                 "seller_commission_pct": seller_rate * 100 if seller_rate is not None else None,
+                # Comissão extra é de campanha: guardamos o período para saber quando ela acaba.
+                "offer_starts_at": _epoch_iso(node.get("periodStartTime")),
+                "offer_ends_at": _epoch_iso(node.get("periodEndTime")),
             },
             sold_quantity=_to_int(node.get("sales")),
             rating=_to_float(node.get("ratingStar")),
@@ -462,6 +465,19 @@ def _to_float(value: Any) -> float | None:
     try:
         return float(value)
     except (TypeError, ValueError):
+        return None
+
+
+def _epoch_iso(value: Any) -> str | None:
+    """Segundos (ou milissegundos) desde 1970 -> ISO em UTC; ausente, zero ou ilegível vira None."""
+    number = _to_float(value)
+    if number is None or number <= 0:
+        return None
+    if number > 1e11:  # milissegundos
+        number /= 1000
+    try:
+        return datetime.fromtimestamp(number, UTC).isoformat()
+    except (OverflowError, OSError, ValueError):
         return None
 
 
