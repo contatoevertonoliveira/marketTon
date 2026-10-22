@@ -5,7 +5,18 @@ registrar todos de uma vez.
 """
 from __future__ import annotations
 
-from backend.routers import auth, catalog, creative, jobs, marketplaces, operations, portfolio, scoring, trends
+from backend.routers import (
+    auth,
+    catalog,
+    creative,
+    jobs,
+    marketplaces,
+    operations,
+    performance,
+    portfolio,
+    scoring,
+    trends,
+)
 
 API_ROUTERS = [
     auth.router,
@@ -17,6 +28,7 @@ API_ROUTERS = [
     operations.router,
     marketplaces.router,
     trends.router,
+    performance.router,
 ]
 
 __all__ = [
@@ -27,6 +39,7 @@ __all__ = [
     "jobs",
     "marketplaces",
     "operations",
+    "performance",
     "portfolio",
     "scoring",
     "trends",

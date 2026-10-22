@@ -166,6 +166,11 @@ class Sale(Base, TimestampMixin):
         ForeignKey("source_records.id", ondelete="SET NULL"), index=True
     )
 
+    # Produto vendido, como o marketplace informou — independe de o produto
+    # estar no catálogo local (`product_id` só existe se estiver).
+    product_external_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    product_title: Mapped[str | None] = mapped_column(String(512))
+
     commissions: Mapped[list[Commission]] = relationship(
         back_populates="sale",
         cascade="all, delete-orphan",

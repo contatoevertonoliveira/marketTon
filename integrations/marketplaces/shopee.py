@@ -406,6 +406,7 @@ class ShopeeAdapter(MarketplaceAdapter):
                         currency="BRL",
                         gross_amount=_to_float(item.get("actualAmount")) or _to_float(item.get("itemPrice")),
                         product_external_id=str(item_id),
+                        product_title=item.get("itemName"),
                         status=status,
                         commission_estimated=commission if status == "PENDING" else None,
                         commission_confirmed=commission if status == "COMPLETED" else None,

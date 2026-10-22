@@ -145,6 +145,7 @@ class SalesRecord:
     gross_amount: float | None = None
     net_amount: float | None = None
     product_external_id: str | None = None
+    product_title: str | None = None
     channel: str | None = None
     status: str | None = None
     # Comissão mantém estimado e confirmado separados: plataformas de afiliado

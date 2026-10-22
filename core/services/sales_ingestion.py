@@ -93,6 +93,8 @@ def ingest_sales(
                 status=record.status,
                 product_id=product.id if product else None,
                 portfolio_item_id=portfolio_item.id if portfolio_item else None,
+                product_external_id=record.product_external_id,
+                product_title=record.product_title,
             )
             session.add(sale)
             session.flush()
@@ -103,6 +105,11 @@ def ingest_sales(
                 sale.gross_amount = record.gross_amount
             if record.net_amount is not None:
                 sale.net_amount = record.net_amount
+            # Vendas ingeridas antes da migração 0010 não têm id/nome do item.
+            if record.product_external_id and sale.product_external_id is None:
+                sale.product_external_id = record.product_external_id
+            if record.product_title and sale.product_title is None:
+                sale.product_title = record.product_title
             if product is not None and sale.product_id is None:
                 sale.product_id = product.id
             if portfolio_item is not None and sale.portfolio_item_id is None:
@@ -123,6 +130,7 @@ def _apply_commission(session: Session, sale: Sale, record: SalesRecord) -> None
     if commission is None:
         commission = Commission(
             sale_id=sale.id,
+            portfolio_item_id=sale.portfolio_item_id,
             marketplace=sale.marketplace,
             currency=record.currency,
             rate_basis_points=record.commission_rate_basis_points,
