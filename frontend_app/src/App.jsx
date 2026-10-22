@@ -6,6 +6,7 @@ import Produtos from "./pages/Produtos";
 import Integrations from "./pages/Integrations";
 import TrendingAbroad from "./pages/TrendingAbroad";
 import Opportunities from "./pages/Opportunities";
+import Profile from "./pages/Profile";
 import Login from "./pages/Login";
 import { API_BASE, isLoggedIn, logout, setAuthExpiredHandler } from "./lib/apiClient";
 
@@ -17,11 +18,13 @@ const PAGES = [
   { id: "oportunidades", label: "Oportunidades de Busca", icon: "🔥" },
   { id: "tendencias", label: "Tendências Internacionais", icon: "🌎" },
   { id: "integracoes", label: "Integrações", icon: "🔌" },
+  { id: "perfil", label: "Perfil", icon: "👤" },
 ];
 
 export default function App() {
   const [authed, setAuthed] = useState(isLoggedIn());
   const [page, setPage] = useState("daily-ops");
+  const [loginNotice, setLoginNotice] = useState("");
 
   useEffect(() => {
     setAuthExpiredHandler(() => setAuthed(false));
@@ -101,13 +104,26 @@ export default function App() {
             <Integrations />
           </div>
         );
+      case "perfil":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Perfil</h3>
+            <Profile
+              onRelogin={(message) => {
+                logout();
+                setLoginNotice(message);
+                setAuthed(false);
+              }}
+            />
+          </div>
+        );
       default:
         return null;
     }
   };
 
   if (!authed) {
-    return <Login onLoggedIn={() => setAuthed(true)} />;
+    return <Login notice={loginNotice} onLoggedIn={() => { setLoginNotice(""); setPage("daily-ops"); setAuthed(true); }} />;
   }
 
   return (

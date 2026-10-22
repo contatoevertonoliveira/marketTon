@@ -17,6 +17,7 @@ Princípios aplicados:
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -177,6 +178,87 @@ def set_password(session: Session, user: User, password: str) -> None:
     user.failed_login_count = 0
     user.locked_until = None
     revoke_all_user_tokens(session, user.id)
+
+
+USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{3,64}$")
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class InvalidProfile(AuthError):
+    """Dado de perfil inválido. A mensagem é segura para exibir."""
+
+
+def update_profile(
+    session: Session,
+    user: User,
+    *,
+    username: str | None = None,
+    email: str | None = None,
+    full_name: str | None = None,
+    phone: str | None = None,
+    company: str | None = None,
+) -> bool:
+    """Atualiza os dados de perfil. Devolve `True` se o nome de usuário mudou.
+
+    `None` significa "não mexer"; string vazia limpa o campo opcional. O nome de
+    usuário é o `sub` do token: se mudar, a sessão atual deixa de resolver e o
+    cliente precisa entrar de novo (quem chama avisa a tela).
+    """
+    username_changed = False
+    if username is not None:
+        username = username.strip()
+        if username != user.username:
+            if not USERNAME_PATTERN.match(username):
+                raise InvalidProfile("usuário deve ter 3 a 64 caracteres: letras, números, ponto, hífen ou sublinhado")
+            if get_user_by_username(session, username) is not None:
+                raise UserExists(f"o usuário '{username}' já existe")
+            user.username = username
+            username_changed = True
+
+    if email is not None:
+        email = email.strip()
+        if email and not EMAIL_PATTERN.match(email):
+            raise InvalidProfile("e-mail inválido")
+        if email:
+            other = session.scalar(select(User).where(User.email == email, User.id != user.id))
+            if other is not None:
+                raise UserExists("este e-mail já está em uso por outra conta")
+        user.email = email or None
+
+    for field, value, limit in (("full_name", full_name, 128), ("phone", phone, 32), ("company", company, 128)):
+        if value is None:
+            continue
+        value = value.strip()
+        if len(value) > limit:
+            raise InvalidProfile(f"{field} excede {limit} caracteres")
+        setattr(user, field, value or None)
+
+    session.flush()
+    return username_changed
+
+
+def change_own_password(session: Session, user: User, *, current_password: str, new_password: str) -> None:
+    """Troca a senha do próprio usuário, exigindo a atual.
+
+    Errar a senha atual conta para o mesmo bloqueio do login: sem isso, quem
+    roubasse uma sessão aberta poderia adivinhar a senha por aqui, sem limite.
+    """
+    locked_until = _ensure_aware(user.locked_until)
+    if locked_until is not None and locked_until > _now():
+        remaining = int((locked_until - _now()).total_seconds() // 60) + 1
+        raise AccountLocked(f"conta temporariamente bloqueada. Tente novamente em {remaining} minuto(s).")
+
+    if not verify_password(current_password, user.password_hash):
+        user.failed_login_count += 1
+        if user.failed_login_count >= MAX_FAILED_LOGINS:
+            user.locked_until = _now() + timedelta(minutes=LOCKOUT_MINUTES)
+        session.commit()
+        raise InvalidCredentials("senha atual incorreta")
+
+    if verify_password(new_password, user.password_hash):
+        raise InvalidProfile("a nova senha precisa ser diferente da atual")
+
+    set_password(session, user, new_password)  # valida a força e revoga as sessões
 
 
 def set_active(session: Session, user: User, *, active: bool) -> None:

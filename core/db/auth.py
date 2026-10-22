@@ -77,6 +77,11 @@ class User(Base, TimestampMixin):
 
     created_by: Mapped[str | None] = mapped_column(String(64))
 
+    # Dados de perfil, todos opcionais e editados pelo próprio usuário.
+    full_name: Mapped[str | None] = mapped_column(String(128))
+    phone: Mapped[str | None] = mapped_column(String(32))
+    company: Mapped[str | None] = mapped_column(String(128))
+
     tokens: Mapped[list[RefreshToken]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",

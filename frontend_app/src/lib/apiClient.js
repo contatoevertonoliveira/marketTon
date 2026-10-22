@@ -86,7 +86,9 @@ async function request(path, options = {}, _retried = false) {
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     const detail = data?.detail;
-    const message = typeof detail === "string" ? detail : detail?.message || res.statusText;
+    let message = typeof detail === "string" ? detail : detail?.message || res.statusText;
+    // Senha fraca etc.: o backend manda a lista de motivos; sem ela a tela só diria "não atende".
+    if (Array.isArray(detail?.problems) && detail.problems.length) message += `: ${detail.problems.join("; ")}`;
     throw new Error(message);
   }
   return data;
@@ -95,3 +97,4 @@ async function request(path, options = {}, _retried = false) {
 export const getJSON = (path) => request(path);
 export const postJSON = (path, body) => request(path, { method: "POST", body: JSON.stringify(body || {}) });
 export const putJSON = (path, body) => request(path, { method: "PUT", body: JSON.stringify(body || {}) });
+export const patchJSON = (path, body) => request(path, { method: "PATCH", body: JSON.stringify(body || {}) });

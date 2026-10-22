@@ -23,7 +23,7 @@ const buttonStyle = {
   cursor: "pointer",
 };
 
-export default function Login({ onLoggedIn }) {
+export default function Login({ onLoggedIn, notice }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -59,6 +59,11 @@ export default function Login({ onLoggedIn }) {
       >
         <h4 style={{ marginTop: 0, marginBottom: 2, color: "#32325d" }}>marketTon</h4>
         <p style={{ color: "#8898aa", fontSize: 13, marginTop: 0, marginBottom: 18 }}>Affiliate Intelligence System</p>
+        {notice && (
+          <div style={{ background: "#e5faf1", color: "#1a7a54", fontSize: 12, padding: "8px 10px", borderRadius: 8, marginBottom: 12 }}>
+            {notice}
+          </div>
+        )}
         <input
           placeholder="usuário"
           value={username}

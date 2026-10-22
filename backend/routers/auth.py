@@ -38,8 +38,10 @@ from core.services.auth import (
     AccountLocked,
     AuthError,
     InvalidCredentials,
+    InvalidProfile,
     UserExists,
     WeakPassword,
+    change_own_password,
     create_user,
     login,
     refresh_session,
@@ -47,6 +49,7 @@ from core.services.auth import (
     revoke_refresh_token,
     set_active,
     set_password,
+    update_profile,
 )
 from core.services.security import SecurityError
 
@@ -84,12 +87,32 @@ class UserOut(BaseModel):
     role: str
     is_active: bool
     last_login_at: str | None = None
+    full_name: str | None = None
+    phone: str | None = None
+    company: str | None = None
 
 
 class MeResponse(UserOut):
     """Inclui as permissões para o frontend montar a navegação."""
 
     permissions: list[str]
+    # `True` quando a mudança invalida a sessão atual (ex.: novo nome de usuário).
+    relogin_required: bool = False
+
+
+class ProfileUpdateRequest(BaseModel):
+    """Campos ausentes não são alterados; string vazia limpa um campo opcional."""
+
+    username: str | None = Field(default=None, max_length=64)
+    email: str | None = Field(default=None, max_length=255)
+    full_name: str | None = Field(default=None, max_length=128)
+    phone: str | None = Field(default=None, max_length=32)
+    company: str | None = Field(default=None, max_length=128)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=10, max_length=256)
 
 
 class CreateUserRequest(BaseModel):
@@ -116,6 +139,9 @@ def _user_out(user: User) -> UserOut:
         role=user.role.value if hasattr(user.role, "value") else str(user.role),
         is_active=user.is_active,
         last_login_at=user.last_login_at.isoformat() if user.last_login_at else None,
+        full_name=user.full_name,
+        phone=user.phone,
+        company=user.company,
     )
 
 
@@ -231,6 +257,75 @@ def me(principal: CurrentUser) -> MeResponse:
     """
     base = _user_out(principal.user)
     return MeResponse(**base.model_dump(), permissions=principal.permissions)
+
+
+@router.patch("/me", response_model=MeResponse, summary="Editar o próprio perfil")
+def update_me(
+    payload: ProfileUpdateRequest,
+    principal: CurrentUser,
+    session: Session = Depends(get_session),
+) -> MeResponse:
+    """Nome de usuário, e-mail e dados de contato do próprio usuário.
+
+    Trocar o nome de usuário invalida a sessão atual (ele é o `sub` do token), por
+    isso a resposta traz `relogin_required` e a tela pede novo login.
+    """
+    user = session.get(User, principal.user.id)
+    try:
+        username_changed = update_profile(session, user, **payload.model_dump())
+    except UserExists as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except InvalidProfile as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    record_action(
+        session,
+        principal,
+        action="auth.profile_updated",
+        resource_type="user",
+        resource_id=str(user.id),
+        detail="nome de usuário alterado" if username_changed else None,
+    )
+    session.commit()
+    session.refresh(user)
+    return MeResponse(
+        **_user_out(user).model_dump(),
+        permissions=principal.permissions,
+        relogin_required=username_changed,
+    )
+
+
+@router.post("/me/password", summary="Trocar a própria senha")
+def change_my_password(
+    payload: PasswordChangeRequest,
+    principal: CurrentUser,
+    session: Session = Depends(get_session),
+) -> dict:
+    """Exige a senha atual. Revoga todas as sessões: é preciso entrar de novo."""
+    user = session.get(User, principal.user.id)
+    try:
+        change_own_password(
+            session, user, current_password=payload.current_password, new_password=payload.new_password
+        )
+    except AccountLocked as exc:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=str(exc)) from exc
+    except InvalidCredentials as exc:
+        record_action(session, principal, action="auth.password_changed", resource_type="user",
+                      resource_id=str(user.id), outcome="failure", detail="senha atual incorreta")
+        session.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except InvalidProfile as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except WeakPassword as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"message": "senha não atende aos requisitos", "problems": exc.problems},
+        ) from exc
+
+    record_action(session, principal, action="auth.password_changed", resource_type="user",
+                  resource_id=str(user.id), detail="sessões revogadas")
+    session.commit()
+    return {"ok": True, "relogin_required": True}
 
 
 # --- Administração de usuários ------------------------------------------------
