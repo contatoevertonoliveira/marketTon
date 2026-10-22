@@ -232,10 +232,17 @@ def test_monetizze_token_comes_from_the_consumer_key_header(monkeypatch):
         MonetizzeAdapter(MonetizzeConfig()).check()
 
 
-def test_monetizze_products_use_the_active_plan_price_and_never_invent_commission(monkeypatch):
-    http = _Http(monkeypatch, {("GET", "/2.1/token"): MONETIZZE_TOKEN, ("GET", "/2.1/myproducts"): MONETIZZE_PRODUCTS})
+MONETIZZE_V3 = {("GET", "/3.0/token"): _Resp(200, {"token": "t3", "expire": "2026-10-22 12:00:00"}),
+                ("GET", "/3.0/produto/afiliacoes"): _Resp(200, {"status": 200, "totalRegistros": 1, "produtos": [
+                    {"codigo": 34348, "chave": "k", "nome": "Curso básico de php", "comissao": "Até R$ 141,42", "vendas": 0}]})}
+
+
+def test_monetizze_products_use_the_active_plan_price_and_the_commission_from_the_affiliations_route(monkeypatch):
+    http = _Http(monkeypatch, {("GET", "/2.1/token"): MONETIZZE_TOKEN, ("GET", "/2.1/myproducts"): MONETIZZE_PRODUCTS, **MONETIZZE_V3})
     batch = _monetizze().fetch_products()
     first, second = batch.products
+    assert first.affiliate_commission_fixed == 141.42 and first.attributes["commission_is_ceiling"] is True  # "Até R$": é um teto
+    assert second.affiliate_commission_fixed is None  # sem afiliação listada: nada inventado
     assert (first.external_id, first.title, first.price, first.is_available) == ("34348", "Curso básico de php", 99.0, True)  # plano inativo (79) fora
     assert first.images == ["https://static.monetizze.com.br/img/fotos/34348/x.png"]
     assert first.affiliate_commission_pct is None and second.price is None and second.is_available is False
@@ -277,7 +284,7 @@ def test_monetizze_regenerates_the_token_once_when_the_api_says_403(monkeypatch)
         state["n"] += 1
         return _Resp(403, {"Error": "Token inválido"}) if state["n"] == 1 else MONETIZZE_PRODUCTS
 
-    http = _Http(monkeypatch, {("GET", "/2.1/token"): MONETIZZE_TOKEN, ("GET", "/2.1/myproducts"): products})
+    http = _Http(monkeypatch, {("GET", "/2.1/token"): MONETIZZE_TOKEN, ("GET", "/2.1/myproducts"): products, **MONETIZZE_V3})
     assert len(_monetizze().fetch_products().products) == 2
     assert http.count("GET", "/2.1/token") == 2
 

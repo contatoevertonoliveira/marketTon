@@ -30,6 +30,7 @@ from __future__ import annotations
 import base64
 import binascii
 import logging
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -319,6 +320,7 @@ class HotmartAdapter(_PlatformAdapter):
 # ================================================================== Monetizze =========
 
 MONETIZZE_API = "https://api.monetizze.com.br/2.1"
+MONETIZZE_API_V3 = "https://api.monetizze.com.br/3.0"  # só a rota de afiliações existe aqui (comissão por produto)
 MONETIZZE_TOKEN_TTL = 14 * 60  # o token vive 15 min e renova a cada uso (doc oficial)
 # Status da venda (texto, doc oficial): Aguardando pagamento · Finalizada · Cancelada · Devolvida · Bloqueada · Completa
 MONETIZZE_CANCELLED = {"cancelada", "devolvida", "bloqueada"}
@@ -386,14 +388,39 @@ class MonetizzeAdapter(_PlatformAdapter):
         self._access_token(force=True)
         return "token obtido com a chave de API (vale 15 min e renova a cada uso)"
 
+    @staticmethod
+    def parse_commission(text: Any) -> tuple[float | None, float | None, bool]:
+        """"Até R$ 141,42" -> (141.42, None, True); "30%" -> (None, 30.0, False). O terceiro valor diz se é um teto ("Até")."""
+        raw = str(text or "")
+        ceiling = raw.strip().lower().startswith("at")
+        number = re.search(r"(\d[\d.]*(?:,\d+)?)", raw)
+        value = _to_float(number.group(1).replace(".", "").replace(",", ".")) if number else None
+        if value is None:
+            return None, None, ceiling
+        return (None, value, ceiling) if "%" in raw else (value, None, ceiling)
+
+    def _affiliations(self) -> dict[str, dict]:
+        """Afiliações da conta na API 3.0 (`produto/afiliacoes`): comissão e vendas por produto. Falha vira dicionário vazio."""
+        try:
+            auth = {"X_CONSUMER_KEY": self.cfg.consumer_key, "CONSUMER_KEY": self.cfg.consumer_key, "ORIGEM": "marketton"}
+            token = requests.get(f"{MONETIZZE_API_V3}/token", headers=auth, timeout=self.cfg.timeout).json().get("token")
+            response = requests.get(f"{MONETIZZE_API_V3}/produto/afiliacoes", params={"por_pagina": 50},
+                                    headers={**auth, "TOKEN": token or ""}, timeout=self.cfg.timeout)
+            rows = (response.json() or {}).get("produtos") or []
+        except (requests.RequestException, ValueError, AttributeError):
+            return {}
+        return {str(r.get("codigo")): r for r in rows if isinstance(r, dict) and r.get("codigo") is not None}
+
     def fetch_products(self, *, limit: int | None = None) -> ConnectorBatch:
         """`/myproducts`: por padrão, os produtos em que você é afiliado ativo."""
         from integrations.marketplaces.base import ConnectorProduct
 
         data = self._get("/myproducts", {"retorno_produtor": 0})
         rows = data.get("dados") if isinstance(data, dict) else None
+        affiliations = self._affiliations()
         products: list[ConnectorProduct] = []
         for row in rows or []:
+            fixed, pct, ceiling = self.parse_commission((affiliations.get(str(row.get("codigo"))) or {}).get("comissao"))
             plans = [p for p in (row.get("planos") or []) if str(p.get("status")) == "1"]
             prices = [v for v in (_to_float(p.get("valor")) for p in plans) if v is not None]
             products.append(ConnectorProduct(
@@ -403,10 +430,11 @@ class MonetizzeAdapter(_PlatformAdapter):
                 price=min(prices) if prices else None,
                 is_available=str(row.get("status")) == "2",
                 images=[row["foto"]] if row.get("foto") else None,
-                # A API não informa a comissão do afiliado no produto: fica `None`, e a
-                # taxa observada nas vendas preenche depois.
-                affiliate_commission_pct=None,
-                attributes={"platform": "monetizze", "plans": [
+                # Comissão da rota de afiliações ("Até R$ X" é o teto do plano mais caro); a taxa observada nas
+                # vendas refina depois.
+                affiliate_commission_pct=pct,
+                affiliate_commission_fixed=fixed,
+                attributes={"platform": "monetizze", "commission_is_ceiling": ceiling or None, "plans": [
                     {"codigo": p.get("codigo"), "nome": p.get("nome"), "valor": p.get("valor"), "status": p.get("status")}
                     for p in (row.get("planos") or [])]},
             ))
@@ -415,7 +443,8 @@ class MonetizzeAdapter(_PlatformAdapter):
         return ConnectorBatch(
             connector=self.name, products=products, collected_at=datetime.now(UTC),
             endpoint=f"{MONETIZZE_API}/myproducts", reliability=self.reliability,
-            warnings=["Comissão do afiliado não vem no produto; é aprendida nas vendas."],
+            warnings=([] if affiliations else ["Comissão não obtida (rota de afiliações indisponível); é aprendida nas vendas."])
+            + (["Comissão 'Até R$ X' é um teto; o link de afiliado não vem pela API."] if affiliations else []),
         )
 
     @staticmethod

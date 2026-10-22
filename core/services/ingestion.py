@@ -102,6 +102,8 @@ def _as_enum(value: Marketplace | str) -> Marketplace:
 def _connector_kind_for(connector: str) -> ConnectorKind:
     """Classifica a fonte para auditoria de legitimidade (briefing seção 2)."""
     lowered = connector.lower()
+    if "manual" in lowered:
+        return ConnectorKind.MANUAL
     if "affiliate" in lowered:
         return ConnectorKind.AFFILIATE_API
     return ConnectorKind.OFFICIAL_API

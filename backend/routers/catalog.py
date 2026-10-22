@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.deps import get_adapters, get_session
-from backend.security import require
+from backend.security import Principal, record_action, require
 from backend.serializers import (
     latest_scores_by_dimension,
     product_detail,
@@ -443,6 +443,29 @@ class ProductFunnelOut(BaseModel):
     # Comissão extra do vendedor e até quando vale (None = produto sem comissão extra).
     commission_offer: dict | None = None
     commission_note: str | None = None
+
+
+class DigitalImportIn(BaseModel):
+    csv: str = Field(min_length=1, max_length=400_000)
+
+
+@router.post("/import-digital", summary="Importar produtos digitais (Hotmart, Eduzz, Monetizze) de uma planilha CSV")
+def import_digital(
+    payload: DigitalImportIn,
+    principal: Principal = Depends(require("catalog.manage")),
+    session: Session = Depends(get_session),
+) -> dict:
+    """As plataformas digitais não têm API de descoberta: o operador escolhe no painel de cada uma e importa aqui."""
+    from core.services import digital_import
+
+    try:
+        report = digital_import.import_csv(session, payload.csv)
+    except digital_import.ImportError_ as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_action(session, principal, action="catalog.digital_import", resource_type="product",
+                  detail=f"{report.created_or_updated} produto(s): {report.by_platform}")
+    session.commit()
+    return {"imported": report.created_or_updated, "rows": report.rows, "by_platform": report.by_platform, "errors": report.errors}
 
 
 @router.get("/products/{product_id}/funnel", response_model=ProductFunnelOut)

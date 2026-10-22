@@ -77,6 +77,35 @@ function AddFromCatalog({ onAdd }) {
   );
 }
 
+const MODELO = "plataforma;nome;link;comissao_pct;comissao_reais;preco;foto;categoria
+hotmart;Nome do curso;https://pay.hotmart.com/SEU-LINK;40;;197,00;https://exemplo.com/capa.jpg;Cursos";
+
+function ImportDigital({ onDone }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState(null);
+  async function send() {
+    setBusy(true); setRes(null);
+    try { const r = await postJSON("/catalog/import-digital", { csv: text }); setRes({ ok: true, ...r }); onDone && onDone(); } catch (e) { setRes({ ok: false, error: e.message }); } finally { setBusy(false); }
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: "#8898aa", marginBottom: 8 }}>
+        Hotmart, Eduzz e Monetizze não têm API para descobrir produtos. Escolha no painel de cada uma e cole aqui: <strong>plataforma, nome, link (seu link de afiliado, https), comissão % ou em R$, preço, foto, categoria</strong>.
+        Só plataforma, nome e link são obrigatórios. Aceita planilha copiada (separada por tab), vírgula ou ponto e vírgula.
+      </div>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder={MODELO} style={{ ...input, fontFamily: "monospace", fontSize: 12 }} />
+      <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={send} disabled={busy || !text.trim()} style={{ border: "none", background: "#5e72e4", color: "#fff", borderRadius: 8, padding: "7px 18px", fontSize: 13, cursor: "pointer" }}>{busy ? "Importando…" : "Importar"}</button>
+        <button onClick={() => setText(MODELO)} style={{ border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>Inserir modelo</button>
+        {res?.ok && <span style={{ fontSize: 12, color: "#1a7a54" }}>{res.imported} produto(s) importado(s) {Object.entries(res.by_platform).map(([k, v]) => `${k}: ${v}`).join(", ")}{res.errors.length ? ` · ${res.errors.length} linha(s) com problema` : ""}</span>}
+        {res && !res.ok && <span style={{ fontSize: 12, color: "#c31e3f" }}>{res.error}</span>}
+      </div>
+      {res?.ok && res.errors.length > 0 && <ul style={{ fontSize: 11, color: "#b8720a", margin: "8px 0 0 16px" }}>{res.errors.slice(0, 8).map((e) => <li key={e}>{e}</li>)}</ul>}
+    </div>
+  );
+}
+
 export default function Vitrine() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -162,6 +191,11 @@ export default function Vitrine() {
       <div style={card}>
         <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14, marginBottom: 10 }}>Adicionar produto do catálogo</div>
         <AddFromCatalog onAdd={add} />
+      </div>
+
+      <div style={card}>
+        <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14, marginBottom: 10 }}>Importar produtos digitais (Hotmart, Eduzz, Monetizze)</div>
+        <ImportDigital onDone={load} />
       </div>
 
       <div style={card}>
