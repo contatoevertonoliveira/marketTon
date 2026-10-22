@@ -332,6 +332,8 @@ def test_mcp_exposes_exactly_the_intended_tools():
         "marketton_status", "marketton_checklist", "list_products", "get_product", "product_funnel",
         "search_opportunities", "trending_abroad", "sales_performance", "list_portfolio", "commission_proposals",
         "daily_review", "add_to_portfolio", "move_portfolio_item", "set_manual_signals", "apply_observed_commissions",
+        "agent_playbook", "chat_inbox", "chat_send", "request_resource", "complete_task", "system_health",
+        "capabilities", "sync_sales",
     }
     # Nada de credenciais, usuários ou anúncios: o agente só tem o que a API do portfólio oferece.
     assert not any(w in n for n in names for w in ("credential", "user", "password", "ads_", "campaign"))
@@ -376,3 +378,138 @@ def test_mcp_reports_an_unreachable_backend_in_plain_words(monkeypatch):
     monkeypatch.setattr(server, "_client", client_module.MarkettonClient("http://t", "agente", PASSWORD))
     out = server.marketton_status()
     assert out["ok"] is False and "backend está no ar" in out["message"]
+
+
+# --- chat, ativação, capacidades, saúde e aviso de venda ---------------------------------------
+
+
+def test_turning_the_mode_on_queues_the_activation_routine_once(api):
+    admin, agent = _as(api, "dono"), _as(api, "agente")
+    api.put("/agent/mode", json={"enabled": True}, headers=admin)
+    api.put("/agent/mode", json={"enabled": True}, headers=admin)  # ligar de novo não duplica
+
+    inbox = api.get("/agent/chat/inbox", headers=agent).json()
+    tasks = [m for m in inbox["open_tasks"] if m["meta"]["task"] == "activation_routine"]
+    assert len(tasks) == 1 and "rotina de ativação" in tasks[0]["text"]
+    assert "sync_sales" in tasks[0]["text"] and "chat_send" in tasks[0]["text"]
+
+    # Ler a caixa marca como lido; a tarefa continua aberta até o agente concluí-la.
+    again = api.get("/agent/chat/inbox", headers=agent).json()
+    assert again["unread"] == [] and len(again["open_tasks"]) == 1
+    done = api.patch(f"/agent/chat/{tasks[0]['id']}", json={"status": "done"}, headers=agent)
+    assert done.status_code == 200 and done.json()["status"] == "done"
+    assert api.get("/agent/chat/inbox", headers=agent).json()["open_tasks"] == []
+
+    api.put("/agent/mode", json={"enabled": False}, headers=admin)
+    texts = [m["text"] for m in api.get("/agent/chat", headers=admin).json()["messages"]]
+    assert any("DESLIGADO" in t for t in texts)
+
+
+def test_chat_author_comes_from_the_role_and_the_agent_cannot_forge_system_messages(api):
+    admin, agent, viewer = _as(api, "dono"), _as(api, "agente"), _as(api, "leitor")
+
+    assert api.post("/agent/chat", json={"text": "oi agente"}, headers=viewer).status_code == 403  # leitor não instrui o agente
+    mine = api.post("/agent/chat", json={"text": "  analise o catálogo  "}, headers=admin).json()
+    assert mine["author"] == "user" and mine["text"] == "analise o catálogo"
+    assert api.post("/agent/chat", json={"text": "x", "kind": "alert"}, headers=admin).status_code == 422
+
+    reply = api.post("/agent/chat", json={"text": "Feito."}, headers=agent).json()
+    assert reply["author"] == "agent"  # mesmo que o corpo tentasse dizer outro autor
+    for forged in ("alert", "task"):
+        assert api.post("/agent/chat", json={"text": "x", "kind": forged}, headers=agent).status_code == 422
+    assert api.post("/agent/chat", json={"text": "   "}, headers=admin).status_code == 422
+
+
+def test_resource_requests_can_be_resolved_only_by_the_operator(api):
+    admin, agent = _as(api, "dono"), _as(api, "agente")
+    req = api.post("/agent/chat", json={"text": "Chave do AI Studio", "kind": "request",
+                                        "meta": {"resource": "ai_studio_key"}}, headers=agent).json()
+    assert req["status"] == "open"
+    counts = api.get("/agent/chat", headers=admin).json()["counts"]
+    assert counts["open_requests"] == 1 and counts["unread_for_user"] >= 1
+
+    assert api.patch(f"/agent/chat/{req['id']}", json={"status": "done"}, headers=agent).status_code == 403
+    assert api.patch(f"/agent/chat/{req['id']}", json={"status": "done"}, headers=admin).json()["status"] == "done"
+    assert api.get("/agent/chat", headers=admin).json()["counts"]["open_requests"] == 0
+
+    api.post("/agent/chat/read", headers=admin)
+    assert api.get("/agent/chat", headers=admin).json()["counts"]["unread_for_user"] == 0
+    assert api.get("/agent/chat", params={"after_id": req["id"]}, headers=admin).json()["messages"] == []
+
+
+def test_capabilities_never_present_unbuilt_things_as_ready(api):
+    data = api.get("/agent/capabilities", headers=_as(api, "agente")).json()
+    by_key = {c["key"]: c for c in data["capabilities"]}
+    for key in ("social_publishing", "ads_management", "link_clicks", "meta_ads_library",
+                "marketplace_hotmart", "marketplace_kirvano", "marketplace_monetizze"):
+        assert by_key[key]["status"] == "nao_construido" and by_key[key]["needs"], key
+    assert by_key["google_trends"]["status"] == "pronto"
+    assert by_key["google_ads_keyword_planner"]["status"] == "configurar"  # sem credencial no banco de teste
+    assert by_key["ai_creatives"]["status"] == "configurar" and any("AI_API_KEY" in n for n in by_key["ai_creatives"]["needs"])
+    assert sum(data["summary"].values()) == len(data["capabilities"])
+
+
+def test_health_reports_database_and_empty_catalog(api):
+    health = api.get("/agent/health", headers=_as(api, "agente")).json()
+    by_name = {c["name"]: c for c in health["checks"]}
+    assert by_name["banco_de_dados"]["status"] == "ok"
+    assert by_name["catalogo"]["status"] == "aviso" and "vazio" in by_name["catalogo"]["detail"]
+    assert health["overall"] in ("aviso", "erro")
+
+
+class _FakeShopee:
+    def __init__(self, records):
+        self.records = records
+
+    def is_configured(self):
+        return True
+
+    def fetch_sales(self, since=None):
+        return self.records
+
+
+def test_sales_sync_alerts_only_for_new_sales_and_learns_commission(session):
+    from core.db.agent_chat import AgentMessage
+    from core.services.sales_sync import sync_sales
+
+    product = _product(session, "777")
+    first = [_sale("A", "777", 100.0, conf=10.0), _sale("B", "777", 50.0, est=5.0, status="PENDING")]
+
+    out = sync_sales(session, {"shopee": _FakeShopee(first)})
+    assert out["new_sales"] == 2 and out["marketplaces"][0]["commissions_learned"] == 1
+    assert product.affiliate_commission_pct == 10.0
+    alerts = session.query(AgentMessage).filter_by(kind="alert").all()
+    assert len(alerts) == 2 and all(a.author == "system" for a in alerts)
+    assert any("Nova venda na shopee" in a.text and "R$ 100,00" in a.text and "confirmada" in a.text for a in alerts)
+    assert any("pendente" in a.text for a in alerts)
+
+    # Rodar de novo com uma venda a mais: só a nova gera alerta.
+    out2 = sync_sales(session, {"shopee": _FakeShopee(first + [_sale("C", "777", 80.0, conf=8.0)])})
+    assert out2["new_sales"] == 1
+    assert session.query(AgentMessage).filter_by(kind="alert").count() == 3
+
+
+def test_sales_sync_skips_unconfigured_and_reports_errors_without_stopping(session):
+    from core.services.sales_sync import sync_sales
+
+    class Unconfigured:
+        def is_configured(self):
+            return False
+
+    class Broken:
+        def is_configured(self):
+            return True
+
+        def fetch_sales(self, since=None):
+            raise RuntimeError("api fora do ar")
+
+    out = sync_sales(session, {"amazon": Unconfigured(), "shopee": Broken()})
+    by = {m["marketplace"]: m for m in out["marketplaces"]}
+    assert by["amazon"]["skipped"] and by["shopee"]["error"] == "api fora do ar" and out["new_sales"] == 0
+
+
+def test_sales_sync_endpoint_requires_the_mode_for_the_agent(api):
+    agent = _as(api, "agente")
+    assert api.post("/agent/sales/sync", headers=agent).status_code == 403
+    api.put("/agent/mode", json={"enabled": True}, headers=_as(api, "dono"))
+    assert api.post("/agent/sales/sync", headers=agent).status_code == 200

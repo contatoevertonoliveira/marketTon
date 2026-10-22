@@ -8,8 +8,9 @@ import TrendingAbroad from "./pages/TrendingAbroad";
 import Opportunities from "./pages/Opportunities";
 import Profile from "./pages/Profile";
 import AgentSwitch from "./components/AgentSwitch";
+import AgentChat from "./pages/AgentChat";
 import Login from "./pages/Login";
-import { API_BASE, isLoggedIn, logout, setAuthExpiredHandler } from "./lib/apiClient";
+import { API_BASE, getJSON, isLoggedIn, logout, setAuthExpiredHandler } from "./lib/apiClient";
 
 const PAGES = [
   { id: "visao-geral", label: "Visão Geral", icon: "🏠" },
@@ -18,6 +19,7 @@ const PAGES = [
   { id: "portfolio", label: "Portfólio", icon: "🗂️" },
   { id: "oportunidades", label: "Oportunidades de Busca", icon: "🔥" },
   { id: "tendencias", label: "Tendências Internacionais", icon: "🌎" },
+  { id: "agente", label: "Agente (chat)", icon: "🤖" },
   { id: "integracoes", label: "Integrações", icon: "🔌" },
   { id: "perfil", label: "Perfil", icon: "👤" },
 ];
@@ -26,10 +28,20 @@ export default function App() {
   const [authed, setAuthed] = useState(isLoggedIn());
   const [page, setPage] = useState("daily-ops");
   const [loginNotice, setLoginNotice] = useState("");
+  const [chatCounts, setChatCounts] = useState(null);
 
   useEffect(() => {
     setAuthExpiredHandler(() => setAuthed(false));
   }, []);
+
+  // Aviso no menu: mensagens, alertas de venda e pedidos do agente ainda não vistos.
+  useEffect(() => {
+    if (!authed) return undefined;
+    const poll = () => getJSON("/agent/chat?limit=1").then((d) => setChatCounts(d.counts)).catch(() => {});
+    poll();
+    const id = setInterval(poll, 30000);
+    return () => clearInterval(id);
+  }, [authed]);
 
   const sidebarItem = (item) => (
     <button
@@ -51,6 +63,11 @@ export default function App() {
     >
       <span>{item.icon}</span>
       <span>{item.label}</span>
+      {item.id === "agente" && chatCounts && chatCounts.unread_for_user + chatCounts.open_requests > 0 && (
+        <span style={{ marginLeft: "auto", background: "#f5365c", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 700, padding: "1px 7px" }}>
+          {chatCounts.unread_for_user + chatCounts.open_requests}
+        </span>
+      )}
     </button>
   );
 
@@ -103,6 +120,13 @@ export default function App() {
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Integrações</h3>
             <Integrations />
+          </div>
+        );
+      case "agente":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Chat com o agente</h3>
+            <AgentChat onCountsChange={setChatCounts} />
           </div>
         );
       case "perfil":

@@ -16,6 +16,7 @@ ela vira uma ferramenta aqui.
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -27,6 +28,9 @@ AGENT_NAME = "claude_agent"
 
 INSTRUCTIONS = """\
 Você administra o marketTon, um sistema de inteligência para afiliados (Shopee, Mercado Livre).
+
+Comece SEMPRE por `agent_playbook` (seu manual de especialista) e `chat_inbox` (o que o operador pediu).
+Fale com o operador pelo chat (`chat_send`); peça recursos que faltam com `request_resource`.
 
 Princípios:
 - Nunca invente dado. Se uma ferramenta devolver null/"sem dado", diga isso.
@@ -233,6 +237,78 @@ def apply_observed_commissions(marketplace: str | None = None, min_sales: int = 
     Nunca sobrescreve comissão vinda da API ou digitada pelo operador. Mostre antes `commission_proposals`.
     """
     return _run(lambda: _client.post("/agent/commissions/apply", marketplace=marketplace, min_sales=min_sales))
+
+
+# --- Conversa, saúde e vendas ------------------------------------------------------------
+
+PLAYBOOK = Path(__file__).resolve().parent.parent / "docs" / "agent-playbook.md"
+
+
+@mcp.tool(annotations=READ)
+def agent_playbook() -> str:
+    """O manual do agente: regras, rotina diária, como escolher produto, conteúdo orgânico e recalibragem. Leia antes de agir."""
+    try:
+        return PLAYBOOK.read_text(encoding="utf-8")
+    except OSError:
+        return "Manual não encontrado em docs/agent-playbook.md."
+
+
+@mcp.tool(annotations=READ)
+def chat_inbox() -> Any:
+    """Mensagens novas do operador e do sistema + tarefas abertas (ex.: rotina de ativação). Marca como lido."""
+    return _run(lambda: _client.get("/agent/chat/inbox"))
+
+
+@mcp.tool(annotations=WRITE)
+def chat_send(text: str, kind: str = "message") -> Any:
+    """Escreve no chat do operador. `kind`: message (conversa) ou report (relatório curto). Funciona mesmo com o modo agente desligado."""
+    return _run(lambda: _client.post("/agent/chat", {"text": text, "kind": kind if kind in ("message", "report") else "message"}))
+
+
+@mcp.tool(annotations=WRITE)
+def request_resource(resource: str, why: str, how_to_provide: str) -> Any:
+    """Pede ao operador um recurso, acesso ou ferramenta que falta (aparece como cartão no chat).
+
+    `resource`: o que precisa (ex.: "Chave da API do AI Studio"). `why`: o que isso destrava. `how_to_provide`:
+    onde o operador coloca (ex.: "Integrações > ..."). Nunca peça senha ou token no chat: o operador os cadastra no app.
+    """
+    text = f"**{resource}**\nPor quê: {why}\nComo fornecer: {how_to_provide}"
+    return _run(lambda: _client.post("/agent/chat", {
+        "text": text, "kind": "request", "meta": {"resource": resource, "why": why, "how": how_to_provide}}))
+
+
+@mcp.tool(annotations=WRITE)
+def complete_task(task_id: int) -> Any:
+    """Marca como concluída uma tarefa da caixa de entrada (ex.: a rotina de ativação), depois de postar o relatório."""
+    return _run(lambda: _client.request("PATCH", f"/agent/chat/{task_id}", json={"status": "done"}))
+
+
+@mcp.tool(annotations=READ)
+def system_health() -> Any:
+    """Saúde do sistema: banco, frescor do catálogo e das vendas, integrações, jobs com falha e pedidos abertos."""
+    return _run(lambda: _client.get("/agent/health"))
+
+
+@mcp.tool(annotations=READ)
+def capabilities() -> Any:
+    """O que está pronto, o que falta o operador configurar e o que ainda não foi construído (base para pedir recursos)."""
+    return _run(lambda: _client.get("/agent/capabilities"))
+
+
+@mcp.tool(annotations=WRITE)
+def sync_sales(since_days: int = 30) -> Any:
+    """Busca as vendas dos marketplaces, aprende comissão e avisa cada venda nova no chat. EXIGE o modo agente ligado."""
+    return _run(lambda: _client.post("/agent/sales/sync", since_days=since_days))
+
+
+@mcp.prompt(name="ativacao", description="Roda a rotina completa de ativação do agente no marketTon.")
+def ativacao() -> str:
+    return (
+        "Execute a rotina de ativação do marketTon: leia `agent_playbook` e `chat_inbox`, rode `system_health`, "
+        "`marketton_checklist` e `sync_sales`, analise o catálogo com `product_funnel`, escolha e vincule os produtos "
+        "com mais chance de venda, poste um relatório no chat, peça com `request_resource` o que faltar e conclua a "
+        "tarefa com `complete_task`."
+    )
 
 
 def main() -> None:

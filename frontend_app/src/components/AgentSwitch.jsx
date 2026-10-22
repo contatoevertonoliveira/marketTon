@@ -94,7 +94,7 @@ function ConnectModal({ mode, onClose, onRefresh }) {
 
         {access && (
           <>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#32325d", marginTop: 16 }}>2. No PowerShell, na pasta do projeto, cole e abra o Claude Code</div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#32325d", marginTop: 16 }}>2. No PowerShell, na pasta do projeto, cole: o Claude abre já com a rotina de ativação</div>
             <CopyBlock text={`${envBlock}\nclaude`} />
             <div style={{ fontSize: 11, color: "#c31e3f", marginTop: 6 }}>
               A senha aparece só agora e não fica guardada em texto no marketTon. Copie antes de fechar.

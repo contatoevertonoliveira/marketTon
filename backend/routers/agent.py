@@ -9,16 +9,17 @@ from __future__ import annotations
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from dataclasses import asdict
 
-from backend.deps import get_session
+from backend.deps import get_adapters, get_session
 from backend.routers.marketplaces import CREDENTIAL_FIELDS
 from backend.security import CurrentUser, Principal, record_action, require
+from core.roles import AGENT_ROLE
 from core.db.auth import Role, User
 from core.db.base import PortfolioState
 from core.db.catalog import Product
@@ -27,7 +28,10 @@ from core.db.portfolio import PortfolioItem
 from core.db.service_credentials import ServiceCredential
 from core.db.tracking import Sale
 from core.db.base import Marketplace
+from core.services.agent_capabilities import capabilities, health, integration_states
+from core.services import agent_chat
 from core.services.app_settings import agent_mode_info, set_agent_mode
+from core.services.sales_sync import sync_sales
 from core.services.auth import create_user, get_user_by_username, set_password
 from core.services.security import validate_password_strength
 from core.services.commission_learning import apply_commissions, propose_commissions
@@ -76,7 +80,17 @@ def put_mode(
     principal: Principal = Depends(require("users.manage")),
     session: Session = Depends(get_session),
 ) -> AgentModeOut:
+    was_enabled = agent_mode_info(session)["enabled"]
     info = set_agent_mode(session, enabled=payload.enabled, actor=principal.username)
+    if payload.enabled and not was_enabled:
+        # Ao ligar, o agente recebe a rotina de análise completa. Ele a lê assim que uma sessão do
+        # Claude conectar — o sistema não roda o Claude por conta própria.
+        agent_chat.post_activation_task(session)
+    elif was_enabled and not payload.enabled:
+        agent_chat.post_message(
+            session, author="system", kind="message",
+            text="Modo agente DESLIGADO: a partir de agora você só consulta. Nenhuma ação de escrita será aceita.",
+        )
     record_action(
         session,
         principal,
@@ -129,28 +143,7 @@ def generate_access(
 
 
 def _integrations(session: Session) -> list[dict]:
-    """Estado das integrações, sem nenhum valor de credencial."""
-    rows = {row.marketplace.value: row for row in session.scalars(select(MarketplaceCredential))}
-    out = []
-    for slug, fields in CREDENTIAL_FIELDS.items():
-        row = rows.get(slug)
-        filled = bool(row) and any(bool(row.values.get(f["name"])) for f in fields)
-        out.append({
-            "name": slug,
-            "enabled": bool(row and row.enabled),
-            "has_credentials": filled,
-            "last_check_status": row.last_check_status if row else None,
-            "last_check_message": row.last_check_message if row else None,
-        })
-    google = session.scalar(select(ServiceCredential).where(ServiceCredential.service == "google_ads"))
-    out.append({
-        "name": "google_ads",
-        "enabled": bool(google and google.enabled),
-        "has_credentials": bool(google) and GoogleAdsConfig.from_values(google.values).is_complete(),
-        "last_check_status": google.last_check_status if google else None,
-        "last_check_message": google.last_check_message if google else None,
-    })
-    return out
+    return integration_states(session)
 
 
 @router.get("/status", summary="Estado geral para o agente decidir o que fazer")
@@ -293,3 +286,143 @@ def commission_apply(
     )
     session.commit()
     return {"applied": applied, "proposals": [asdict(p) for p in proposals]}
+
+
+# --- Chat com o agente ----------------------------------------------------------------
+
+
+class ChatPost(BaseModel):
+    text: str
+    kind: str = "message"
+    meta: dict | None = None
+
+
+class StatusUpdate(BaseModel):
+    status: str
+
+
+def _is_agent(principal: Principal) -> bool:
+    return principal.role == AGENT_ROLE
+
+
+@router.get("/chat", summary="Conversa com o agente")
+def chat_list(
+    after_id: int = 0,
+    limit: int = 100,
+    principal: Principal = Depends(require("operations.view")),
+    session: Session = Depends(get_session),
+) -> dict:
+    return {
+        "messages": [agent_chat.serialize(m) for m in agent_chat.list_messages(session, after_id=after_id, limit=limit)],
+        "counts": agent_chat.counts(session),
+    }
+
+
+@router.post("/chat", summary="Enviar mensagem (operador) ou responder (agente)")
+def chat_send(
+    payload: ChatPost,
+    principal: Principal = Depends(require("operations.view")),
+    session: Session = Depends(get_session),
+) -> dict:
+    """O autor vem do papel de quem chama, nunca do corpo da requisição.
+
+    Escrever no chat é uma instrução ao agente, então só operadores para cima escrevem como
+    "user". O agente escreve como "agent" e não pode forjar alerta do sistema nem tarefa.
+    """
+    if _is_agent(principal):
+        author = "agent"
+        if payload.kind not in ("message", "request", "report"):
+            raise HTTPException(status_code=422, detail="o agente só envia message, request ou report")
+    else:
+        if not principal.can("portfolio.manage"):
+            raise HTTPException(status_code=403, detail="só operadores ou administradores falam com o agente")
+        author = "user"
+        if payload.kind != "message":
+            raise HTTPException(status_code=422, detail="o operador envia apenas mensagens")
+    try:
+        message = agent_chat.post_message(session, author=author, text=payload.text, kind=payload.kind, meta=payload.meta)
+    except agent_chat.ChatError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return agent_chat.serialize(message)
+
+
+@router.post("/chat/read", summary="Marcar como lido (para quem chama)")
+def chat_mark_read(
+    principal: Principal = Depends(require("operations.view")), session: Session = Depends(get_session)
+) -> dict:
+    changed = agent_chat.mark_read(session, "agent" if _is_agent(principal) else "user")
+    session.commit()
+    return {"marked": changed, "counts": agent_chat.counts(session)}
+
+
+@router.get("/chat/inbox", summary="Caixa de entrada do agente (marca como lido)")
+def chat_inbox(
+    principal: Principal = Depends(require("operations.view")), session: Session = Depends(get_session)
+) -> dict:
+    inbox = agent_chat.agent_inbox(session)
+    session.commit()
+    return {
+        "unread": [agent_chat.serialize(m) for m in inbox["unread"]],
+        "open_tasks": [agent_chat.serialize(m) for m in inbox["open_tasks"]],
+    }
+
+
+@router.patch("/chat/{message_id}", summary="Resolver ou dispensar um pedido/tarefa")
+def chat_set_status(
+    message_id: int,
+    payload: StatusUpdate,
+    principal: Principal = Depends(require("operations.view")),
+    session: Session = Depends(get_session),
+) -> dict:
+    """O operador resolve ou dispensa pedidos; o agente só conclui as próprias tarefas."""
+    message = session.get(agent_chat.AgentMessage, message_id)
+    if message is None:
+        raise HTTPException(status_code=404, detail=f"mensagem {message_id} não encontrada")
+    if _is_agent(principal):
+        if message.kind != "task" or payload.status != "done":
+            raise HTTPException(status_code=403, detail="o agente só pode concluir tarefas")
+    elif not principal.can("portfolio.manage"):
+        raise HTTPException(status_code=403, detail="sem permissão")
+    try:
+        updated = agent_chat.set_status(session, message_id, payload.status)
+    except agent_chat.ChatError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return agent_chat.serialize(updated)
+
+
+# --- Capacidades, saúde e vendas ----------------------------------------------------------
+
+
+@router.get("/capabilities", summary="O que está pronto, o que falta configurar e o que ainda não foi construído")
+def get_capabilities(
+    principal: Principal = Depends(require("operations.view")), session: Session = Depends(get_session)
+) -> dict:
+    items = capabilities(session)
+    return {
+        "capabilities": items,
+        "summary": {s: sum(1 for i in items if i["status"] == s) for s in ("pronto", "configurar", "nao_construido")},
+    }
+
+
+@router.get("/health", summary="Saúde do sistema")
+def get_health(
+    principal: Principal = Depends(require("operations.view")), session: Session = Depends(get_session)
+) -> dict:
+    return health(session)
+
+
+@router.post("/sales/sync", summary="Sincronizar vendas dos marketplaces e avisar as novas")
+def sales_sync(
+    since_days: int = 30,
+    principal: Principal = Depends(require("portfolio.manage")),
+    session: Session = Depends(get_session),
+) -> dict:
+    result = sync_sales(session, get_adapters(), since_days=max(1, min(since_days, 90)))
+    record_action(
+        session, principal, action="agent.sales_synced", resource_type="sale",
+        detail=f"{result['new_sales']} venda(s) nova(s)",
+    )
+    session.commit()
+    return result
