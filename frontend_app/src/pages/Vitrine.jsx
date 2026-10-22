@@ -77,8 +77,7 @@ function AddFromCatalog({ onAdd }) {
   );
 }
 
-const MODELO = "plataforma;nome;link;comissao_pct;comissao_reais;preco;foto;categoria
-hotmart;Nome do curso;https://pay.hotmart.com/SEU-LINK;40;;197,00;https://exemplo.com/capa.jpg;Cursos";
+const MODELO = "plataforma;nome;link;comissao_pct;comissao_reais;preco;foto;categoria\nhotmart;Nome do curso;https://pay.hotmart.com/SEU-LINK;40;;197,00;https://exemplo.com/capa.jpg;Cursos";
 
 function ImportDigital({ onDone }) {
   const [text, setText] = useState("");
