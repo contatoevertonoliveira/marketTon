@@ -88,7 +88,7 @@ onde você posta (instagram, tiktok, youtube, shopee_video…) e a `campaign` id
 (cliques) **do que converte** (vendas). Cliques não são visualizações do post, e robôs não contam. Se o encurtador
 não estiver configurado, peça a configuração (`request_resource`) em vez de usar o link comum.
 
-## 3.06 Vitrine pública (Achados do Felix)
+## 3.06 Vitrine pública (Mural na Web)
 
 A loja pública mostra os produtos do portfólio para quem vem das redes. Você a mantém:
 1. `storefront_status` — o que está na loja e o que ficou de fora (e o motivo).

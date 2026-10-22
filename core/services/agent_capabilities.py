@@ -113,7 +113,7 @@ def capabilities(session: Session) -> list[dict]:
              "saber quais divulgações geram clique, não só venda (use create_tracked_link e sync_clicks)",
              [] if shortener_ok else ["configurar o Encurtador de links em Integrações (endereço e token do redirecionador)"],
              "Conta cliques do link curto; não conta robôs nem pré-visualizações, e não é visualização do post."),
-        _cap("storefront", "Vitrine pública (loja online Achados do Felix)", "pronto" if store_ok else "configurar",
+        _cap("storefront", "Vitrine pública (loja online Mural na Web)", "pronto" if store_ok else "configurar",
              "mostrar os produtos escolhidos numa loja bonita para quem vem das redes, com os links de afiliado (use storefront_status, "
              "storefront_update_item e storefront_publish)",
              [] if store_ok else ["configurar a Vitrine pública em Integrações (endereço e token) e testar"],

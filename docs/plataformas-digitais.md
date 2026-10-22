@@ -39,7 +39,11 @@ no catálogo de sugeridos. Comissão por venda alimenta a taxa observada do sist
 O fluxo de **autenticação** segue a documentação à risca. Já o **formato exato das respostas de venda**
 foi montado pelos exemplos da documentação e **não foi testado com conta real**:
 
-* **Monetizze:** a doc não diz qual item de `comissoes` é o do afiliado que consulta. Só se aceita
+* **Monetizze — conferido com conta real (22/10/2026):** o `/token` devolve `token` em minúsculas (não `TOKEN`) e o
+  `/myproducts` lista os produtos com `codigo`, `nome`, `foto` e `planos[].valor`; o link de afiliado **não** vem no produto
+  e a comissão também não (é aprendida nas vendas). As vendas (`/transactions`) ainda **não foram vistas** com dados reais
+  (a conta não tinha vendas na janela de 60 dias).
+* **Monetizze (vendas):** a doc não diz qual item de `comissoes` é o do afiliado que consulta. Só se aceita
   quando há um candidato único (item com `refAfiliado`, ou lista de 1); com mais de um, a comissão fica
   vazia em vez de chute. A data usada é `dataInicio` (a doc não traz a data da compra de forma clara).
 * **Eduzz:** os valores do campo `status` e o significado de `netGain` para a conta de afiliado não são

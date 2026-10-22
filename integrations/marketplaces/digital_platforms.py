@@ -326,9 +326,11 @@ class MonetizzeAdapter(_PlatformAdapter):
             raise PlatformError(f"sem conexão com a Monetizze: {exc}") from exc
         if not response.ok:
             raise PlatformError(f"Monetizze recusou a chave — {_error_text(response)}")
-        token = (response.json() or {}).get("TOKEN")
+        body = response.json() or {}
+        # A API devolve `token` em minúsculas (a doc antiga mostrava TOKEN): aceita as duas grafias.
+        token = next((v for k, v in body.items() if str(k).lower() == "token" and isinstance(v, str) and v), None)             if isinstance(body, dict) else None
         if not token:
-            raise PlatformError("Monetizze não devolveu o TOKEN")
+            raise PlatformError("Monetizze não devolveu o token de acesso")
         self._token.set(token, MONETIZZE_TOKEN_TTL)
         return token
 

@@ -234,6 +234,6 @@ def test_the_integration_card_hides_the_token_and_tests_the_connection(session, 
 
 
 def test_store_name_and_tagline_have_defaults_and_can_change(session):
-    assert sf.get_meta(session)["name"] == "Achados do Felix"
+    assert sf.get_meta(session)["name"] == "Mural na Web"
     sf.set_meta(session, name="  Garimpo  ", tagline=None, actor="x")
     assert sf.get_meta(session) == {"name": "Garimpo", "tagline": sf.DEFAULT_TAGLINE}

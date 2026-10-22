@@ -360,7 +360,7 @@ def sync_clicks():
 
 @mcp.tool(annotations=READ)
 def storefront_status():
-    """A vitrine pública (loja Achados do Felix): produtos, categoria, o que pode ser publicado e por quê, último envio.
+    """A vitrine pública (loja Mural na Web): produtos, categoria, o que pode ser publicado e por quê, último envio.
 
     Todo item do portfólio entra na loja por padrão. Produto sem link de afiliado ou sem foto aparece com o motivo.
     """

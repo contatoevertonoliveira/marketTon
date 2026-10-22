@@ -45,7 +45,7 @@ SERVICES: dict[str, dict] = {
         "icon": "🛍️",
         "required": ["base_url", "admin_token"],
         "name": "Vitrine pública (loja online)",
-        "description": "A loja pública Achados do Felix (loja.felixsystems.com.br). O marketTon envia a ela a lista de "
+        "description": "A loja pública Mural na Web. O marketTon envia a ela a lista de "
                        "produtos escolhidos; ela fica no ar mesmo com o computador desligado.",
         "fields": [
             {"name": "base_url", "label": "Endereço do site onde estão as funções da loja (https://seudominio.com.br)", "secret": False},

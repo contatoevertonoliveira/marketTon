@@ -1,4 +1,4 @@
-"""Vitrine pública "Achados do Felix": o que vai para a loja, como se monta e como se publica.
+"""Vitrine pública "Mural na Web": o que vai para a loja, como se monta e como se publica.
 
 O marketTon roda no computador do operador, que a internet não alcança. A loja pública vive no Netlify
 (`loja.felixsystems.com.br`) e **recebe uma fotografia do catálogo**: aqui se monta essa fotografia e se envia a
@@ -38,10 +38,10 @@ META_KEY = "storefront_meta"
 CHANNEL = "vitrine"  # canal dos links curtos da loja: cliques da loja aparecem separados dos das redes
 TIMEOUT = 30
 
-DEFAULT_NAME = "Achados do Felix"
-DEFAULT_TAGLINE = "Achados que valem o clique, escolhidos a dedo na Shopee e no Mercado Livre."
+DEFAULT_NAME = "Mural na Web"
+DEFAULT_TAGLINE = "O mural dos achados que valem o clique, escolhidos a dedo na Shopee e no Mercado Livre."
 DISCLOSURE = (
-    "O Achados do Felix participa dos programas de afiliados da Shopee e do Mercado Livre e pode receber uma comissão "
+    "O Mural na Web participa dos programas de afiliados da Shopee e do Mercado Livre e pode receber uma comissão "
     "pelas compras feitas pelos links desta página, sem custo extra para você. A compra, o pagamento e a entrega são "
     "feitos no marketplace. Preços e disponibilidade são os vistos no dia indicado e podem mudar: confira antes de comprar."
 )

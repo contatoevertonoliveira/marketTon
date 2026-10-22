@@ -170,7 +170,8 @@ def test_hotmart_has_no_public_catalog_and_says_so(monkeypatch):
 
 # ================================================================== Monetizze =========
 
-MONETIZZE_TOKEN = _Resp(200, {"TOKEN": "mtok", "expire": "2026-10-22 12:39:24"})
+# Formato real (conferido com uma conta): `token` em minúsculas, mais `user_id` e `expire`.
+MONETIZZE_TOKEN = _Resp(200, {"user_id": 4826152, "token": "mtok", "expire": "2026-10-22 12:39:24"})
 MONETIZZE_PRODUCTS = _Resp(200, {"status": 200, "totalRegistros": 2, "dados": [
     {"codigo": "34348", "sku": "CURSO-PHP-01", "chave": "k", "status": "2", "nome": "Curso básico de php",
      "foto": "https://static.monetizze.com.br/img/fotos/34348/x.png",
@@ -183,6 +184,15 @@ MONETIZZE_PRODUCTS = _Resp(200, {"status": 200, "totalRegistros": 2, "dados": [
 
 def _monetizze():
     return MonetizzeAdapter(MonetizzeConfig(consumer_key="ckey"))
+
+
+def test_monetizze_token_accepts_either_letter_case_and_complains_when_missing(monkeypatch):
+    for body in ({"TOKEN": "mtok"}, {"token": "mtok"}, {"Token": "mtok", "user": {"name": "x"}}):
+        _Http(monkeypatch, {("GET", "/2.1/token"): _Resp(200, body)})
+        assert "15 min" in _monetizze().check()
+    _Http(monkeypatch, {("GET", "/2.1/token"): _Resp(200, {"user_id": 1})})
+    with pytest.raises(PlatformError, match="não devolveu o token"):
+        _monetizze().check()
 
 
 def test_monetizze_token_comes_from_the_consumer_key_header(monkeypatch):
