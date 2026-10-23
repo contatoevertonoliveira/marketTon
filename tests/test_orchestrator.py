@@ -104,12 +104,19 @@ class TestLifecycle:
     def test_status_transitions(self, one_shot) -> None:
         one_shot.load_memory()
         assert one_shot.status == "stopped"
-        one_shot.start([_task("noop", [])])
+        hold = threading.Event()
+
+        def gated(memory):
+            hold.wait(timeout=5)  # sem isto o modo one-shot termina sozinho antes do pause() e o teste corre contra isso
+            return TaskResult(task_id="noop", ok=True, summary="ok")
+
+        one_shot.start([Task(id="noop", name="Noop", run=gated)])
         assert one_shot.status == "running"
         one_shot.pause()
         assert one_shot.status == "paused"
         one_shot.resume()
         assert one_shot.status == "running"
+        hold.set()
         one_shot.stop()
         assert one_shot.status == "stopped"
 

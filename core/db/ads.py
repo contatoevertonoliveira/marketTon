@@ -23,7 +23,11 @@ class AdCampaign(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft", index=True)
     variant: Mapped[str | None] = mapped_column(String(8))  # gancho A/B do criativo
     external_campaign_id: Mapped[str | None] = mapped_column(String(64))
+    external_adset_id: Mapped[str | None] = mapped_column(String(64))
     external_ad_id: Mapped[str | None] = mapped_column(String(64))
+    duration_days: Mapped[int | None] = mapped_column(Integer)
+    destination_url: Mapped[str | None] = mapped_column(String(1024))
+    meta_status: Mapped[str | None] = mapped_column(String(32))  # estado efetivo informado pela Meta
     daily_budget_brl: Mapped[float | None] = mapped_column(Float)
     spent_brl: Mapped[float | None] = mapped_column(Float)
     impressions: Mapped[int | None] = mapped_column(Integer)

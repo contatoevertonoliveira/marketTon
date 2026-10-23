@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from backend.deps import get_session
 from backend.security import Principal, record_action, require
 from core.db.creatives import CreativeCampaign
-from core.services import aistudio, creative_history
+from core.services import aistudio, creative_history, meta_campaigns
 from core.services.aistudio import AIStudioError
 
 router = APIRouter(tags=["criativos (AI Studio)"])
@@ -100,6 +100,75 @@ def put_ad(ad_id: int, payload: AdUpdate, principal: Principal = Depends(require
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()
     return creative_history.ad_out(ad)
+
+
+class AdCreate(BaseModel):
+    creative_id: int
+    daily_brl: float = Field(gt=0)
+    days: int = Field(3, ge=1, le=14)
+    dry_run: bool = True  # padrão: só mostra o que seria enviado à Meta, sem enviar nada
+    variant: str | None = None
+
+
+@router.get("/ads/budget", summary="Orçamento de anúncios: teto, verba comprometida e gasto da semana")
+def ads_budget_status(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
+    return meta_campaigns.budget_status(session)
+
+
+@router.post("/ads", summary="Criar o anúncio na Meta a partir de um criativo (sempre PAUSADO; dry_run por padrão)", status_code=201)
+def create_meta_ad(payload: AdCreate, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        result = meta_campaigns.create_ad(session, payload.creative_id, daily_brl=payload.daily_brl, days=payload.days, dry_run=payload.dry_run,
+                                          actor=principal.username, variant=payload.variant)
+    except meta_campaigns.AdsError as exc:
+        session.commit()  # guarda a tentativa que falhou
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not payload.dry_run:
+        record_action(session, principal, action="ads.created_paused", resource_type="creative", resource_id=str(payload.creative_id),
+                      detail=f"R$ {payload.daily_brl:g}/dia por {payload.days} dia(s)")
+    session.commit()
+    return result
+
+
+@router.post("/ads/{ad_id}/activate", summary="LIGAR o anúncio (só o operador: passa a gastar até a verba diária)")
+def activate_ad(ad_id: int, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        ad = meta_campaigns.activate(session, ad_id, actor=principal.username)
+    except meta_campaigns.AdsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_action(session, principal, action="ads.activated", resource_type="ad", resource_id=str(ad_id),
+                  detail=f"R$ {ad.daily_budget_brl:g}/dia por {ad.duration_days} dia(s)")
+    session.commit()
+    return creative_history.ad_out(ad)
+
+
+@router.post("/ads/{ad_id}/pause", summary="Pausar um anúncio")
+def pause_ad(ad_id: int, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        ad = meta_campaigns.pause(session, ad_id)
+    except meta_campaigns.AdsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_action(session, principal, action="ads.paused", resource_type="ad", resource_id=str(ad_id))
+    session.commit()
+    return creative_history.ad_out(ad)
+
+
+@router.post("/ads/pause-all", summary="Botão de parada: pausa todos os anúncios ativos (só o operador)")
+def pause_all_ads(principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    n = meta_campaigns.pause_all(session)
+    record_action(session, principal, action="ads.paused_all", resource_type="ad", detail=f"{n} anúncio(s)")
+    session.commit()
+    return {"paused": n}
+
+
+@router.post("/ads/sync", summary="Ler as métricas da Meta (gasto, impressões, cliques)")
+def sync_ads(principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        n = meta_campaigns.sync_metrics(session)
+    except meta_campaigns.AdsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"updated": n}
 
 
 @router.post("/creatives/estimate", summary="Estimar custo e prazo (não gasta)")

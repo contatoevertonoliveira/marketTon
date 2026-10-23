@@ -336,10 +336,11 @@ def test_mcp_exposes_exactly_the_intended_tools():
         "capabilities", "sync_sales", "refresh_catalog", "catalog_refresh_status",
         "create_tracked_link", "sync_clicks", "list_tracked_links",
         "storefront_status", "storefront_update_item", "storefront_publish", "goals_status",
-        "creative_estimate", "creative_create", "creative_status",
+        "creative_estimate", "creative_create", "creative_status", "ads_budget_status", "ad_create", "ad_pause", "ads_sync_metrics",
     }
-    # Nada de credenciais, usuários ou anúncios: o agente só tem o que a API do portfólio oferece.
-    assert not any(w in n for n in names for w in ("credential", "user", "password", "ads_", "campaign"))
+    # Nada de credenciais nem usuários. Anúncios: o agente PLANEJA, cria PAUSADO e pausa, mas nunca liga (ver teste abaixo).
+    assert not any(w in n for n in names for w in ("credential", "user", "password"))
+    assert not any(w in n for n in names for w in ("activate", "resume", "enable", "launch"))  # ligar gasto é do operador
 
 
 def test_mcp_read_tools_work_with_the_mode_off(api, mcp_tools):

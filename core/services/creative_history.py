@@ -36,6 +36,8 @@ def ad_out(ad: AdCampaign) -> dict:
     cpc = round(ad.spent_brl / ad.clicks, 2) if ad.spent_brl is not None and ad.clicks else None
     return {"id": ad.id, "platform": ad.platform, "status": ad.status, "variant": ad.variant, "daily_budget_brl": ad.daily_budget_brl,
             "spent_brl": ad.spent_brl, "impressions": ad.impressions, "clicks": ad.clicks, "ctr_pct": ctr, "cpc_brl": cpc,
+            "meta_status": ad.meta_status, "duration_days": ad.duration_days, "destination_url": ad.destination_url,
+            "on_meta": bool(ad.external_ad_id),
             "started_at": ad.started_at.isoformat() if ad.started_at else None, "ended_at": ad.ended_at.isoformat() if ad.ended_at else None,
             "last_metrics_at": ad.last_metrics_at.isoformat() if ad.last_metrics_at else None, "notes": ad.notes}
 

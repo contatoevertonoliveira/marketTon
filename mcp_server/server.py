@@ -385,6 +385,36 @@ def creative_status(refresh: bool = True):
 
 
 @mcp.tool(annotations=READ)
+def ads_budget_status():
+    """Orçamento de anúncios: teto por dia, valor da semana, quanto já está comprometido e o gasto lido da Meta. Consulte antes de planejar."""
+    return _run(lambda: _client.get("/ads/budget"))
+
+
+@mcp.tool(annotations=WRITE)
+def ad_create(creative_id: int, daily_brl: float, days: int = 3, dry_run: bool = True):
+    """Cria o anúncio na Meta a partir de um criativo PRONTO. EXIGE o modo agente.
+
+    `dry_run=True` (padrão) só mostra o que seria enviado, sem tocar na Meta: use sempre primeiro e mostre o plano no chat. Com `dry_run=False`
+    o anúncio nasce PAUSADO na Meta (nada gasta): quem LIGA é o operador, em Criativos e anúncios; você não consegue ligar. As travas
+    (verba por dia, valor da semana, produtos e criativos por produto) são aplicadas pelo sistema e você não as altera. Criativo de teste
+    (sandbox) nunca vira anúncio de verdade. Peça a aprovação do plano no chat ANTES de criar.
+    """
+    return _run(lambda: _client.post("/ads", {"creative_id": creative_id, "daily_brl": daily_brl, "days": days, "dry_run": dry_run}))
+
+
+@mcp.tool(annotations=WRITE)
+def ad_pause(ad_id: int):
+    """Pausa um anúncio ativo (a decisão de pausar o que não rende é sua; a de ligar é do operador). EXIGE o modo agente."""
+    return _run(lambda: _client.post(f"/ads/{ad_id}/pause"))
+
+
+@mcp.tool(annotations=WRITE)
+def ads_sync_metrics():
+    """Lê da Meta gasto, impressões e cliques dos anúncios existentes e atualiza o painel. Faça antes de analisar desempenho. EXIGE o modo agente."""
+    return _run(lambda: _client.post("/ads/sync"))
+
+
+@mcp.tool(annotations=READ)
 def goals_status():
     """As metas do mês definidas pelo operador e o quanto já foi feito (produtos na vitrine, posts, cliques, vendas, comissão).
 

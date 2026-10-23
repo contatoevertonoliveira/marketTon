@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { getJSON } from "../lib/apiClient";
+import { getJSON, postJSON } from "../lib/apiClient";
 
 const card = { background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)", marginBottom: 16 };
 const MODE = { sandbox: ["#eef0f6", "#525f7f", "teste (sandbox)"], live: ["#e5faf1", "#1a7a54", "ao vivo"] };
@@ -58,7 +58,27 @@ function Piece({ d }) {
   return <div style={box}>{d.kind}{d.download ? <> · <a href={d.download} target="_blank" rel="noreferrer">abrir</a></> : null}</div>;
 }
 
-function Item({ it }) {
+function AdActions({ ad, onDone, onMsg }) {
+  const [busy, setBusy] = useState(false);
+  async function run(path, confirmText) {
+    if (confirmText && !window.confirm(confirmText)) return;
+    setBusy(true);
+    try { await postJSON(path); onMsg({ ok: true, text: "Feito." }); onDone(); } catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
+  }
+  const btn = (bg, color) => ({ border: "none", background: bg, color, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" });
+  if (!ad.on_meta) return <span style={{ color: "#8898aa" }}>—</span>;
+  if (ad.status === "active") return <button disabled={busy} style={btn("#fff4e5", "#b8720a")} onClick={() => run(`/ads/${ad.id}/pause`)}>Pausar</button>;
+  if (ad.status === "paused" || ad.status === "draft")
+    return (
+      <button disabled={busy} style={btn("#2dce89", "#fff")}
+        onClick={() => run(`/ads/${ad.id}/activate`, `LIGAR este anúncio na Meta?\n\nEle começa a gastar até ${brl(ad.daily_budget_brl)} por dia, por ${ad.duration_days || 1} dia(s) (no máximo ${brl((ad.daily_budget_brl || 0) * (ad.duration_days || 1))} no total).`)}>
+        Ligar
+      </button>
+    );
+  return <span style={{ color: "#8898aa" }}>—</span>;
+}
+
+function Item({ it, onDone, onMsg }) {
   const p = it.product;
   const r = it.product_results;
   return (
@@ -99,15 +119,15 @@ function Item({ it }) {
             <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", minWidth: 640 }}>
               <thead>
                 <tr style={{ color: "#8898aa", textAlign: "left" }}>
-                  {["Plataforma", "Gancho", "Estado", "Verba/dia", "Gasto", "Impressões", "Cliques", "CTR", "CPC", "Início", "Métricas de"].map((h) => <th key={h} style={{ padding: "4px 8px 4px 0", fontWeight: 600 }}>{h}</th>)}
+                  {["Plataforma", "Gancho", "Estado", "Verba/dia", "Gasto", "Impressões", "Cliques", "CTR", "CPC", "Início", "Métricas de", ""].map((h) => <th key={h} style={{ padding: "4px 8px 4px 0", fontWeight: 600 }}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {it.ads.map((a) => (
                   <tr key={a.id} style={{ borderTop: "1px solid #f6f9fc" }}>
-                    <td style={{ padding: "5px 8px 5px 0" }}>{a.platform}</td><td>{a.variant || "—"}</td><td><Chip map={AD} k={a.status} /></td>
+                    <td style={{ padding: "5px 8px 5px 0" }}>{a.platform}</td><td>{a.variant || "—"}</td><td><Chip map={AD} k={a.status} />{a.meta_status && a.meta_status !== "PAUSED" && a.meta_status !== "ACTIVE" ? <div style={{ fontSize: 10, color: "#b8720a" }}>Meta: {a.meta_status}</div> : null}</td>
                     <td>{brl(a.daily_budget_brl)}</td><td>{brl(a.spent_brl)}</td><td>{num(a.impressions)}</td><td>{num(a.clicks)}</td>
-                    <td>{a.ctr_pct == null ? "—" : `${String(a.ctr_pct).replace(".", ",")}%`}</td><td>{brl(a.cpc_brl)}</td><td>{when(a.started_at)}</td><td>{when(a.last_metrics_at)}</td>
+                    <td>{a.ctr_pct == null ? "—" : `${String(a.ctr_pct).replace(".", ",")}%`}</td><td>{brl(a.cpc_brl)}</td><td>{when(a.started_at)}</td><td>{when(a.last_metrics_at)}</td><td><AdActions ad={a} onDone={onDone} onMsg={onMsg} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -134,6 +154,17 @@ export default function Criativos() {
   const [mode, setMode] = useState("todos");
   const load = useCallback(() => getJSON("/creatives/history?limit=100").then(setData).catch((e) => setError(e.message)), []);
   useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [load]);
+  const [budget, setBudget] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const loadAll = useCallback(() => { load(); getJSON("/ads/budget").then(setBudget).catch(() => {}); }, [load]);
+  useEffect(() => { getJSON("/ads/budget").then(setBudget).catch(() => {}); }, [data]);
+  async function stopAll() {
+    if (!window.confirm("PAUSAR todos os anúncios ativos agora?")) return;
+    try { const r = await postJSON("/ads/pause-all"); setMsg({ ok: true, text: `${r.paused} anúncio(s) pausado(s).` }); loadAll(); } catch (e) { setMsg({ ok: false, text: e.message }); }
+  }
+  async function syncNow() {
+    try { const r = await postJSON("/ads/sync"); setMsg({ ok: true, text: `Métricas atualizadas em ${r.updated} anúncio(s).` }); loadAll(); } catch (e) { setMsg({ ok: false, text: e.message }); }
+  }
   const items = useMemo(() => (data?.items || []).filter((i) => mode === "todos" || i.mode === mode), [data, mode]);
 
   if (error) return <p style={{ color: "#f5365c" }}>Não foi possível carregar os criativos ({error}).</p>;
@@ -147,6 +178,20 @@ export default function Criativos() {
         <Metric label="Anúncios" value={`${num(t.ads)} (${num(t.active_ads)} ativos)`} />
         <Metric label="Gasto em anúncios" value={brl(t.spent_brl)} />
       </div>
+      {budget && budget.configured && (
+        <div style={{ ...card, display: "flex", gap: 22, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <Metric label="Verba da semana" value={`${brl(budget.week_committed_brl)} de ${brl(budget.weekly_brl)}`} hint="Compromisso: verba por dia × dias dos anúncios criados nesta semana" />
+          <Metric label="Por dia agora" value={`${brl(budget.daily_committed_brl)} de ${brl(budget.daily_cap_brl)}`} hint="Anúncios abertos (planejados, pausados ou ativos)" />
+          <Metric label="Produtos na semana" value={`${budget.week_products} de ${budget.max_products}`} />
+          <Metric label="Gasto lido da Meta (semana)" value={brl(budget.week_spent_brl)} />
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button onClick={syncNow} style={{ border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>Atualizar métricas</button>
+            <button onClick={stopAll} style={{ border: "none", background: "#f5365c", color: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Pausar tudo</button>
+          </div>
+        </div>
+      )}
+      {budget && !budget.configured && <div style={{ ...card, fontSize: 12, color: "#b8720a" }}>Defina o Orçamento de anúncios em Integrações (valor por semana e teto por dia) para o agente poder planejar anúncios.</div>}
+      {msg && <div style={{ marginBottom: 12, fontSize: 12, padding: "8px 10px", borderRadius: 8, color: msg.ok ? "#1a7a54" : "#c31e3f", background: msg.ok ? "#e5faf1" : "#fef1f4" }}>{msg.text}</div>}
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {[["todos", "Todos"], ["live", "Ao vivo"], ["sandbox", "Testes"]].map(([k, label]) => (
           <button key={k} onClick={() => setMode(k)} style={{ border: "none", borderRadius: 999, padding: "4px 14px", fontSize: 12, cursor: "pointer", background: mode === k ? "#5e72e4" : "#eef0f6", color: mode === k ? "#fff" : "#525f7f" }}>{label}</button>
@@ -155,7 +200,7 @@ export default function Criativos() {
       {items.length === 0 ? (
         <div style={card}><span style={{ fontSize: 13, color: "#8898aa" }}>Nenhum criativo ainda. Configure o cartão do AI Studio em Integrações; o agente pede os criativos dos produtos escolhidos e eles aparecem aqui, em ordem do mais recente.</span></div>
       ) : (
-        items.map((it) => <Item key={it.id} it={it} />)
+        items.map((it) => <Item key={it.id} it={it} onDone={loadAll} onMsg={setMsg} />)
       )}
     </div>
   );
