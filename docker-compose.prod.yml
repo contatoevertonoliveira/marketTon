@@ -47,6 +47,11 @@ services:
       DATABASE_URL: postgresql+psycopg://marketton:${POSTGRES_PASSWORD}@db:5432/marketton
       REDIS_URL: redis://redis:6379/0
       TZ: America/Sao_Paulo
+    networks:
+      default: {}
+      # Rede interna do AI Studio (/opt/aistudio): o marketTon fala com `aistudio-api:8790` sem nenhuma porta pública.
+      aistudio-edge:
+        aliases: [marketton-api]
     volumes:
       # Casa do usuário do contêiner: guarda o login do Claude Code (e o próprio Claude) entre reinícios.
       - apphome:/home/app
@@ -78,6 +83,11 @@ services:
       - caddy_config:/config
     depends_on:
       - api
+
+networks:
+  aistudio-edge:
+    external: true
+    name: aistudio-edge
 
 volumes:
   pgdata:

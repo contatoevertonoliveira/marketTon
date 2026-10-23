@@ -108,9 +108,9 @@ def _call(cfg: AIStudioConfig, method: str, path: str, *, idempotency_key: str |
 
 def check(cfg: AIStudioConfig) -> str:
     caps = _call(cfg, "GET", "/capabilities")
-    quals = caps.get("qualities") or caps.get("quality") or []
+    quals = [q.get("id") if isinstance(q, dict) else q for q in (caps.get("qualities") or caps.get("quality") or [])]
     live = "geração ao vivo LIGADA" if cfg.allow_live else "somente sandbox (sem gasto)"
-    return f"conectado ao AI Studio ({live}; teto US$ {cfg.max_usd:g} por campanha" + (f"; qualidades: {', '.join(map(str, quals))}" if quals else "") + ")"
+    return f"conectado ao AI Studio ({live}; teto US$ {cfg.max_usd:g} por campanha" + (f"; qualidades: {', '.join(str(q) for q in quals if q)}" if quals else "") + ")"
 
 
 # ------------------------------------------------------------------------------ payload ----------
