@@ -199,3 +199,24 @@ def test_reconcile_recovers_a_lost_webhook(session, net):
     assert ai.reconcile(session) == 1
     assert (record.status, record.cost_usd) == ("completed", 0.5) and [d["id"] for d in ai.deliverables(record)] == ["d1"]
     assert ai.reconcile(session) == 0  # já é final: nada a reconciliar
+
+
+def test_images_only_has_no_video_and_uses_only_true_benefits(session, net):
+    _config(session)
+    product = _product(session)
+    net.routes[("POST", "/campaigns")] = CREATED
+    record = ai.create(session, product.id, formats="images", quality="standard")
+    body = net.calls[-1][3]["json"]
+    kinds = [(d["kind"], d.get("aspect_ratio")) for d in body["deliverables"]]
+    assert kinds == [("image", "4:5"), ("image", "1:1"), ("image", "9:16"), ("copy", None)] and "-i" in record.external_ref
+    assert body["creative"]["music"]["enabled"] is False and "merchandising" in body["creative"]["notes"]
+    assert "Não desenhar texto" in body["creative"]["notes"]
+    assert body["product"]["benefits"] == ["Nota 4,8 na Shopee", "120 vendidos", "Preço abaixo do anterior (28% menos)"]  # só o que o marketTon sabe
+    assert body["creative"]["offer"] == {"headline": "De R$ 179,90 por R$ 129,90"}
+    assert body["product"]["category"] == "casa_cozinha"  # categoria da loja traduzida para a do estúdio
+
+
+def test_unknown_formats_are_rejected(session, net):
+    _config(session)
+    with pytest.raises(ai.AIStudioError, match="parâmetros inválidos"):
+        ai.create(session, _product(session).id, formats="gif")

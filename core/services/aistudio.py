@@ -45,6 +45,7 @@ QUALITIES = ("economy", "standard", "premium")
 CATEGORY_MAP = {"Eletrônicos": "eletronicos", "Casa": "casa_cozinha", "Moda": "moda", "Beleza": "beleza", "Pet": "pet", "Games": "outros",
                 "Cursos": "servicos", "Achados diversos": "outros"}
 ANGLES = ("problem_solution", "demo", "comparison", "offer", "unboxing", "ugc_style")
+FORMATS = ("images", "video")  # images = só imagens e texto (sem vídeo, bem mais barato)
 
 
 class AIStudioError(RuntimeError):
@@ -139,7 +140,8 @@ def ensure_logo_asset(session: Session, cfg: AIStudioConfig) -> str | None:
 
 
 def build_payload(session: Session, product: Product, *, external_ref: str, mode: str, quality: str, budget_usd: float,
-                  angle: str, hook_variants: int, callback_url: str, logo_asset: str | None, store_url: str | None) -> dict:
+                  angle: str, hook_variants: int, callback_url: str, logo_asset: str | None, store_url: str | None,
+                  formats: str = "video") -> dict:
     row = None
     for p, r, _ in storefront._candidates(session):
         if p.id == product.id:
@@ -153,12 +155,34 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
     market = storefront.MARKETPLACE_NAMES.get(product.marketplace.value, product.marketplace.value)
     description = (row.blurb if row and row.blurb else f"{title}, à venda na {market}" + (f" ({', '.join(facts)})" if facts else "") + ".")[:500]
     price = {"amount": round(float(product.price), 2), "currency": "BRL"} if product.price else None
-    if price and product.original_price and product.original_price > product.price:
+    discounted = bool(price and product.original_price and product.original_price > product.price)
+    if discounted:
         price["compare_at"] = round(float(product.original_price), 2)
+    # Benefícios: só fatos que o marketTon sabe (nunca inventados). Sem fato, a lista vai vazia.
+    benefits = []
+    if product.rating and product.rating >= 4:
+        benefits.append(f"Nota {str(round(product.rating, 1)).replace('.', ',')} na {market}")
+    if product.sold_quantity:
+        benefits.append(f"{product.sold_quantity} vendidos")
+    if discounted:
+        benefits.append(f"Preço abaixo do anterior ({round((1 - product.price / product.original_price) * 100)}% menos)")
+    images_only = formats == "images"
+    notes = "Mostrar só o produto da foto de referência. Sem pessoas reais identificáveis e sem promessas de resultado."
+    if images_only:
+        notes += (" Peça de propaganda profissional (merchandising): produto em destaque, cenário limpo e coerente com o uso do produto, "
+                  "composição de anúncio de marca, espaço para título e preço. Não desenhar texto na imagem: título, preço e selo entram na montagem.")
+    copy_piece = {"kind": "copy", "channel": "instagram", "fields": ["caption", "hashtags", "headline"]}
+    if images_only:
+        deliverables = [{"kind": "image", "channel": "feed", "aspect_ratio": "4:5"}, {"kind": "image", "channel": "feed", "aspect_ratio": "1:1"},
+                        {"kind": "image", "channel": "instagram", "aspect_ratio": "9:16"}, copy_piece]
+    else:
+        deliverables = [{"kind": "video", "channel": "instagram_reels", "aspect_ratio": "9:16", "duration_s": 15, "variants": hook_variants},
+                        {"kind": "video", "channel": "feed", "aspect_ratio": "1:1", "duration_s": 15, "derive_from": "instagram_reels"},
+                        {"kind": "image", "channel": "feed", "aspect_ratio": "4:5"}, copy_piece]
     payload = {
         "external_ref": external_ref, "mode": mode, "quality": quality, "language": "pt-BR", "budget": {"max_usd": budget_usd},
         "approval": {"mode": "none"},
-        "product": {"id": str(product.id), "name": title, "category": CATEGORY_MAP.get(storefront.guess_category(product.title, product.marketplace.value), "outros"),
+        "product": {"id": str(product.id), "name": title, **({"benefits": benefits} if benefits else {}), "category": CATEGORY_MAP.get(storefront.guess_category(product.title, product.marketplace.value), "outros"),
                     "description": description, "images": [{"url": storefront._first_image(product), "role": "main"}],
                     "forbidden_claims": FORBIDDEN_CLAIMS, **({"price": price} if price else {}), **({"url": store_url} if store_url else {})},
         "brand": {"name": storefront.get_meta(session)["name"], "colors": {"primary": "#A71920", "secondary": "#171923", "text": "#FFFFFF"},
@@ -166,15 +190,10 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
                   **({"logo": {"asset_id": logo_asset}} if logo_asset else {})},
         "audience": {"locale": "BR", "age_range": [20, 50]},
         "creative": {"objective": "consideration", "angle": angle, "hook_variants": hook_variants, "presenter": {"type": "none"},
-                     "voice": {"style": "warm_male"}, "music": {"mood": "upbeat_modern", "enabled": True},
-                     "cta": {"text": "Ver na loja", **({"url": store_url} if store_url else {})},
-                     "notes": "Mostrar só o produto da foto de referência. Sem pessoas reais identificáveis e sem promessas de resultado."},
-        "deliverables": [
-            {"kind": "video", "channel": "instagram_reels", "aspect_ratio": "9:16", "duration_s": 15, "variants": hook_variants},
-            {"kind": "video", "channel": "feed", "aspect_ratio": "1:1", "duration_s": 15, "derive_from": "instagram_reels"},
-            {"kind": "image", "channel": "feed", "aspect_ratio": "4:5"},
-            {"kind": "copy", "channel": "instagram", "fields": ["caption", "hashtags", "headline"]},
-        ],
+                     "voice": {"style": "warm_male"}, "music": {"mood": "upbeat_modern", "enabled": not images_only},
+                     "cta": {"text": "Ver na loja", **({"url": store_url} if store_url else {})}, "notes": notes,
+                     **({"offer": {"headline": f"De R$ {product.original_price:.2f} por R$ {product.price:.2f}".replace(".", ",")}} if discounted else {})},
+        "deliverables": deliverables,
         "compliance": {"platforms": ["meta"], "ai_disclosure": True, "sensitive_category": None},
     }
     if callback_url:
@@ -200,18 +219,20 @@ def _store_url(session: Session, product_id: int) -> str | None:
     return f"{cfg.public_url}/#p{product_id}" if cfg else None
 
 
-def estimate(session: Session, product_id: int, *, quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2) -> dict:
+def estimate(session: Session, product_id: int, *, quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2,
+             formats: str = "video") -> dict:
     cfg = _require(session)
     product = _product_for(session, product_id)
     payload = build_payload(session, product, external_ref=f"estimate-{product_id}", mode="sandbox", quality=quality, budget_usd=cfg.max_usd,
-                            angle=angle, hook_variants=hook_variants, callback_url="", logo_asset=None, store_url=_store_url(session, product_id))
+                            angle=angle, hook_variants=hook_variants, callback_url="", logo_asset=None, store_url=_store_url(session, product_id),
+                            formats=formats)
     return _call(cfg, "POST", "/campaigns/estimate", json=payload)
 
 
 def create(session: Session, product_id: int, *, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution",
-           hook_variants: int = 2, budget_usd: float | None = None, actor: str = "agent") -> CreativeCampaign:
+           hook_variants: int = 2, budget_usd: float | None = None, actor: str = "agent", formats: str = "video") -> CreativeCampaign:
     cfg = _require(session)
-    if mode not in ("sandbox", "live") or quality not in QUALITIES or angle not in ANGLES:
+    if mode not in ("sandbox", "live") or quality not in QUALITIES or angle not in ANGLES or formats not in FORMATS:
         raise AIStudioError(f"parâmetros inválidos (modo sandbox|live; qualidade {', '.join(QUALITIES)}; ângulo {', '.join(ANGLES)})")
     if mode == "live" and not cfg.allow_live:
         raise AIStudioError("geração ao vivo gasta créditos e está desligada: o operador precisa ligar \"Permitir geração ao vivo\" no cartão do AI Studio. "
@@ -221,14 +242,14 @@ def create(session: Session, product_id: int, *, mode: str = "sandbox", quality:
         raise AIStudioError(f"o orçamento da campanha (US$ {budget:g}) passa do teto do operador (US$ {cfg.max_usd:g})")
     product = _product_for(session, product_id)
     n = session.query(CreativeCampaign).filter(CreativeCampaign.product_id == product_id).count() + 1
-    ref = f"mural-p{product_id}-{mode[0]}{n}-{datetime.now(UTC):%y%m%d%H%M}"
+    ref = f"mural-p{product_id}-{'i' if formats == 'images' else 'v'}{mode[0]}{n}-{datetime.now(UTC):%y%m%d%H%M}"
     record = CreativeCampaign(product_id=product_id, external_ref=ref, mode=mode, status="requested", quality=quality, angle=angle,
                               budget_usd=budget, created_by=actor[:64])
     session.add(record)
     session.flush()  # o external_ref fica guardado ANTES da chamada: retentar nunca duplica
     payload = build_payload(session, product, external_ref=ref, mode=mode, quality=quality, budget_usd=budget, angle=angle,
                             hook_variants=hook_variants, callback_url=cfg.callback_url, logo_asset=ensure_logo_asset(session, cfg),
-                            store_url=_store_url(session, product_id))
+                            store_url=_store_url(session, product_id), formats=formats)
     record.request = payload
     try:
         body = _call(cfg, "POST", "/campaigns", idempotency_key=ref[:80], json=payload)

@@ -22,6 +22,7 @@ class CreativeIn(BaseModel):
     angle: str = "problem_solution"
     hook_variants: int = Field(2, ge=1, le=4)
     budget_usd: float | None = Field(None, gt=0)
+    formats: str = "video"  # "images" = só imagens e texto (sem vídeo)
 
 
 def _out(c: CreativeCampaign) -> dict:
@@ -104,7 +105,8 @@ def put_ad(ad_id: int, payload: AdUpdate, principal: Principal = Depends(require
 @router.post("/creatives/estimate", summary="Estimar custo e prazo (não gasta)")
 def estimate(payload: CreativeIn, principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
     try:
-        return aistudio.estimate(session, payload.product_id, quality=payload.quality, angle=payload.angle, hook_variants=payload.hook_variants)
+        return aistudio.estimate(session, payload.product_id, quality=payload.quality, angle=payload.angle, hook_variants=payload.hook_variants,
+                               formats=payload.formats)
     except AIStudioError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -114,7 +116,8 @@ def create_creative(payload: CreativeIn, principal: Principal = Depends(require(
                     session: Session = Depends(get_session)) -> dict:
     try:
         record = aistudio.create(session, payload.product_id, mode=payload.mode, quality=payload.quality, angle=payload.angle,
-                                 hook_variants=payload.hook_variants, budget_usd=payload.budget_usd, actor=principal.username)
+                                 hook_variants=payload.hook_variants, budget_usd=payload.budget_usd, actor=principal.username,
+                                 formats=payload.formats)
     except AIStudioError as exc:
         session.commit()  # guarda a tentativa (external_ref) mesmo quando falha
         raise HTTPException(status_code=422, detail=str(exc)) from exc

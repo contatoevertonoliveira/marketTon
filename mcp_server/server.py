@@ -359,23 +359,23 @@ def sync_clicks():
 
 
 @mcp.tool(annotations=READ)
-def creative_estimate(product_id: int, quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2):
+def creative_estimate(product_id: int, quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2, formats: str = "video"):
     """Estima custo e prazo dos criativos de um produto no AI Studio, sem gastar. Use antes de `creative_create`.
 
-    `quality`: economy | standard | premium. `angle`: problem_solution | demo | comparison | offer | unboxing | ugc_style.
+    `quality`: economy | standard | premium. `angle`: problem_solution | demo | comparison | offer | unboxing | ugc_style. `formats`: video (padrão) | images (só imagens 4:5, 1:1 e 9:16 mais texto, bem mais barato).
     """
-    return _run(lambda: _client.post("/creatives/estimate", {"product_id": product_id, "quality": quality, "angle": angle, "hook_variants": hook_variants}))
+    return _run(lambda: _client.post("/creatives/estimate", {"product_id": product_id, "quality": quality, "angle": angle, "hook_variants": hook_variants, "formats": formats}))
 
 
 @mcp.tool(annotations=WRITE)
-def creative_create(product_id: int, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2):
+def creative_create(product_id: int, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2, formats: str = "video"):
     """Pede ao AI Studio os criativos (vídeo 9:16 e 1:1, imagem 4:5 e texto) de um produto da vitrine. EXIGE o modo agente.
 
     `mode="sandbox"` (padrão) não gasta nada e devolve peças de exemplo: use para testar o fluxo. `mode="live"` gasta créditos e só funciona
     se o operador ligou a permissão no cartão do AI Studio; peça aprovação no chat antes. Nunca invente alegações: o produto só pode ser descrito
     pelos fatos que o marketTon tem. O resultado chega por webhook; acompanhe com `creative_status`.
     """
-    return _run(lambda: _client.post("/creatives", {"product_id": product_id, "mode": mode, "quality": quality, "angle": angle, "hook_variants": hook_variants}))
+    return _run(lambda: _client.post("/creatives", {"product_id": product_id, "mode": mode, "quality": quality, "angle": angle, "hook_variants": hook_variants, "formats": formats}))
 
 
 @mcp.tool(annotations=READ)
