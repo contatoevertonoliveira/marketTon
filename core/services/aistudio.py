@@ -41,6 +41,9 @@ LOGO_PATH = Path(__file__).resolve().parents[2] / "docs" / "marca" / "logo.png"
 FORBIDDEN_CLAIMS = ["cura", "garantia de resultado", "milagre", "emagrece", "o mais barato", "melhor do Brasil", "100% garantido"]
 BANNED_WORDS = ["milagre", "grátis para sempre"]
 QUALITIES = ("economy", "standard", "premium")
+# Categorias da loja -> categorias do AI Studio (GET /capabilities.categories). Desconhecida vira "outros".
+CATEGORY_MAP = {"Eletrônicos": "eletronicos", "Casa": "casa_cozinha", "Moda": "moda", "Beleza": "beleza", "Pet": "pet", "Games": "outros",
+                "Cursos": "servicos", "Achados diversos": "outros"}
 ANGLES = ("problem_solution", "demo", "comparison", "offer", "unboxing", "ugc_style")
 
 
@@ -101,7 +104,8 @@ def _call(cfg: AIStudioConfig, method: str, path: str, *, idempotency_key: str |
         raise AIStudioError("o AI Studio recusou a chave (confira em Integrações)", code="unauthorized")
     if not response.ok:
         err = (body.get("error") or {}) if isinstance(body, dict) else {}
-        raise AIStudioError(str(err.get("message") or f"HTTP {response.status_code}")[:300], code=err.get("code"),
+        fields = "; ".join(f"{f.get('field')}: {f.get('message')}" for f in ((err.get("details") or {}).get("fields") or []))
+        raise AIStudioError((str(err.get("message") or f"HTTP {response.status_code}") + (f" ({fields})" if fields else ""))[:400], code=err.get("code"),
                             retryable=bool(err.get("retryable")) or response.status_code >= 500 or response.status_code == 429)
     return body
 
@@ -154,11 +158,11 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
     payload = {
         "external_ref": external_ref, "mode": mode, "quality": quality, "language": "pt-BR", "budget": {"max_usd": budget_usd},
         "approval": {"mode": "none"},
-        "product": {"id": str(product.id), "name": title, "category": storefront.guess_category(product.title, product.marketplace.value),
+        "product": {"id": str(product.id), "name": title, "category": CATEGORY_MAP.get(storefront.guess_category(product.title, product.marketplace.value), "outros"),
                     "description": description, "images": [{"url": storefront._first_image(product), "role": "main"}],
                     "forbidden_claims": FORBIDDEN_CLAIMS, **({"price": price} if price else {}), **({"url": store_url} if store_url else {})},
         "brand": {"name": storefront.get_meta(session)["name"], "colors": {"primary": "#A71920", "secondary": "#171923", "text": "#FFFFFF"},
-                  "font": "Montserrat", "voice_tone": ["direto", "amigável"], "banned_words": BANNED_WORDS,
+                  "voice_tone": ["direto", "amigável"], "banned_words": BANNED_WORDS,
                   **({"logo": {"asset_id": logo_asset}} if logo_asset else {})},
         "audience": {"locale": "BR", "age_range": [20, 50]},
         "creative": {"objective": "consideration", "angle": angle, "hook_variants": hook_variants, "presenter": {"type": "none"},

@@ -16,12 +16,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY --chown=app:app . .
-
 USER app
-# Claude Code: instalador oficial da Anthropic (instala em ~/.local/bin).
+# Claude Code: instalador oficial da Anthropic (instala em ~/.local/bin). Fica antes do código para a camada ir para o cache.
 RUN curl -fsSL https://claude.ai/install.sh | bash
 ENV PATH="/home/app/.local/bin:${PATH}"
+
+COPY --chown=app:app . .
 
 EXPOSE 8000
 CMD ["sh", "-c", "alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port 8000"]
