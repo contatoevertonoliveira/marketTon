@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import Vitrine from "./pages/Vitrine";
 import Criativos from "./pages/Criativos";
 import Relatorios from "./pages/Relatorios";
+import Financeiro from "./pages/Financeiro";
 import AgentSwitch from "./components/AgentSwitch";
 import AgentChat from "./pages/AgentChat";
 import Login from "./pages/Login";
@@ -18,6 +19,7 @@ import { API_BASE, getJSON, isLoggedIn, logout, setAuthExpiredHandler } from "./
 const PAGES = [
   { id: "visao-geral", label: "Visão Geral", icon: "🏠" },
   { id: "daily-ops", label: "Daily Ops", icon: "🎯" },
+  { id: "financeiro", label: "Financeiro", icon: "💰" },
   { id: "produtos", label: "Produtos", icon: "📦" },
   { id: "portfolio", label: "Portfólio", icon: "🗂️" },
   { id: "oportunidades", label: "Oportunidades de Busca", icon: "🔥" },
@@ -133,6 +135,13 @@ export default function App() {
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Criativos e anúncios</h3>
             <Criativos />
+          </div>
+        );
+      case "financeiro":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Financeiro</h3>
+            <Financeiro />
           </div>
         );
       case "relatorios":

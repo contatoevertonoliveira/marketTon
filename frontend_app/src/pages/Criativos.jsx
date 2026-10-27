@@ -44,7 +44,44 @@ function useBlob(path) {
   return url;
 }
 
-function Piece({ d }) {
+// Pré-visualização grande: clicar numa imagem abre; setas (ou botões) passam para as outras do mesmo criativo; Esc fecha.
+function Preview({ pieces, index, onIndex, onClose }) {
+  const d = pieces[index];
+  const src = useBlob(d?.file);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight") onIndex((index + 1) % pieces.length);
+      else if (e.key === "ArrowLeft") onIndex((index - 1 + pieces.length) % pieces.length);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [index, pieces.length, onClose, onIndex]);
+  if (!d) return null;
+  const nav = { position: "absolute", top: "50%", transform: "translateY(-50%)", border: "none", background: "rgba(255,255,255,.9)", borderRadius: 999, width: 40, height: 40, fontSize: 20, cursor: "pointer" };
+  return (
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label="Pré-visualização da imagem"
+      style={{ position: "fixed", inset: 0, background: "rgba(15,20,40,.86)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ position: "relative", maxWidth: "96vw", maxHeight: "94vh", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+        {src ? <img src={src} alt="" style={{ maxWidth: "92vw", maxHeight: "84vh", objectFit: "contain", borderRadius: 8, background: "#fff" }} />
+          : <div style={{ color: "#fff", padding: 60 }}>Carregando…</div>}
+        <div style={{ color: "#fff", fontSize: 13, display: "flex", gap: 14, alignItems: "center" }}>
+          <span>{d.aspect_ratio ? `Formato ${d.aspect_ratio}` : "Imagem"} · {index + 1} de {pieces.length}</span>
+          {src && <a href={src} download={`criativo-${d.aspect_ratio || "imagem"}.png`} style={{ color: "#9fb4ff" }}>baixar</a>}
+          <button onClick={onClose} style={{ border: "1px solid #fff", background: "transparent", color: "#fff", borderRadius: 6, padding: "2px 12px", cursor: "pointer" }}>fechar (Esc)</button>
+        </div>
+        {pieces.length > 1 && (<>
+          <button aria-label="Anterior" onClick={() => onIndex((index - 1 + pieces.length) % pieces.length)} style={{ ...nav, left: -8 }}>‹</button>
+          <button aria-label="Próxima" onClick={() => onIndex((index + 1) % pieces.length)} style={{ ...nav, right: -8 }}>›</button>
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+function Piece({ d, onOpen }) {
   const src = useBlob(d.file);
   const box = { background: "#f6f9fc", borderRadius: 8, padding: 8, fontSize: 12, color: "#525f7f", maxWidth: 230 };
   if (d.kind === "video")
@@ -57,7 +94,7 @@ function Piece({ d }) {
   if (d.kind === "image" || d.kind === "thumbnail")
     return (
       <div style={box}>
-        {src ? <img src={src} alt="" style={{ width: "100%", borderRadius: 6 }} /> : null}
+        {src ? <img src={src} alt="" title="Clique para ampliar" onClick={() => onOpen && onOpen(d)} style={{ width: "100%", borderRadius: 6, cursor: "zoom-in" }} /> : null}
         <div style={{ marginTop: 4 }}>{d.kind === "image" ? "Imagem" : "Miniatura"} {d.aspect_ratio}</div>
       </div>
     );
@@ -95,7 +132,7 @@ function AdActions({ ad, onDone, onMsg }) {
   return <span style={{ color: "#8898aa" }}>—</span>;
 }
 
-function Item({ it, onDone, onMsg }) {
+function Item({ it, onDone, onMsg, onPreview }) {
   const p = it.product;
   const r = it.product_results;
   return (
@@ -124,7 +161,7 @@ function Item({ it, onDone, onMsg }) {
       {it.error && <div style={{ marginTop: 10, fontSize: 12, padding: "7px 10px", borderRadius: 8, color: "#c31e3f", background: "#fef1f4" }}>{it.error}</div>}
 
       {it.deliverables.length > 0 && (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>{it.deliverables.map((d) => <Piece key={d.id} d={d} />)}</div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>{it.deliverables.map((d) => <Piece key={d.id} d={d} onOpen={(piece) => { const imgs = it.deliverables.filter((x) => x.kind === "image" || x.kind === "thumbnail"); onPreview(imgs, Math.max(0, imgs.findIndex((x) => x.id === piece.id))); }} />)}</div>
       )}
 
       <div style={{ marginTop: 14, borderTop: "1px solid #f0f2f7", paddingTop: 10 }}>
@@ -173,6 +210,7 @@ export default function Criativos() {
   useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [load]);
   const [budget, setBudget] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [preview, setPreview] = useState(null);
   const loadAll = useCallback(() => { load(); getJSON("/ads/budget").then(setBudget).catch(() => {}); }, [load]);
   useEffect(() => { getJSON("/ads/budget").then(setBudget).catch(() => {}); }, [data]);
   async function stopAll() {
@@ -189,6 +227,7 @@ export default function Criativos() {
   const t = data.totals;
   return (
     <div>
+      {preview && <Preview pieces={preview.pieces} index={preview.index} onIndex={(i) => setPreview({ ...preview, index: i })} onClose={() => setPreview(null)} />}
       <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14 }}>
         <Metric label="Criativos" value={num(t.creatives)} />
         <Metric label="Gasto em criativos" value={usd(t.cost_usd)} hint="Custo das gerações no AI Studio (só modo ao vivo gasta)" />
@@ -217,7 +256,7 @@ export default function Criativos() {
       {items.length === 0 ? (
         <div style={card}><span style={{ fontSize: 13, color: "#8898aa" }}>Nenhum criativo ainda. Configure o cartão do AI Studio em Integrações; o agente pede os criativos dos produtos escolhidos e eles aparecem aqui, em ordem do mais recente.</span></div>
       ) : (
-        items.map((it) => <Item key={it.id} it={it} onDone={loadAll} onMsg={setMsg} />)
+        items.map((it) => <Item key={it.id} it={it} onDone={loadAll} onMsg={setMsg} onPreview={(pieces, index) => setPreview({ pieces, index })} />)
       )}
     </div>
   );

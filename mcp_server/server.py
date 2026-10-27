@@ -280,6 +280,19 @@ def chat_send(text: str, kind: str = "message"):
     return _run(lambda: _client.post("/agent/chat", {"text": text, "kind": kind if kind in ("message", "report") else "message"}))
 
 
+@mcp.tool(annotations=READ)
+def finance_summary(days: int = 7):
+    """Resumo financeiro curto: vendas, comissão (confirmada x pendente), gasto com anúncios, resultado e saldo total das carteiras.
+
+    Só os números do período (sem a série diária). Use no relatório e para decidir onde pôr verba; não lança saldo.
+    """
+    def pick(d):
+        return {"periodo": f"{d['from']} a {d['to']}", **d["kpis"], "carteiras": d["wallets"]["total_brl"],
+                "carteiras_informadas": f"{d['wallets']['known']} de {d['wallets']['of']}",
+                "por_plataforma": [{k: v[k] for k in ("label", "sales", "confirmed_brl", "pending_brl")} for v in d["by_platform"]]}
+    return _run(lambda: pick(_client.get(f"/finance/overview?days={max(1, min(int(days), 90))}")))
+
+
 @mcp.tool(annotations=WRITE)
 def report_add(kind: str, title: str, body: str = ""):
     """Registra uma linha no relatório do operador (página Relatórios). `kind`: achado (o que viu), acao (o que fez),

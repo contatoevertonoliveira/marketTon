@@ -12,6 +12,7 @@ from backend.routers import (
     catalog,
     creative,
     creatives,
+    finance,
     jobs,
     links,
     marketplaces,
@@ -41,6 +42,7 @@ API_ROUTERS = [
     storefront.router,
     creatives.router,
     agent_reports.router,
+    finance.router,
 ]
 
 __all__ = [
@@ -51,6 +53,7 @@ __all__ = [
     "catalog",
     "creative",
     "creatives",
+    "finance",
     "jobs",
     "links",
     "marketplaces",
