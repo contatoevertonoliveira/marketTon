@@ -210,6 +210,12 @@ def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int
         made = _post(f"{account}/ads", token, name=plan["name"], adset_id=adset["id"], creative=json.dumps({"creative_id": adcreative["id"]}), status="PAUSED")
         ad.external_ad_id, ad.status, ad.meta_status = made["id"], "paused", "PAUSED"
     except (AdsError, KeyError) as exc:
+        for obj in (ad.external_adset_id, ad.external_campaign_id):  # não deixa campanha/conjunto pela metade na conta de anúncios
+            if obj:
+                try:
+                    _post(obj, token, status="DELETED")
+                except AdsError:
+                    logger.warning("não consegui apagar %s na Meta após a falha", obj)
         ad.status, ad.notes = "failed", f"falhou ao criar na Meta: {exc}"[:500]
         session.flush()
         raise AdsError(str(exc) if isinstance(exc, AdsError) else f"resposta inesperada da Meta ({exc})") from exc
