@@ -49,6 +49,7 @@ ${it.price ? `<meta property="product:price:amount" content="${esc(Number(it.pri
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/loja/img/favicon-64.png">
 <link rel="stylesheet" href="/loja/loja.css">
+<script src="/loja/pixel.js" defer></script>
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>
 </head>
 <body>

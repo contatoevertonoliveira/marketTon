@@ -35,3 +35,10 @@ test("helpers", () => {
   assert.equal(findItem(snap([item()]), "p99"), null);
   assert.ok(renderNotFound().includes("saiu da vitrine"));
 });
+
+
+test("a página do produto carrega o script do pixel (que só liga depois do aceite)", () => {
+  const html = renderProductPage(item(), snap([item()]).store, "https://mural.felixsystems.com.br");
+  assert.ok(html.includes('src="/loja/pixel.js"'));
+  assert.ok(!html.includes("fbevents.js") && !html.includes("fbq("), "nada da Meta direto no HTML: só pelo script, depois do aceite");
+});
