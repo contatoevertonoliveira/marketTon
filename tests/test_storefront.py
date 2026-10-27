@@ -265,3 +265,29 @@ def test_sensitive_products_never_enter_the_store_and_cannot_be_forced(session):
     reasons = {r["product_id"]: r["reason"] for r in admin["items"] if not r["eligible"]}
     assert set(reasons) == {p.id for p in sensitive} and all("sensível" in r for r in reasons.values())
     assert [i["id"] for i in sf.build_snapshot(session)["items"]] == [f"p{ok.id}"]
+
+
+def test_storefront_products_with_affiliate_link_become_linked_in_the_portfolio(session):
+    from core.db.portfolio import PortfolioItem, PortfolioState, PortfolioTransition
+    from core.services import storefront as sf
+
+    with_link, without = _product(session, 901), _product(session, 902, affiliate=None)
+    sf.upsert_item(session, with_link.id, category="Casa")
+    sf.upsert_item(session, without.id, category="Casa")
+    item = session.query(PortfolioItem).filter_by(product_id=with_link.id).one()
+    assert item.state == PortfolioState.AFFILIATED and session.query(PortfolioItem).filter_by(product_id=without.id).count() == 0
+    assert session.query(PortfolioTransition).filter_by(portfolio_item_id=item.id).one().from_state is None
+    sf.upsert_item(session, with_link.id, blurb="x")  # de novo: não duplica
+    assert session.query(PortfolioItem).filter_by(product_id=with_link.id).count() == 1
+
+
+def test_backfill_adds_the_products_already_on_the_shelf(session):
+    from core.db.portfolio import PortfolioItem
+    from core.db.storefront import StorefrontItem
+    from core.services import storefront as sf
+
+    p = _product(session, 903)
+    session.add(StorefrontItem(product_id=p.id, highlight=False, hidden=False, position=0))  # como os 22 que já existiam
+    session.flush()
+    assert sf.backfill_portfolio(session) == 1 and sf.backfill_portfolio(session) == 0
+    assert session.query(PortfolioItem).filter_by(product_id=p.id).count() == 1

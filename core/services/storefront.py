@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from core.db.app_settings import AppSetting
 from core.db.catalog import Product
-from core.db.portfolio import PortfolioItem, PortfolioState
+from core.db.portfolio import PortfolioItem, PortfolioState, PortfolioTransition
 from core.db.service_credentials import ServiceCredential
 from core.db.storefront import StorefrontItem
 from core.db.tracking import AffiliateLink
@@ -251,6 +251,37 @@ def list_admin(session: Session) -> dict:
     }
 
 
+def ensure_in_portfolio(session: Session, product: Product, *, actor: str) -> PortfolioItem | None:
+    """Todo produto da vitrine com link de afiliado é um produto vinculado à conta: garante o item no portfólio (aba "Vinculados").
+
+    Sem link de afiliado o produto não é vinculado (nem pode ir à loja), então nada é criado. Já existindo o item, nada muda.
+    """
+    if not product.affiliate_url:
+        return None
+    item = session.scalar(select(PortfolioItem).where(PortfolioItem.product_id == product.id))
+    if item is not None:
+        return item
+    now = datetime.now(UTC)
+    item = PortfolioItem(product_id=product.id, marketplace=product.marketplace, label=product.title, state=PortfolioState.AFFILIATED,
+                         state_changed_at=now, added_by=actor[:128], notes="Entrou pela vitrine (Mural na Web) com link de afiliado.")
+    session.add(item)
+    session.flush()
+    session.add(PortfolioTransition(portfolio_item_id=item.id, from_state=None, to_state=PortfolioState.AFFILIATED, occurred_at=now,
+                                    actor=actor[:128], reason="produto da vitrine com link de afiliado"))
+    session.flush()
+    return item
+
+
+def backfill_portfolio(session: Session, *, actor: str = "sistema") -> int:
+    """Põe no portfólio os produtos da vitrine que ainda não estão. Devolve quantos entraram."""
+    created = 0
+    for row in session.scalars(select(StorefrontItem)):
+        product = session.get(Product, row.product_id)
+        if product is not None and session.scalar(select(PortfolioItem.id).where(PortfolioItem.product_id == product.id)) is None:
+            created += 1 if ensure_in_portfolio(session, product, actor=actor) else 0
+    return created
+
+
 def upsert_item(session: Session, product_id: int, **fields) -> StorefrontItem:
     """Cria ou atualiza o ajuste de um produto. Campos ausentes (`None`) não mudam; texto vazio limpa o campo."""
     product = session.get(Product, product_id)
@@ -274,6 +305,7 @@ def upsert_item(session: Session, product_id: int, **fields) -> StorefrontItem:
     if fields.get("position") is not None:
         row.position = max(-999, min(int(fields["position"]), 999))
     session.flush()
+    ensure_in_portfolio(session, product, actor="vitrine")
     return row
 
 
@@ -343,6 +375,7 @@ def build_snapshot(session: Session, *, create_links: bool = False) -> dict:
 
 def publish(session: Session, *, actor: str) -> dict:
     cfg = _require(session)
+    backfill_portfolio(session, actor=actor)
     snapshot = build_snapshot(session, create_links=True)
     if not snapshot["items"]:
         raise StorefrontError("nenhum produto pronto para a loja: confira os motivos na lista (sem link de afiliado, sem foto…)")
