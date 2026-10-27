@@ -82,14 +82,17 @@ SERVICES: dict[str, dict] = {
         "icon": "💰",
         "required": ["weekly_brl", "daily_cap_brl"],
         "name": "Orçamento de anúncios (travas de gasto)",
-        "description": "Quanto o agente pode gastar testando anúncios. Só você altera estes valores: o agente não tem acesso a este cartão.",
+        "description": "Quanto o agente pode gastar testando anúncios, um orçamento para cada plataforma (Meta e Google). Só você altera estes valores: o agente não tem acesso a este cartão.",
         "help": "O agente propõe o plano da semana dentro destes limites e precisa da sua aprovação no chat antes de gastar. "
                 "Campanha nova sempre nasce pausada. O teto por dia não pode passar do valor da semana. \"Testar\" só confere os números.",
         "fields": [
-            {"name": "weekly_brl", "label": "Valor por semana em R$ (ex.: 150)", "secret": False},
-            {"name": "daily_cap_brl", "label": "Teto por dia em R$ (ex.: 30)", "secret": False},
-            {"name": "max_products", "label": "Produtos testados por semana (padrão 3)", "secret": False},
-            {"name": "creatives_per_product", "label": "Criativos por produto (padrão 2)", "secret": False},
+            {"name": "weekly_brl", "label": "META: valor por semana em R$ (ex.: 100)", "secret": False},
+            {"name": "daily_cap_brl", "label": "META: teto por dia em R$ (ex.: 30)", "secret": False},
+            {"name": "max_products", "label": "META: produtos testados por semana (padrão 3)", "secret": False},
+            {"name": "creatives_per_product", "label": "META: criativos por produto (padrão 2)", "secret": False},
+            {"name": "google_weekly_brl", "label": "GOOGLE: valor por semana em R$ (ex.: 50)", "secret": False},
+            {"name": "google_daily_cap_brl", "label": "GOOGLE: teto por dia em R$ (ex.: 12)", "secret": False},
+            {"name": "google_max_products", "label": "GOOGLE: produtos testados por semana (padrão 3)", "secret": False},
         ],
     },
     "storefront": {

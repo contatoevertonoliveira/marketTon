@@ -67,8 +67,8 @@ def _cards(session, weekly="140", daily="30", products="3"):
     ok = {"last_check_status": "ok"}
     session.add_all([
         ServiceCredential(service="google_ads", enabled=True, values={"client_id": "c", "client_secret": "s", "refresh_token": "r", "customer_id": "1"}, **ok),
-        ServiceCredential(service="ads_budget", enabled=True, values={"weekly_brl": weekly, "daily_cap_brl": daily, "max_products": products,
-                                                                       "creatives_per_product": "1"}, **ok),
+        ServiceCredential(service="ads_budget", enabled=True, values={"google_weekly_brl": weekly, "google_daily_cap_brl": daily,
+                                                                       "google_max_products": products, "weekly_brl": "500", "daily_cap_brl": "100"}, **ok),
         ServiceCredential(service="storefront", enabled=True, values={"base_url": "https://x.com", "admin_token": "t",
                                                                        "public_url": "https://mural.felixsystems.com.br"}, **ok),
     ])
@@ -128,18 +128,31 @@ def test_bad_copy_is_refused_before_calling_google(session, google):
     assert not google.mutations
 
 
-def test_budget_is_shared_with_meta(session, google):
+def test_budgets_are_separate_per_platform(session, google):
     _cards(session, weekly="100", daily="20")
     p, q = _product(session, 1), _product(session, 2, title="Outro produto")
-    session.add(AdCampaign(platform="meta", status="paused", daily_budget_brl=15, duration_days=3, product_id=q.id))
+    # a Meta já usa o dela inteiro: não pesa no Google
+    session.add(AdCampaign(platform="meta", status="paused", daily_budget_brl=99, duration_days=1, product_id=q.id))
     session.flush()
-    with pytest.raises(gc.AdsError, match="teto"):  # 15 da Meta + 10 > 20 por dia
-        gc.create_campaign(session, p.id, daily_brl=10, days=2)
-    gc.create_campaign(session, p.id, daily_brl=5, days=2, dry_run=False)  # 15 + 5 = 20 cabe
-    session.query(AdCampaign).update({"status": "ended"})  # libera o teto: o próximo erro tem de ser o da conexão
+    gc.create_campaign(session, p.id, daily_brl=15, days=4, dry_run=False)  # 60 na semana, 15/dia: cabe no Google (100 / 20)
+    with pytest.raises(gc.AdsError, match="do Google"):
+        gc.create_campaign(session, q.id, daily_brl=10, days=2)  # 15 + 10 > 20 por dia NO GOOGLE
+    st = gc.budget_status(session, platform="google")
+    assert st["daily_committed_brl"] == 15 and st["week_committed_brl"] == 60 and st["platform"] == "google"
+    assert gc.budget_status(session, platform="meta")["daily_committed_brl"] == 99  # a Meta só enxerga os dela
     session.query(ServiceCredential).filter_by(service="google_ads").delete()
+    session.query(AdCampaign).filter(AdCampaign.platform == "google").update({"status": "ended"})
     with pytest.raises(gc.AdsError, match="não está conectado"):
         gc.create_campaign(session, _product(session, 3, title="Terceiro").id, daily_brl=0.5, days=1, dry_run=False)
+
+
+def test_google_without_its_own_budget_is_refused(session, google):
+    _cards(session)
+    row = session.query(ServiceCredential).filter_by(service="ads_budget").one()
+    row.values = {"weekly_brl": "500", "daily_cap_brl": "100"}  # só a Meta tem orçamento
+    session.flush()
+    with pytest.raises(gc.AdsError, match="Orçamento de anúncios do Google"):
+        gc.create_campaign(session, _product(session).id, daily_brl=5, days=1)
 
 
 def test_activate_pause_and_metrics(session, google):

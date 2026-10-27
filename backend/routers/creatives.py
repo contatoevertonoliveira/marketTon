@@ -135,9 +135,9 @@ class GoogleAdCreate(BaseModel):
     keywords: list[str] | None = Field(None, max_length=10)
 
 
-@router.get("/ads/budget", summary="Orçamento de anúncios: teto, verba comprometida e gasto da semana")
+@router.get("/ads/budget", summary="Orçamento de anúncios por plataforma: teto, verba comprometida e gasto da semana")
 def ads_budget_status(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
-    return meta_campaigns.budget_status(session)
+    return {"meta": meta_campaigns.budget_status(session, platform="meta"), "google": meta_campaigns.budget_status(session, platform="google")}
 
 
 @router.post("/ads", summary="Criar o anúncio na Meta a partir de um criativo (sempre PAUSADO; dry_run por padrão)", status_code=201)

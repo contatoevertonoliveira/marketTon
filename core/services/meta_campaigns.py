@@ -78,42 +78,45 @@ def week_window(now: datetime | None = None) -> tuple[datetime, datetime]:
     return start, start + timedelta(days=7)
 
 
-def budget_status(session: Session, now: datetime | None = None) -> dict:
-    """Quanto da verba já está comprometido: verba/dia dos anúncios abertos e compromisso da semana (verba × dias)."""
-    budget = ads_budget.load(session)
+def budget_status(session: Session, now: datetime | None = None, platform: str = "meta") -> dict:
+    """Quanto da verba **da plataforma** já está comprometido: verba/dia dos anúncios abertos e compromisso da semana (verba × dias)."""
+    budget = ads_budget.load(session, platform)
     if budget is None:
-        return {"configured": False}
+        return {"configured": False, "platform": platform}
     start, end = week_window(now)
-    open_ads = list(session.scalars(select(AdCampaign).where(AdCampaign.status.in_(OPEN_STATUSES))))
-    this_week = [a for a in session.scalars(select(AdCampaign)) if (c := a.created_at) is not None and start <= (c if c.tzinfo else c.replace(tzinfo=UTC)) < end]
+    open_ads = list(session.scalars(select(AdCampaign).where(AdCampaign.status.in_(OPEN_STATUSES), AdCampaign.platform == platform)))
+    this_week = [a for a in session.scalars(select(AdCampaign).where(AdCampaign.platform == platform))
+                 if (c := a.created_at) is not None and start <= (c if c.tzinfo else c.replace(tzinfo=UTC)) < end]
     committed = sum((a.daily_budget_brl or 0) * (a.duration_days or 1) for a in this_week if a.status not in ("failed", "removed"))
     products = {a.product_id for a in this_week if a.product_id and a.status not in ("failed", "removed")}
-    return {"configured": True, "weekly_brl": budget.weekly_brl, "daily_cap_brl": budget.daily_cap_brl, "max_products": budget.max_products,
+    return {"configured": True, "platform": platform, "weekly_brl": budget.weekly_brl, "daily_cap_brl": budget.daily_cap_brl, "max_products": budget.max_products,
             "creatives_per_product": budget.creatives_per_product, "daily_committed_brl": round(sum(a.daily_budget_brl or 0 for a in open_ads), 2),
             "week_committed_brl": round(committed, 2), "week_products": len(products),
             "week_spent_brl": round(sum(a.spent_brl or 0 for a in this_week), 2)}
 
 
-def _guard(session: Session, product_id: int | None, daily_brl: float, days: int, now: datetime | None = None, *, per_product: bool = True) -> None:
-    st = budget_status(session, now)
+def _guard(session: Session, product_id: int | None, daily_brl: float, days: int, now: datetime | None = None, *, per_product: bool = True,
+           platform: str = "meta") -> None:
+    st = budget_status(session, now, platform)
+    who = ads_budget.NAMES[platform]
     if not st["configured"]:
-        raise AdsError("defina o Orçamento de anúncios (valor por semana e teto por dia) em Integrações antes de criar anúncios.")
+        raise AdsError(f"defina o Orçamento de anúncios do {who} (valor por semana e teto por dia) em Integrações antes de criar anúncios.")
     if not 0 < daily_brl <= st["daily_cap_brl"]:
         raise AdsError(f"verba diária de R$ {daily_brl:g} fora do teto (R$ {st['daily_cap_brl']:g} por dia).")
     if st["daily_committed_brl"] + daily_brl > st["daily_cap_brl"] + 1e-9:
-        raise AdsError(f"já há R$ {st['daily_committed_brl']:g}/dia comprometidos em anúncios abertos; mais R$ {daily_brl:g} passaria do teto "
+        raise AdsError(f"já há R$ {st['daily_committed_brl']:g}/dia comprometidos em anúncios abertos do {who}; mais R$ {daily_brl:g} passaria do teto "
                        f"de R$ {st['daily_cap_brl']:g} por dia. Pause ou encerre um anúncio antes.")
     if not 1 <= days <= MAX_DAYS:
         raise AdsError(f"duração de {days} dia(s) fora do permitido (1 a {MAX_DAYS}).")
     if st["week_committed_brl"] + daily_brl * days > st["weekly_brl"] + 1e-9:
-        raise AdsError(f"o compromisso da semana (R$ {st['week_committed_brl']:g}) mais R$ {daily_brl * days:g} passaria do valor da semana "
-                       f"(R$ {st['weekly_brl']:g}).")
+        raise AdsError(f"o compromisso da semana no {who} (R$ {st['week_committed_brl']:g}) mais R$ {daily_brl * days:g} passaria do valor da semana "
+                       f"do {who} (R$ {st['weekly_brl']:g}).")
     same_product = session.query(AdCampaign).filter(AdCampaign.product_id == product_id, AdCampaign.status.in_(OPEN_STATUSES),
-                                                    AdCampaign.platform == "meta").count()
+                                                    AdCampaign.platform == platform).count()
     if per_product and same_product >= st["creatives_per_product"]:
         raise AdsError(f"este produto já tem {same_product} anúncio(s) aberto(s); o máximo é {st['creatives_per_product']} criativo(s) por produto.")
     this_week_products = st["week_products"]
-    already = session.query(AdCampaign).filter(AdCampaign.product_id == product_id).count() > 0
+    already = session.query(AdCampaign).filter(AdCampaign.product_id == product_id, AdCampaign.platform == platform).count() > 0
     if not already and this_week_products >= st["max_products"]:
         raise AdsError(f"já há {this_week_products} produto(s) em anúncio nesta semana; o máximo é {st['max_products']}.")
 

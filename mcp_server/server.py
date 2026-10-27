@@ -424,7 +424,8 @@ def creative_status(refresh: bool = True):
 
 @mcp.tool(annotations=READ)
 def ads_budget_status():
-    """Orçamento de anúncios: teto por dia, valor da semana, quanto já está comprometido e o gasto lido da Meta. Consulte antes de planejar."""
+    """Orçamento de anúncios POR PLATAFORMA (`meta` e `google`, cada uma com o seu): teto por dia, valor da semana, quanto já está comprometido e o
+    gasto lido. O gasto de uma rede não consome o da outra. Consulte antes de planejar."""
     return _run(lambda: _client.get("/ads/budget"))
 
 
@@ -446,8 +447,8 @@ def google_ad_create(product_id: int, daily_brl: float, days: int = 3, dry_run: 
     """Cria a campanha de PESQUISA no Google Ads de um produto da vitrine. EXIGE o modo agente.
 
     `dry_run=True` (padrão) só mostra o plano (títulos, descrições, palavras-chave, link), sem tocar no Google: use sempre primeiro e mostre no
-    chat. Com `dry_run=False` a campanha nasce PAUSADA (nada gasta); quem LIGA é o operador. A verba é a MESMA do Meta (teto por dia e valor da
-    semana somados das duas redes). Sem `keywords`/`headlines`/`descriptions` o sistema monta do produto. Regras do Google: título até 30
+    chat. Com `dry_run=False` a campanha nasce PAUSADA (nada gasta); quem LIGA é o operador. A verba é o orçamento PRÓPRIO do Google (campos GOOGLE do
+    cartão), separado do da Meta. Sem `keywords`/`headlines`/`descriptions` o sistema monta do produto. Regras do Google: título até 30
     caracteres e sem "!", descrição até 90, 3 a 15 títulos, 2 a 4 descrições; sem promessas que não possam ser provadas (grátis, garantido,
     melhor). Use `max_cpc_brl` baixo (padrão R$ 1). Anúncio de pesquisa pega quem já procura o produto: prefira produtos com demanda de busca.
     """

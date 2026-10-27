@@ -1,6 +1,6 @@
 """Campanhas de Pesquisa no Google Ads a partir de um produto da vitrine: criar (sempre PAUSADA), ligar (só o operador), pausar e ler métricas.
 
-Mesmas travas da Meta, em código (e o orçamento é **um só** para as duas redes: o que está comprometido em qualquer plataforma conta):
+Mesmas travas da Meta, em código, mas com **orçamento próprio do Google** (cartão Orçamento de anúncios, campos GOOGLE: o gasto de uma rede não consome o da outra):
 
 * **Nada gasta ao ser criado.** A campanha nasce `PAUSED`; quem liga é o operador. O agente cria e pausa, nunca liga.
 * Verba por dia ≤ teto por dia; verba de todas as redes somada ≤ teto por dia; compromisso da semana (verba × dias) ≤ valor da semana;
@@ -114,7 +114,7 @@ def build_plan(session: Session, product_id: int, *, daily_brl: float, days: int
     descriptions = [d.strip() for d in (descriptions or auto_d)]
     keywords = [k.strip().lower() for k in (keywords or auto_k)]
     _validate(headlines, descriptions, keywords)
-    _guard(session, product_id, daily_brl, days, now, per_product=False)
+    _guard(session, product_id, daily_brl, days, now, per_product=False, platform="google")
     tag = f"mural-g-p{product.id}-{(now or datetime.now(UTC)):%y%m%d%H%M}"
     link = f"{cfg.public_url}/p/p{product.id}?utm_source=google&utm_medium=cpc&utm_campaign={tag}"
     return {"name": tag, "type": "SEARCH", "daily_budget_brl": daily_brl, "days": days, "max_cpc_brl": max_cpc_brl, "link": link,
@@ -214,7 +214,7 @@ def activate(session: Session, ad_id: int, *, actor: str, now: datetime | None =
         raise AdsError(f"campanha {ad_id} não encontrada")
     if ad.status not in ("paused", "draft") or not ad.external_campaign_id:
         raise AdsError(f"a campanha está “{ad.status}”: só dá para ligar uma campanha pausada que já existe no Google.")
-    st = budget_status(session, now)
+    st = budget_status(session, now, "google")
     others = st.get("daily_committed_brl", 0) - (ad.daily_budget_brl or 0)
     if not st["configured"] or others + (ad.daily_budget_brl or 0) > st["daily_cap_brl"] + 1e-9:
         raise AdsError("ligar esta campanha passaria do teto de verba por dia.")

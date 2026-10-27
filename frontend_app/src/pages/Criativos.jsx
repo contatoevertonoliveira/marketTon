@@ -281,18 +281,30 @@ function Overview({ ads, totals, budget, onSync, onPauseAll }) {
         <Metric big label="Anúncios ativos" value={`${active} de ${ads.length}`} />
         <Metric big label="Gasto em criativos" value={usd(totals.cost_usd)} hint="Custo das gerações no AI Studio (só o modo ao vivo gasta)" />
       </div>
-      {budget && budget.configured ? (
-        <div style={{ ...card, display: "flex", gap: 22, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <Metric label="Verba da semana" value={`${brl(budget.week_committed_brl)} de ${brl(budget.weekly_brl)}`} hint="Compromisso: verba por dia × dias dos anúncios criados nesta semana (Meta + Google)" />
-          <Metric label="Por dia agora" value={`${brl(budget.daily_committed_brl)} de ${brl(budget.daily_cap_brl)}`} hint="Anúncios abertos (planejados, pausados ou ativos)" />
-          <Metric label="Produtos na semana" value={`${budget.week_products} de ${budget.max_products}`} />
-          <Metric label="Gasto lido (semana)" value={brl(budget.week_spent_brl)} />
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <button onClick={onSync} style={{ border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer" }}>Atualizar métricas</button>
-            <button onClick={onPauseAll} style={{ border: "none", background: "#f5365c", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Pausar tudo</button>
-          </div>
-        </div>
-      ) : budget ? <div style={{ ...card, fontSize: 12, color: "#b8720a" }}>Defina o Orçamento de anúncios em Integrações (valor por semana e teto por dia) para o agente poder planejar anúncios.</div> : null}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
+        <button onClick={onSync} style={{ border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer" }}>Atualizar métricas</button>
+        <button onClick={onPauseAll} style={{ border: "none", background: "#f5365c", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Pausar tudo (Meta e Google)</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+        {["meta", "google"].map((n) => {
+          const b = budget ? budget[n] : null;
+          return (
+            <div key={n} style={card}>
+              <div style={{ fontWeight: 700, color: "#32325d", marginBottom: 8 }}>Orçamento {NET[n]}</div>
+              {b && b.configured ? (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12 }}>
+                  <Metric label="Semana" value={`${brl(b.week_committed_brl)} de ${brl(b.weekly_brl)}`} hint="Compromisso: verba por dia × dias das campanhas criadas nesta semana" />
+                  <Metric label="Por dia agora" value={`${brl(b.daily_committed_brl)} de ${brl(b.daily_cap_brl)}`} hint="Campanhas abertas (planejadas, pausadas ou ativas)" />
+                  <Metric label="Produtos" value={`${b.week_products} de ${b.max_products}`} />
+                  <Metric label="Gasto lido (semana)" value={brl(b.week_spent_brl)} />
+                </div>
+              ) : budget ? (
+                <div style={{ fontSize: 12, color: "#b8720a" }}>Sem orçamento do {NET[n]}. Preencha os campos {NET[n].toUpperCase()} do cartão Orçamento de anúncios em Integrações: o agente só cria campanha na rede com orçamento próprio.</div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
         {byNet.map((n) => (
           <div key={n.net} style={card}>
