@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 
 import requests
@@ -137,7 +138,10 @@ def _fit(text: str, limit: int) -> str:
     text = " ".join(text.split())
     if len(text) <= limit:
         return text
-    return (text[:limit].rsplit(" ", 1)[0] or text[:limit]).rstrip(" -–:,;.")
+    words = (text[:limit].rsplit(" ", 1)[0] or text[:limit]).split()
+    while len(words) > 1 and words[-1].lower() in {"na", "no", "de", "da", "do", "e", "ou", "com", "para", "em", "a", "o", "um", "uma", "-", "–"}:
+        words.pop()  # não termina em palavra solta ("… Nota 5,0 na")
+    return " ".join(words).rstrip(" -–:,;.")
 
 
 def _creative_copy(creative: CreativeCampaign) -> dict:
@@ -208,7 +212,9 @@ def post_kit(session: Session, creative_id: int) -> dict:
     if creative is None:
         raise AdsError(f"criativo {creative_id} não encontrado")
     plan = build_plan(session, creative, daily_brl=1, days=1, check_budget=False)
-    return {"creative_id": creative.id, "headline": plan["headline"], "message": plan["message"], "link": plan["link"],
+    # O texto do criativo traz "Ver na loja: <vitrine>": tira, porque o link do post é o da página do produto (com UTM).
+    message = re.sub(r"\s*Ver na loja:?\s*https?://\S+", "", plan["message"], flags=re.I).strip()
+    return {"creative_id": creative.id, "headline": plan["headline"], "message": message, "link": plan["link"],
             "image_file": next((d["file"] for d in aistudio.deliverables(creative) if d["id"] == plan["image_id"]), None),
             "steps": ["Baixe a imagem (4:5) e publique na Página com o texto e o link abaixo (cole o link no texto do post).",
                       "Volte aqui, atualize a lista de posts e escolha o post.", "O anúncio nasce pausado: você liga depois."]}

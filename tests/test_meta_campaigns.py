@@ -233,7 +233,7 @@ def test_stop_ends_for_good_and_remove_deletes_on_meta_and_frees_the_budget(sess
 
 
 def test_headline_is_cut_on_a_word_and_campaign_disables_budget_sharing(session, meta):
-    assert mc._fit("Garrafa Infantil 500ml - Nota 5,0 na Shopee", 40) == "Garrafa Infantil 500ml - Nota 5,0 na"
+    assert mc._fit("Garrafa Infantil 500ml - Nota 5,0 na Shopee", 40) == "Garrafa Infantil 500ml - Nota 5,0"
     assert mc._fit("Curto", 40) == "Curto"
     _cards(session)
     mc.create_ad(session, _creative(session).id, daily_brl=10, days=3, dry_run=False, now=NOW)
@@ -248,6 +248,7 @@ def test_ad_on_an_existing_page_post_skips_the_image_and_checks_the_post(session
     meta.gets = {"999_555": post, "999/posts": {"data": [{**post, "message": "Garrafa", "full_picture": "https://img/x.jpg"}]}, "999": {"access_token": "pagetoken"}}
 
     kit = mc.post_kit(session, creative.id)
+    assert "Ver na loja" not in kit["message"] and "http" not in kit["message"]
     assert kit["link"] == link and kit["headline"] == "Gelada por 24 h" and kit["image_file"] == f"/creatives/{creative.id}/files/d1"
     assert mc.list_page_posts(session)[0]["link"] == link
 
