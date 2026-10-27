@@ -95,6 +95,9 @@ class Settings(BaseSettings):
     agent_effort: str = "medium"  # rotinas e ativação
     agent_effort_chat: str = "low"  # responder o chat não precisa pensar tanto
     agent_run_budget_usd: float = 1.0
+    agent_research_weekday: int = 6  # pesquisa semanal na web: 0=segunda … 6=domingo
+    agent_research_hour: int = 10
+    agent_research_budget_usd: float = 0.6
     agent_daily_budget_usd: float = 3.0
     agent_max_runs_per_day: int = 8  # rodadas automáticas por dia (o "rodar agora" manual não conta)
 

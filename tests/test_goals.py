@@ -97,3 +97,19 @@ def test_store_products_use_the_last_publication_and_are_not_pro_rated(session):
     m = {m["key"]: m for m in goals.progress(session, NOW)["metrics"]}["store_products"]
     assert m["current"] == 12 and m["pct"] == 50.0 and m["expected_pct"] == 100.0 and m["projection"] is None
     assert m["status"] == "atrasada"  # a meta de vitrine vale desde já, não proporcional ao dia do mês
+
+
+def test_period_pace_splits_the_monthly_goal_by_days(session):
+    from datetime import datetime
+
+    from core.services import agent_goals as g
+
+    g.set_targets(session, {"sales": 30, "commission_brl": 300}, actor="t")
+    now = datetime(2026, 10, 14, 12, 0).astimezone()  # quarta-feira, mês de 31 dias
+    periods = {p["key"]: p for p in g.progress(session, now)["periods"]}
+    assert list(periods) == ["day", "week", "fortnight", "month"]
+    sales = {k: next(m for m in p["metrics"] if m["key"] == "sales") for k, p in periods.items()}
+    assert sales["day"]["target"] == 0.97 and sales["week"]["target"] == 6.77 and sales["fortnight"]["target"] == 14.52
+    assert sales["month"]["target"] == 30
+    assert periods["week"]["start"].startswith("2026-10-12") and periods["fortnight"]["start"].startswith("2026-10-01")
+    assert all(m["key"] != "store_products" for m in periods["day"]["metrics"])  # vitrine é estado, não se reparte

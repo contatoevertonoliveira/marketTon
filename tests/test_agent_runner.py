@@ -383,3 +383,23 @@ def test_agent_reports_api_validates_kind_and_title(ready):
         m.add_report(ready, kind="qualquer", title="x")
     with pytest.raises(m.ReportError):
         m.add_report(ready, kind="achado", title="  ")
+
+
+def test_weekly_research_runs_once_on_its_day_and_only_sees_web_plus_report(ready, tmp_path):
+    set_agent_autonomy(ready, level="independent", actor="x")
+    ready.commit()
+    sunday = at(11, day=25)  # 2026-10-25 é domingo
+    _run(ready, "morning", started=at(8, day=25).astimezone(UTC))
+    _run(ready, "check", started=at(11, 1, day=25).astimezone(UTC))
+    assert ar.decide_trigger(ready, now=sunday) == "research"
+    assert ar.decide_trigger(ready, now=at(11, day=24)) != "research"  # sábado não
+    _run(ready, "research", started=at(11, 5, day=25).astimezone(UTC))
+    assert ar.decide_trigger(ready, now=at(11, 30, day=25)) is None  # uma por semana
+
+    cmd = ar.build_command("claude", "pesquise", tmp_path / "m.json", trigger="research")
+    assert cmd[cmd.index("--tools") + 1] == "WebSearch,WebFetch"
+    allowed = cmd[cmd.index("--allowedTools") + 1: cmd.index("--disallowedTools")]
+    assert "mcp__marketton__report_add" in allowed and "mcp__marketton" not in allowed  # nada de ação: só leitura e relatório
+    assert cmd[cmd.index("--max-budget-usd") + 1] == str(ar.get_settings().agent_research_budget_usd)
+    normal = ar.build_command("claude", "x", tmp_path / "m.json", trigger="chat")
+    assert normal[normal.index("--tools") + 1] == "" and "WebSearch" in normal[normal.index("--disallowedTools") + 1:]

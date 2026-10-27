@@ -63,7 +63,7 @@ function Bubble({ m, onStatus }) {
 }
 
 
-const TRIGGERS = { activation: "ativação", chat: "chat", morning: "rotina completa do dia", check: "verificação", manual: "manual" };
+const TRIGGERS = { activation: "ativação", chat: "chat", morning: "rotina completa do dia", check: "verificação", research: "pesquisa semanal", manual: "manual" };
 const usd = (v) => (v == null ? null : `US$ ${Number(v).toFixed(v < 0.1 ? 3 : 2)}`);
 const kTokens = (n) => (n == null ? null : n >= 1000 ? `${Math.round(n / 1000)} mil` : String(n));
 const RUN_STATUS = {
@@ -195,6 +195,25 @@ function GoalsPanel() {
           )}
         </div>
       ))}
+      {!edit && g.periods && (
+        <div style={{ marginTop: 10, borderTop: "1px solid #f0f2f7", paddingTop: 8 }}>
+          <div style={{ fontSize: 11, color: "#8898aa", marginBottom: 4 }}>Ritmo por período (a meta do mês repartida pelos dias)</div>
+          <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
+            <thead><tr style={{ color: "#8898aa", textAlign: "left" }}><th></th>{g.periods.map((p) => <th key={p.key}>{p.label}</th>)}</tr></thead>
+            <tbody>
+              {["sales", "commission_brl", "clicks"].map((k) => (
+                <tr key={k} style={{ borderTop: "1px solid #f6f7fb" }}>
+                  <td style={{ padding: "3px 0", color: "#525f7f" }}>{g.periods[0].metrics.find((m) => m.key === k)?.label}</td>
+                  {g.periods.map((p) => {
+                    const m = p.metrics.find((x) => x.key === k);
+                    return <td key={p.key} style={{ color: COLORS[m.status], fontWeight: 600 }}>{fmt(m, m.current)} / {fmt(m, Number(m.target.toFixed(1)))}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {edit && (
         <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
           <button onClick={save} style={{ border: "none", background: "#2dce89", color: "#fff", borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer" }}>Salvar metas</button>

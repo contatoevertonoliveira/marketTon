@@ -102,6 +102,57 @@ def _measure(session: Session, start: datetime, end: datetime) -> dict:
             "sales": len(sales_rows), "commission_brl": round(commission, 2)}
 
 
+PERIODS = (("day", "Hoje"), ("week", "Semana"), ("fortnight", "Quinzena"), ("month", "Mês"))
+
+
+def period_bounds(key: str, now: datetime | None = None) -> tuple[datetime, datetime]:
+    """Início e fim (hora local) do dia, da semana (segunda a domingo), da quinzena (1–15 / 16–fim) ou do mês."""
+    local = (now or datetime.now(UTC)).astimezone()
+    midnight = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    if key == "day":
+        return midnight, midnight + timedelta(days=1)
+    if key == "week":
+        start = midnight - timedelta(days=midnight.weekday())
+        return start, start + timedelta(days=7)
+    month_start, month_end, _, _ = month_bounds(now)
+    if key == "fortnight":
+        if local.day <= 15:
+            return month_start, month_start + timedelta(days=15)
+        return month_start + timedelta(days=15), month_end
+    return month_start, month_end
+
+
+def period_progress(session: Session, now: datetime | None = None) -> list[dict]:
+    """Ritmo por período: a meta mensal repartida pelos dias (diária, semanal, quinzenal) contra o que foi medido no período.
+
+    Só as metas acumulativas (cliques, vendas, comissão, posts) se repartem; vitrine é um estado e fica só no mensal.
+    """
+    local = (now or datetime.now(UTC)).astimezone()
+    _, _, _, month_days = month_bounds(now)
+    targets, out = get_targets(session), []
+    for key, label in PERIODS:
+        start, end = period_bounds(key, now)
+        days = (end - start).days
+        expected = min(1.0, max(0.0, (local - start).total_seconds() / (end - start).total_seconds()))
+        done, metrics = _measure(session, start, end), []
+        for mkey, meta in METRICS.items():
+            if not meta["cumulative"]:
+                continue
+            target = round(targets[mkey]["target"] * days / month_days, 2)
+            current = done[mkey]
+            if not target:
+                status = "sem_meta"
+            elif current >= target:
+                status = "adiantada"
+            else:
+                ratio = (current / target) / expected if expected else 1.0
+                status = "adiantada" if ratio >= 1 else "no_ritmo" if ratio >= 0.8 else "atrasada"
+            metrics.append({"key": mkey, "label": meta["label"], "unit": meta["unit"], "target": target, "current": current,
+                            "pct": round(current / target * 100, 1) if target else None, "status": status})
+        out.append({"key": key, "label": label, "start": start.isoformat(), "end": end.isoformat(), "days": days, "metrics": metrics})
+    return out
+
+
 def progress(session: Session, now: datetime | None = None) -> dict:
     start, end, day, days = month_bounds(now)
     expected = day / days
@@ -127,6 +178,7 @@ def progress(session: Session, now: datetime | None = None) -> dict:
         })
     behind = [m for m in metrics if m["status"] == "atrasada"]
     return {"period": f"{start:%m/%Y}", "day": day, "days": days, "days_left": days - day, "metrics": metrics,
+            "periods": period_progress(session, now),
             "behind": [m["key"] for m in behind],
             "summary": ("Todas as metas estão no ritmo ou adiantadas." if not behind else
                         "Atrasadas: " + "; ".join(f"{m['label']} ({m['current']:g} de {m['target']:g})" for m in behind) + ".")}

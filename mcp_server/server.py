@@ -426,6 +426,7 @@ def goals_status():
     """As metas do mês definidas pelo operador e o quanto já foi feito (produtos na vitrine, posts, cliques, vendas, comissão).
 
     Mostra o realizado, o ritmo esperado até hoje, a projeção para o fim do mês e quais metas estão atrasadas.
+    `periods` traz o ritmo de hoje, da semana, da quinzena e do mês (a meta mensal repartida pelos dias).
     Consulte no começo de cada rotina e priorize o que fecha as metas atrasadas. Você não altera as metas: elas são do operador.
     """
     return _run(lambda: _client.get("/agent/goals"))
