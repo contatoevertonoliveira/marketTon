@@ -34,6 +34,7 @@ from core.services import storefront
 
 logger = logging.getLogger(__name__)
 
+PRESENTER_S = 8  # vídeo curto de feed com apresentadora (o contrato aceita de 6 a 60 s)
 SLIDESHOW_S = 12  # segundos do slideshow com trilha (o contrato aceita 10 a 15)
 
 SERVICE = "aistudio"
@@ -176,7 +177,8 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
     if with_presenter:
         notes = ("Uma apresentadora virtual adulta, simpática, segura o produto da foto de referência e apresenta rapidamente, em português do Brasil, "
                  "com uma narração curta e natural, SÓ as características que constam na descrição e nos benefícios. Mostrar o produto idêntico à foto. "
-                 "Sem crianças em cena, sem prometer resultado nem tempo de conservação de temperatura, sem preço falado.")
+                 "Sem crianças em cena, sem prometer resultado nem tempo de conservação de temperatura, sem preço falado. Anúncio de feed: ritmo rápido, "
+                 "direto ao ponto. A narração (ou a fala da personagem) TERMINA, no finalzinho, com a frase \"Confira no link\".")
     if images_only:
         notes += (" Peça de propaganda profissional (merchandising): produto em destaque, cenário limpo e coerente com o uso do produto, "
                   "composição de anúncio de marca, espaço para título e preço. Não desenhar texto na imagem: título, preço e selo entram na montagem.")
@@ -189,7 +191,7 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
                         # Slideshow 9:16 de 10 a 15 s com trilha, montado pelo estúdio (ffmpeg local, sem IA; trilha < US$ 0,01).
                         {"kind": "slideshow", "duration_s": SLIDESHOW_S, "include_product_photos": True}]
     elif with_presenter:
-        deliverables = [{"kind": "video", "channel": "instagram_reels", "aspect_ratio": "9:16", "duration_s": 15, "variants": 1}, copy_piece]
+        deliverables = [{"kind": "video", "channel": "instagram_reels", "aspect_ratio": "9:16", "duration_s": PRESENTER_S, "variants": 1}, copy_piece]
     else:
         deliverables = [{"kind": "video", "channel": "instagram_reels", "aspect_ratio": "9:16", "duration_s": 15, "variants": hook_variants},
                         {"kind": "video", "channel": "feed", "aspect_ratio": "1:1", "duration_s": 15, "derive_from": "instagram_reels"},
