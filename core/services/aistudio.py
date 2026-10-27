@@ -38,6 +38,7 @@ SERVICE = "aistudio"
 TIMEOUT = 40
 DEFAULT_MAX_USD = 2.0
 LOGO_KEY = "aistudio_logo_asset"
+LOGO_PLACEMENT = "bottom_right"  # carimbo no canto do rodapé: não cobre título, preço nem produto (capabilities.logo_placements)
 LOGO_PATH = Path(__file__).resolve().parents[2] / "docs" / "marca" / "logo.png"
 FORBIDDEN_CLAIMS = ["cura", "garantia de resultado", "milagre", "emagrece", "o mais barato", "melhor do Brasil", "100% garantido"]
 BANNED_WORDS = ["milagre", "grátis para sempre"]
@@ -188,7 +189,7 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
                     "forbidden_claims": FORBIDDEN_CLAIMS, **({"price": price} if price else {}), **({"url": store_url} if store_url else {})},
         "brand": {"name": storefront.get_meta(session)["name"], "colors": {"primary": "#A71920", "secondary": "#171923", "text": "#FFFFFF"},
                   "voice_tone": ["direto", "amigável"], "banned_words": BANNED_WORDS,
-                  **({"logo": {"asset_id": logo_asset}} if logo_asset else {})},
+                  **({"logo": {"asset_id": logo_asset, "placement": LOGO_PLACEMENT}} if logo_asset else {})},
         "audience": {"locale": "BR", "age_range": [20, 50]},
         "creative": {"objective": "consideration", "angle": angle, "hook_variants": hook_variants, "presenter": {"type": "none"},
                      "voice": {"style": "warm_male"}, "music": {"mood": "upbeat_modern", "enabled": not images_only},
