@@ -230,3 +230,11 @@ def test_stop_ends_for_good_and_remove_deletes_on_meta_and_frees_the_budget(sess
     assert removed.status == "removed" and {d["status"] for _, d in meta.posts} == {"DELETED"} and len(meta.posts) == 3  # anúncio, conjunto, campanha
     assert mc.budget_status(session, NOW)["week_committed_brl"] == before - 16  # o excluído deixa de contar no compromisso
     assert mc.remove(session, b).status == "removed"  # de novo: nada acontece
+
+
+def test_headline_is_cut_on_a_word_and_campaign_disables_budget_sharing(session, meta):
+    assert mc._fit("Garrafa Infantil 500ml - Nota 5,0 na Shopee", 40) == "Garrafa Infantil 500ml - Nota 5,0 na"
+    assert mc._fit("Curto", 40) == "Curto"
+    _cards(session)
+    mc.create_ad(session, _creative(session).id, daily_brl=10, days=3, dry_run=False, now=NOW)
+    assert dict(meta.posts)["act_123/campaigns"]["is_adset_budget_sharing_enabled"] == "false"

@@ -132,6 +132,14 @@ def _creative_image(creative: CreativeCampaign) -> dict | None:
     return None
 
 
+def _fit(text: str, limit: int) -> str:
+    """Corta no limite sem partir palavra ("… na Sho")."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    return (text[:limit].rsplit(" ", 1)[0] or text[:limit]).rstrip(" -–:,;.")
+
+
 def _creative_copy(creative: CreativeCampaign) -> dict:
     for d in aistudio.deliverables(creative):
         if d.get("kind") == "copy" and isinstance(d.get("content"), dict):
@@ -147,7 +155,7 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
     if not piece:
         raise AdsError("o criativo não tem imagem pronta (peça `image` com endereço de download).")
     copy = _creative_copy(creative)
-    headline = str(copy.get("headline") or "").strip()[:40]
+    headline = _fit(str(copy.get("headline") or ""), 40)
     caption = str(copy.get("caption") or "").strip()[:500]
     if not headline or not caption:
         raise AdsError("o criativo não tem título e legenda prontos.")
@@ -180,7 +188,8 @@ def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int
     session.add(ad)
     session.flush()
     try:
-        campaign = _post(f"{account}/campaigns", token, name=plan["name"], objective=plan["objective"], status="PAUSED", special_ad_categories="[]")
+        campaign = _post(f"{account}/campaigns", token, name=plan["name"], objective=plan["objective"], status="PAUSED", special_ad_categories="[]",
+                         is_adset_budget_sharing_enabled="false")  # orçamento por conjunto, sem compartilhar (a Meta passou a exigir o campo)
         ad.external_campaign_id = campaign["id"]
         adset = _post(f"{account}/adsets", token, name=plan["name"], campaign_id=campaign["id"], daily_budget=_cents(daily_brl),
                       billing_event="IMPRESSIONS", optimization_goal="LINK_CLICKS", bid_strategy="LOWEST_COST_WITHOUT_CAP",
