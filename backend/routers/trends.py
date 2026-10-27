@@ -13,9 +13,12 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from agents.product_hunter.agent import DEFAULT_KEYWORDS
-from backend.security import require
+from backend.deps import get_session
+from backend.security import Principal, require
 from config.settings import get_settings
+from core.services import trend_radar
 from core.services.keyword_metrics import analyze_keywords, planner_provider, rank_opportunities
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/trends", tags=["tendências"], dependencies=[Depends(require("catalog.view"))])
 
@@ -67,3 +70,25 @@ def opportunities(
         top=[to_out(m) for m in top],
         analyzed=[to_out(m) for m in analyzed],
     )
+
+
+class WatchIn(BaseModel):
+    add: list[str] = Field(default_factory=list, max_length=20)
+    remove: list[str] = Field(default_factory=list, max_length=20)
+
+
+@router.get("/radar", summary="Radar de tendências: o que sobe na busca do Google (semana, quinzena e mês)")
+def radar(limit: int = Query(30, ge=1, le=60), only_rising: bool = False, session: Session = Depends(get_session)) -> dict:
+    return trend_radar.status(session, limit=limit, only_rising=only_rising)
+
+
+@router.post("/radar/watch", summary="Adicionar ou remover palavras da vigilância do radar")
+def radar_watch(payload: WatchIn, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
+    from fastapi import HTTPException
+
+    try:
+        words = trend_radar.set_watch(session, add=payload.add, remove=payload.remove, actor=principal.username)
+    except trend_radar.RadarError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"watching": words}

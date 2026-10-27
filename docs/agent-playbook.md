@@ -143,6 +143,21 @@ somados). Pesquisa pega quem já procura: prefira produtos com demanda de busca 
 escrever `keywords`, `headlines` (até 30 caracteres, sem "!") e `descriptions` (até 90); sem eles o sistema monta do produto. Nunca prometa o que
 não se prova (grátis, garantido, melhor, nº 1). Comece com `max_cpc_brl` baixo (R$ 1) e aprenda pelo CPC e pelos cliques antes de subir.
 
+## 3.08 Radar de tendências (chegar antes do mercado)
+
+O sistema mede por código, todo dia, o que está subindo na busca do Google (`radar_status`: crescimento em 7, 15 e 30 dias, volume, CPC,
+disputa). A verificação só chama você quando uma palavra **começa** a subir. Quando chamar:
+
+1. **Está no catálogo?** `list_products` pela palavra. Se não, `refresh_catalog(keywords=[palavra])` e espere o resultado no chat.
+2. **Vale a pena?** Conta de empate: CPC do radar ÷ comissão por venda = conversão necessária. Acima de ~3% é difícil; só leve adiante o que
+   fecha a conta (ou tem demanda orgânica forte). Demanda comprovada (vendas do produto, avaliações) pesa mais que o tamanho da busca.
+3. **Traga:** `product_funnel`, depois `add_to_portfolio` e, se elegível, `storefront_update_item`; produto com link de afiliado entra na vitrine.
+4. **Proponha a campanha** no chat (`google_ad_create` com `dry_run=true`, ou o criativo para a Meta), com a conta de verba. Você não liga.
+5. Registre no relatório (`report_add`): a tendência, o que fez e o que propõe. Não trate duas vezes a mesma palavra.
+
+Palavras novas: `radar_watch` (até 40; o radar olha 12 por dia). Termos de outros países (`trending_abroad`) entram traduzidos, no que o
+brasileiro digitaria. Alta no Trends sem volume no Planejador (ou abaixo de 200 por mês) não vale campanha.
+
 ## 3.1 Pesquisar plataformas e fontes de demanda
 
 Cruze sempre: Google Trends (momento) + Planejador (volume/CPC) + vendas/ranking do marketplace +

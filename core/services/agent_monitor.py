@@ -16,6 +16,7 @@ from core.db.agent_reports import KINDS, AgentReport
 from core.db.creatives import CreativeCampaign
 from core.db.service_credentials import ServiceCredential
 from core.db.tracking import ClickEvent, Sale
+from core.services import trend_radar
 
 CLICKS_NOTABLE = 25  # cliques novos na loja a partir dos quais vale uma análise
 META_OK = {None, "", "ACTIVE", "PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED", "IN_PROCESS", "PENDING_REVIEW"}
@@ -57,15 +58,19 @@ def digest(session: Session, since: datetime) -> dict:
                     for s in session.scalars(select(ServiceCredential).where(
                         ServiceCredential.enabled.is_(True), ServiceCredential.last_check_status == "error"))]
 
-    notable = bool(sales or ad_alerts or creative_events or integrations or clicks >= CLICKS_NOTABLE)
+    radar = [f"{r['keyword']} (+{r['growth_30d']:g}% em 30 dias" + (f", {r['monthly_volume']} buscas/mês" if r["monthly_volume"] else "") + ")"
+             for r in trend_radar.new_rising(session, since)[:5]]
+
+    notable = bool(sales or ad_alerts or creative_events or integrations or radar or clicks >= CLICKS_NOTABLE)
     return {"since": since.isoformat(), "sales": sales, "clicks": clicks, "ad_alerts": ad_alerts,
-            "creative_events": creative_events, "integration_errors": integrations, "notable": notable}
+            "creative_events": creative_events, "integration_errors": integrations, "radar": radar, "notable": notable}
 
 
 def digest_text(d: dict) -> str:
     """O resumo em poucas linhas: vai no pedido ao Claude e no relatório."""
     parts = [f"vendas novas: {d['sales']}", f"cliques novos na loja: {d['clicks']}"]
-    for key, label in (("ad_alerts", "anúncios"), ("creative_events", "criativos"), ("integration_errors", "integrações")):
+    for key, label in (("ad_alerts", "anúncios"), ("creative_events", "criativos"), ("integration_errors", "integrações"),
+                       ("radar", "tendências começando a subir")):
         if d[key]:
             parts.append(f"{label}: " + "; ".join(d[key][:5]))
     return " | ".join(parts)

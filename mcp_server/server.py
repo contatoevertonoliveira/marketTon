@@ -140,6 +140,24 @@ def search_opportunities(keywords: list[str] | None = None, limit: int = 5):
 
 
 @mcp.tool(annotations=READ)
+def radar_status(limit: int = 10, only_rising: bool = True):
+    """Radar de tendências do Google (medido por código todo dia): crescimento da busca em 7, 15 e 30 dias, volume mensal, CPC e disputa.
+
+    Só as palavras que estão SUBINDO por padrão. Ao achar uma: veja se o catálogo tem o produto (`list_products`), traga mais com
+    `refresh_catalog(keywords=[...])`, confira a conta (CPC ÷ comissão por venda = conversão para empatar) e proponha a campanha. Não repita
+    a análise de palavras que você já tratou.
+    """
+    return _run(lambda: _client.get("/trends/radar", limit=max(1, min(int(limit), 30)), only_rising=only_rising))
+
+
+@mcp.tool(annotations=WRITE)
+def radar_watch(add: list[str] | None = None, remove: list[str] | None = None):
+    """Põe palavras na vigilância do radar (até 40; o radar olha 12 por dia) ou tira. Use termos de produto que o público busca
+    (ex.: "tênis running", "lanterna tática"). Ideias de outros países (`trending_abroad`) entram aqui traduzidas. EXIGE o modo agente."""
+    return _run(lambda: _client.post("/trends/radar/watch", {"add": add or [], "remove": remove or []}))
+
+
+@mcp.tool(annotations=READ)
 def trending_abroad(sites: str = "MLM,MCO,MLC", limit_per_site: int = 10):
     """Mais vendidos de México, Colômbia e Chile no Mercado Livre, com correspondência no catálogo brasileiro."""
     return _run(lambda: _client.get("/catalog/trending-abroad", sites=sites, limit_per_site=limit_per_site))

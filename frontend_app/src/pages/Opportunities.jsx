@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getJSON } from "../lib/apiClient";
+import TrendRadar from "./TrendRadar";
 
 const card = { background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)" };
 
@@ -102,6 +103,7 @@ export default function Opportunities() {
 
   return (
     <div>
+      <TrendRadar />
       <div style={{ ...card, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <div style={{ fontSize: 12, color: "#8898aa", maxWidth: 640 }}>
           {useMock
