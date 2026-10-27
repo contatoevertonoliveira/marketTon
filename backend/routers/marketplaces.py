@@ -46,6 +46,12 @@ CREDENTIAL_FIELDS: dict[str, list[dict[str, str | bool]]] = {
         {"name": "app_id", "label": "App ID", "secret": False},
         {"name": "secret", "label": "Secret", "secret": True},
     ],
+    # AliExpress: portals.aliexpress.com (afiliado) + openservice.aliexpress.com (app com a permissão Affiliate API).
+    "aliexpress": [
+        {"name": "app_key", "label": "App Key", "secret": False},
+        {"name": "app_secret", "label": "App Secret", "secret": True},
+        {"name": "tracking_id", "label": "Tracking ID (Portals > Tracking)", "secret": False},
+    ],
     "amazon": [
         {"name": "client_id", "label": "Client ID", "secret": False},
         {"name": "client_secret", "label": "Client Secret", "secret": True},
@@ -192,6 +198,8 @@ def _test_connection(adapter, marketplace_slug: str) -> tuple[str, str]:
         if marketplace_slug == "shopee":
             adapter._graphql("{ __typename }", {})
             return "ok", "autenticação aceita pela Affiliate Open API"
+        if marketplace_slug == "aliexpress":
+            return "ok", adapter.check()
         if marketplace_slug == "amazon":
             adapter._ensure_access_token()
             return "ok", "token OAuth2 (Creators API) obtido com sucesso"

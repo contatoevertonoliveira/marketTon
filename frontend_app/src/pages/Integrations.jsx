@@ -16,6 +16,7 @@ const input = {
 const MARKETPLACES = {
   mercado_livre: { name: "Mercado Livre", icon: "🛒", color: "#ffe600" },
   shopee: { name: "Shopee", icon: "🛍️", color: "#ee4d2d" },
+  aliexpress: { name: "AliExpress", icon: "🧧", color: "#e62e04" },
   amazon: { name: "Amazon", icon: "📦", color: "#ff9900" },
   tiktok_shop: { name: "TikTok Shop", icon: "🎵", color: "#010101" },
   hotmart: { name: "Hotmart", icon: "🔥", color: "#f04e23" },

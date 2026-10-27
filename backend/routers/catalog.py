@@ -121,7 +121,7 @@ def get_product(product_id: int, session: Session = Depends(get_session)) -> Pro
     return product_detail(session, product)
 
 
-_MEDIA_HOSTS = ("susercontent.com", "shopee.com.br", "shopee.com")
+_MEDIA_HOSTS = ("alicdn.com", "aliexpress-media.com", "susercontent.com", "shopee.com.br", "shopee.com")
 _MAX_IMAGE_BYTES = 15 * 1024 * 1024
 _EXT_BY_TYPE = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 

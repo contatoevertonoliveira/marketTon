@@ -20,8 +20,8 @@ from core.db.finance import WalletBalance
 from core.db.tracking import Commission, Sale
 
 CANCELLED = {"CANCELLED", "CANCELED", "REFUNDED", "CHARGEBACK", "EXPIRED", "DUPLICATED"}
-WALLETS = ("shopee", "mercado_livre", "amazon", "hotmart", "monetizze", "eduzz")
-LABELS = {"shopee": "Shopee", "mercado_livre": "Mercado Livre", "amazon": "Amazon", "hotmart": "Hotmart", "monetizze": "Monetizze",
+WALLETS = ("shopee", "aliexpress", "mercado_livre", "amazon", "hotmart", "monetizze", "eduzz")
+LABELS = {"shopee": "Shopee", "aliexpress": "AliExpress", "mercado_livre": "Mercado Livre", "amazon": "Amazon", "hotmart": "Hotmart", "monetizze": "Monetizze",
           "eduzz": "Eduzz", "tiktok_shop": "TikTok Shop", "other": "Outras"}
 
 

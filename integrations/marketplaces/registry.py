@@ -42,6 +42,7 @@ def load_adapters() -> None:
     Chamado uma vez na inicialização da aplicação. Explícito em vez de depender de
     efeito de importação, para que os testes controlem o registro.
     """
+    from integrations.marketplaces.aliexpress import AliExpressAdapter
     from integrations.marketplaces.amazon import AmazonAdapter
     from integrations.marketplaces.digital_platforms import EduzzAdapter, HotmartAdapter, MonetizzeAdapter
     from integrations.marketplaces.mercado_livre import MercadoLivreAdapter
@@ -49,7 +50,7 @@ def load_adapters() -> None:
     from integrations.marketplaces.tiktok_shop import TikTokShopAdapter
 
     for adapter_cls in (
-        MercadoLivreAdapter, ShopeeAdapter, AmazonAdapter, TikTokShopAdapter, HotmartAdapter, MonetizzeAdapter, EduzzAdapter
+        MercadoLivreAdapter, ShopeeAdapter, AliExpressAdapter, AmazonAdapter, TikTokShopAdapter, HotmartAdapter, MonetizzeAdapter, EduzzAdapter
     ):
         if adapter_cls.name in _REGISTRY:
             continue

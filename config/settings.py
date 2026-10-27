@@ -131,6 +131,11 @@ class Settings(BaseSettings):
     shopee_app_id: str = ""
     shopee_secret: str = ""
 
+    # --- AliExpress (Portals Affiliate API) -------------------------------------
+    aliexpress_app_key: str = ""
+    aliexpress_app_secret: str = ""
+    aliexpress_tracking_id: str = ""
+
     # --- Amazon ---------------------------------------------------------------
     # https://affiliate-program.amazon.com/creatorsapi/ — Creators API.
     # A PA-API 5.0 (AWS SigV4) foi aposentada pela Amazon (confirmado ao vivo:

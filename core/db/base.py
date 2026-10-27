@@ -67,6 +67,7 @@ class Marketplace(str, enum.Enum):
 
     MERCADO_LIVRE = "mercado_livre"
     SHOPEE = "shopee"
+    ALIEXPRESS = "aliexpress"
     AMAZON = "amazon"
     TIKTOK_SHOP = "tiktok_shop"
     # Plataformas de produtos digitais (afiliação por comissão de venda).

@@ -27,7 +27,7 @@ from core.db.tracking import Sale
 from core.services.agent_chat import counts
 from integrations.google_ads import GoogleAdsConfig
 
-MARKETPLACE_SLUGS = ("mercado_livre", "shopee", "amazon", "tiktok_shop")
+MARKETPLACE_SLUGS = ("mercado_livre", "shopee", "aliexpress", "amazon", "tiktok_shop")
 
 
 def integration_states(session: Session) -> list[dict]:
@@ -88,6 +88,7 @@ def capabilities(session: Session) -> list[dict]:
     return [
         marketplace("mercado_livre", "Mercado Livre", "catálogo, concorrência por produto, tendências de outros países"),
         marketplace("shopee", "Shopee", "catálogo, comissão, vendas e comissão por pedido"),
+        marketplace("aliexpress", "AliExpress", "catálogo com várias fotos, comissão e link de afiliado"),
         marketplace("hotmart", "Hotmart", "vendas e comissão como afiliado (a API não lista produtos para afiliar)"),
         marketplace("monetizze", "Monetizze", "produtos em que você é afiliado, vendas e comissão"),
         marketplace("eduzz", "Eduzz", "vendas e ganho como afiliado (a API não lista produtos para afiliar)"),

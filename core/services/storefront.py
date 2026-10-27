@@ -43,14 +43,14 @@ DEFAULT_TAGLINE = "Boas descobertas começam aqui."
 DEFAULT_SUBTITLE = "Produtos selecionados, ofertas interessantes e oportunidades digitais em um só lugar."
 SOCIAL_KEYS = ("facebook", "instagram", "youtube", "whatsapp", "telegram", "tiktok")
 DISCLOSURE = (
-    "O Mural na Web participa de programas de afiliados de plataformas como Shopee, Mercado Livre, Hotmart, Eduzz e Monetizze "
+    "O Mural na Web participa de programas de afiliados de plataformas como Shopee, AliExpress, Mercado Livre, Hotmart, Eduzz e Monetizze "
     "e pode receber uma comissão pelas compras feitas pelos links desta página, sem custo extra para você. Não somos loja "
     "nem parceiros oficiais dessas plataformas: a compra, o pagamento e a entrega são feitos no site de cada uma. Preços e "
     "disponibilidade são os vistos no dia indicado e podem mudar: confira antes de comprar."
 )
 
 CATEGORIES = ("Eletrônicos", "Casa", "Moda", "Beleza", "Games", "Pet", "Cursos", "Achados diversos")
-MARKETPLACE_NAMES = {"shopee": "Shopee", "mercado_livre": "Mercado Livre", "hotmart": "Hotmart", "eduzz": "Eduzz",
+MARKETPLACE_NAMES = {"shopee": "Shopee", "aliexpress": "AliExpress", "mercado_livre": "Mercado Livre", "hotmart": "Hotmart", "eduzz": "Eduzz",
                      "monetizze": "Monetizze"}
 DIGITAL_PLATFORMS = ("hotmart", "eduzz", "monetizze")
 # A ordem importa: a primeira regra que casar vence ("tapete higiênico para cachorro" é Pet, não Casa).

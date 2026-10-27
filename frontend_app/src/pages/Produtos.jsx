@@ -8,6 +8,7 @@ import ProdutosSugeridos from "./ProdutosSugeridos";
 const MARKETPLACES = [
   { id: "mercado_livre", name: "Mercado Livre", icon: "🛒" },
   { id: "shopee", name: "Shopee", icon: "🛍️" },
+  { id: "aliexpress", name: "AliExpress", icon: "🧧" },
   { id: "amazon", name: "Amazon", icon: "📦" },
   { id: "tiktok_shop", name: "TikTok Shop", icon: "🎵" },
   { id: "hotmart", name: "Hotmart", icon: "🔥" },
