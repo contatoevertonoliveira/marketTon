@@ -56,7 +56,8 @@ def default_copy(product: Product) -> tuple[list[str], list[str], list[str]]:
     """Títulos, descrições e palavras-chave montados do produto, sem promessa que não possamos provar."""
     title = storefront.clean_title(product.title, 90)
     headlines = [_short(title, 30), "Veja no Mural na Web", "Fotos e detalhes do produto", "Confira a oferta hoje", "Seleção do Mural na Web"]
-    descriptions = [_short(f"{title}. Veja fotos e detalhes e siga para a oferta.", 90),
+    short = _short(title.replace("…", ""), 48)
+    descriptions = [f"{short}. Veja fotos e detalhes e siga para a oferta.",
                     "Achados selecionados no Mural na Web. Compare e abra a oferta no marketplace."]
     words = [w for w in re.findall(r"[\wÀ-ÿ]+", title.lower()) if len(w) > 2]
     keywords = []

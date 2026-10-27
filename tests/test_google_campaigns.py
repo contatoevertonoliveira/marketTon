@@ -94,7 +94,7 @@ def test_dry_run_builds_a_valid_plan_and_calls_nothing(session, google):
     plan = out["plan"]
     assert out["dry_run"] is True and not google.mutations and session.query(AdCampaign).count() == 0
     assert 3 <= len(plan["headlines"]) <= 15 and all(len(h) <= 30 and "!" not in h for h in plan["headlines"])
-    assert all(len(d) <= 90 for d in plan["descriptions"]) and plan["keywords"] and "grátis" in plan["negative_keywords"]
+    assert all(len(d) <= 90 and "…" not in d for d in plan["descriptions"]) and plan["keywords"] and "grátis" in plan["negative_keywords"]
     assert plan["link"].startswith(f"https://mural.felixsystems.com.br/p/p{p.id}?utm_source=google&utm_medium=cpc&utm_campaign=mural-g-")
 
 
