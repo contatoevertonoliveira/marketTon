@@ -47,7 +47,7 @@ def google(monkeypatch):
     g = G()
     g.mutations, g.rows = [], []
 
-    def mutate(self, operations):
+    def mutate(self, operations, validate_only=False):
         g.mutations.append(operations)
         kinds = [next(iter(op)) for op in operations]
         if "campaignBudgetOperation" in kinds:  # criação
@@ -162,8 +162,8 @@ def test_activate_pause_and_metrics(session, google):
     google.mutations.clear()
     ad = ads_manager.activate(session, ad_id, actor="dono", now=NOW)
     upd = google.mutations[0][0]["campaignOperation"]
-    assert ad.status == "active" and upd["update"]["status"] == "ENABLED" and upd["updateMask"] == "status,endDate"
-    assert upd["update"]["endDate"] == f"{(NOW.astimezone() + timedelta(days=2)):%Y-%m-%d}"  # 3 dias contando hoje
+    assert ad.status == "active" and upd["update"]["status"] == "ENABLED" and upd["updateMask"] == "status,end_date_time"
+    assert upd["update"]["endDateTime"] == f"{(NOW.astimezone() + timedelta(days=2)):%Y-%m-%d} 23:59:59"  # 3 dias contando hoje, até o fim do dia
     google.rows = [{"campaign": {"id": "222", "status": "ENABLED"}, "metrics": {"costMicros": "4500000", "impressions": "300", "clicks": "12"}}]
     assert ads_manager.sync_metrics(session, now=NOW) == 1
     assert (ad.spent_brl, ad.impressions, ad.clicks, ad.meta_status) == (4.5, 300, 12, "ENABLED")

@@ -146,9 +146,13 @@ class GoogleAdsClient:
             raise GoogleAdsError(_error_message(response))
         return response.json()
 
-    def mutate(self, operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Várias operações de uma vez, atômicas (tudo ou nada). Os recursos novos usam ids temporários negativos."""
-        data = self._post("/googleAds:mutate", {"mutateOperations": operations})
+    def mutate(self, operations: list[dict[str, Any]], *, validate_only: bool = False) -> list[dict[str, Any]]:
+        """Várias operações de uma vez, atômicas (tudo ou nada). Os recursos novos usam ids temporários negativos.
+        `validate_only` pede ao Google só para validar (nada é criado nem alterado)."""
+        body: dict[str, Any] = {"mutateOperations": operations}
+        if validate_only:
+            body["validateOnly"] = True
+        data = self._post("/googleAds:mutate", body)
         return data.get("mutateOperationResponses") or []
 
     def search(self, query: str) -> list[dict[str, Any]]:

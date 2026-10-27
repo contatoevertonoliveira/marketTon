@@ -192,16 +192,16 @@ def create_campaign(session: Session, product_id: int, *, daily_brl: float, days
             "note": "Campanha criada PAUSADA no Google: nada está gastando. O operador liga em Criativos e anúncios."}
 
 
-def _set_status(session: Session, ad: AdCampaign, status: str, *, end_date: str | None = None) -> None:
+def _set_status(session: Session, ad: AdCampaign, status: str, *, end_date: str | None = None, validate_only: bool = False) -> None:
     if ad.platform != "google" or not ad.external_campaign_id:
         raise AdsError("esta campanha ainda não existe no Google.")
     client = _client(session)
     update = {"resourceName": f"customers/{client.cfg.customer_id}/campaigns/{ad.external_campaign_id}", "status": status}
     mask = "status"
-    if end_date:
-        update["endDate"], mask = end_date, "status,endDate"
+    if end_date:  # a API nova usa data e hora (`end_date_time`), não mais `end_date`; vale até o fim desse dia
+        update["endDateTime"], mask = f"{end_date} 23:59:59", "status,end_date_time"
     try:
-        client.mutate([{"campaignOperation": {"update": update, "updateMask": mask}}])
+        client.mutate([{"campaignOperation": {"update": update, "updateMask": mask}}], validate_only=validate_only)
     except GoogleAdsError as exc:
         raise AdsError(f"o Google recusou: {exc}") from exc
     ad.meta_status = status
