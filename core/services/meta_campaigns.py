@@ -94,7 +94,7 @@ def budget_status(session: Session, now: datetime | None = None) -> dict:
             "week_spent_brl": round(sum(a.spent_brl or 0 for a in this_week), 2)}
 
 
-def _guard(session: Session, creative: CreativeCampaign, daily_brl: float, days: int, now: datetime | None = None) -> None:
+def _guard(session: Session, product_id: int | None, daily_brl: float, days: int, now: datetime | None = None, *, per_product: bool = True) -> None:
     st = budget_status(session, now)
     if not st["configured"]:
         raise AdsError("defina o Orçamento de anúncios (valor por semana e teto por dia) em Integrações antes de criar anúncios.")
@@ -108,11 +108,12 @@ def _guard(session: Session, creative: CreativeCampaign, daily_brl: float, days:
     if st["week_committed_brl"] + daily_brl * days > st["weekly_brl"] + 1e-9:
         raise AdsError(f"o compromisso da semana (R$ {st['week_committed_brl']:g}) mais R$ {daily_brl * days:g} passaria do valor da semana "
                        f"(R$ {st['weekly_brl']:g}).")
-    same_product = session.query(AdCampaign).filter(AdCampaign.product_id == creative.product_id, AdCampaign.status.in_(OPEN_STATUSES)).count()
-    if same_product >= st["creatives_per_product"]:
+    same_product = session.query(AdCampaign).filter(AdCampaign.product_id == product_id, AdCampaign.status.in_(OPEN_STATUSES),
+                                                    AdCampaign.platform == "meta").count()
+    if per_product and same_product >= st["creatives_per_product"]:
         raise AdsError(f"este produto já tem {same_product} anúncio(s) aberto(s); o máximo é {st['creatives_per_product']} criativo(s) por produto.")
     this_week_products = st["week_products"]
-    already = session.query(AdCampaign).filter(AdCampaign.product_id == creative.product_id).count() > 0
+    already = session.query(AdCampaign).filter(AdCampaign.product_id == product_id).count() > 0
     if not already and this_week_products >= st["max_products"]:
         raise AdsError(f"já há {this_week_products} produto(s) em anúncio nesta semana; o máximo é {st['max_products']}.")
 
@@ -151,7 +152,7 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
     cfg = storefront.load_config(session)
     if not product or not cfg:
         raise AdsError("produto ou endereço da loja indisponível.")
-    _guard(session, creative, daily_brl, days, now)
+    _guard(session, creative.product_id, daily_brl, days, now)
     tag = f"mural-{creative.external_ref}"[:80]
     url = f"{cfg.public_url}/p/p{product.id}?utm_source=meta&utm_medium=paid&utm_campaign={tag}"
     return {"name": tag, "objective": "OUTCOME_TRAFFIC", "daily_budget_brl": daily_brl, "days": days, "headline": headline, "message": caption,
@@ -254,7 +255,7 @@ def pause(session: Session, ad_id: int) -> AdCampaign:
 def pause_all(session: Session) -> int:
     """Botão de parada: pausa todos os anúncios ativos."""
     n = 0
-    for ad in session.scalars(select(AdCampaign).where(AdCampaign.status == "active")):
+    for ad in session.scalars(select(AdCampaign).where(AdCampaign.status == "active", AdCampaign.platform == "meta")):
         try:
             pause(session, ad.id)
             n += 1
@@ -265,7 +266,8 @@ def pause_all(session: Session) -> int:
 
 def sync_metrics(session: Session, now: datetime | None = None) -> int:
     """Lê gasto, impressões e cliques de cada anúncio existente na Meta (leitura; nunca estima)."""
-    ads = list(session.scalars(select(AdCampaign).where(AdCampaign.external_ad_id.is_not(None), AdCampaign.status.in_(("active", "paused", "ended")))))
+    ads = list(session.scalars(select(AdCampaign).where(AdCampaign.platform == "meta", AdCampaign.external_ad_id.is_not(None),
+                                          AdCampaign.status.in_(("active", "paused", "ended")))))
     if not ads:
         return 0
     token = _meta_values(session)["access_token"]

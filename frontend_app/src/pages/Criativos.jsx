@@ -202,6 +202,35 @@ function Item({ it, onDone, onMsg, onPreview }) {
   );
 }
 
+function SearchAds({ ads, onDone, onMsg }) {
+  if (!ads || ads.length === 0) return null;
+  return (
+    <div style={card}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#32325d", marginBottom: 6 }}>Campanhas de pesquisa (Google)</div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", minWidth: 640 }}>
+          <thead>
+            <tr style={{ color: "#8898aa", textAlign: "left" }}>
+              {["Produto", "Estado", "Verba/dia", "Gasto", "Impressões", "Cliques", "CTR", "CPC", "Início", ""].map((h) => <th key={h} style={{ padding: "4px 8px 4px 0", fontWeight: 600 }}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {ads.map((a) => (
+              <tr key={a.id} style={{ borderTop: "1px solid #f6f9fc" }}>
+                <td style={{ padding: "5px 8px 5px 0", maxWidth: 260 }}>{a.product ? a.product.title : "—"}<div style={{ fontSize: 10, color: "#8898aa" }}>{a.notes}</div></td>
+                <td><Chip map={AD} k={a.status} /></td>
+                <td>{brl(a.daily_budget_brl)}</td><td>{brl(a.spent_brl)}</td><td>{num(a.impressions)}</td><td>{num(a.clicks)}</td>
+                <td>{a.ctr_pct == null ? "—" : `${String(a.ctr_pct).replace(".", ",")}%`}</td><td>{brl(a.cpc_brl)}</td><td>{when(a.started_at)}</td>
+                <td><AdActions ad={a} onDone={onDone} onMsg={onMsg} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function Criativos() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -248,6 +277,7 @@ export default function Criativos() {
       )}
       {budget && !budget.configured && <div style={{ ...card, fontSize: 12, color: "#b8720a" }}>Defina o Orçamento de anúncios em Integrações (valor por semana e teto por dia) para o agente poder planejar anúncios.</div>}
       {msg && <div style={{ marginBottom: 12, fontSize: 12, padding: "8px 10px", borderRadius: 8, color: msg.ok ? "#1a7a54" : "#c31e3f", background: msg.ok ? "#e5faf1" : "#fef1f4" }}>{msg.text}</div>}
+      <SearchAds ads={data?.search_ads} onDone={loadAll} onMsg={setMsg} />
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {[["todos", "Todos"], ["live", "Ao vivo"], ["sandbox", "Testes"]].map(([k, label]) => (
           <button key={k} onClick={() => setMode(k)} style={{ border: "none", borderRadius: 999, padding: "4px 14px", fontSize: 12, cursor: "pointer", background: mode === k ? "#5e72e4" : "#eef0f6", color: mode === k ? "#fff" : "#525f7f" }}>{label}</button>

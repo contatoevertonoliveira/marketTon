@@ -423,6 +423,24 @@ def ad_create(creative_id: int, daily_brl: float, days: int = 3, dry_run: bool =
 
 
 @mcp.tool(annotations=WRITE)
+def google_ad_create(product_id: int, daily_brl: float, days: int = 3, dry_run: bool = True, max_cpc_brl: float = 1.0,
+                     keywords: list[str] | None = None, headlines: list[str] | None = None, descriptions: list[str] | None = None):
+    """Cria a campanha de PESQUISA no Google Ads de um produto da vitrine. EXIGE o modo agente.
+
+    `dry_run=True` (padrão) só mostra o plano (títulos, descrições, palavras-chave, link), sem tocar no Google: use sempre primeiro e mostre no
+    chat. Com `dry_run=False` a campanha nasce PAUSADA (nada gasta); quem LIGA é o operador. A verba é a MESMA do Meta (teto por dia e valor da
+    semana somados das duas redes). Sem `keywords`/`headlines`/`descriptions` o sistema monta do produto. Regras do Google: título até 30
+    caracteres e sem "!", descrição até 90, 3 a 15 títulos, 2 a 4 descrições; sem promessas que não possam ser provadas (grátis, garantido,
+    melhor). Use `max_cpc_brl` baixo (padrão R$ 1). Anúncio de pesquisa pega quem já procura o produto: prefira produtos com demanda de busca.
+    """
+    body = {"product_id": product_id, "daily_brl": daily_brl, "days": days, "dry_run": dry_run, "max_cpc_brl": max_cpc_brl}
+    for key, value in (("keywords", keywords), ("headlines", headlines), ("descriptions", descriptions)):
+        if value:
+            body[key] = value
+    return _run(lambda: _client.post("/ads/google", body))
+
+
+@mcp.tool(annotations=WRITE)
 def ad_pause(ad_id: int):
     """Pausa um anúncio ativo (a decisão de pausar o que não rende é sua; a de ligar é do operador). EXIGE o modo agente."""
     return _run(lambda: _client.post(f"/ads/{ad_id}/pause"))
@@ -430,7 +448,7 @@ def ad_pause(ad_id: int):
 
 @mcp.tool(annotations=WRITE)
 def ads_sync_metrics():
-    """Lê da Meta gasto, impressões e cliques dos anúncios existentes e atualiza o painel. Faça antes de analisar desempenho. EXIGE o modo agente."""
+    """Lê da Meta e do Google gasto, impressões e cliques dos anúncios existentes e atualiza o painel. Faça antes de analisar desempenho. EXIGE o modo agente."""
     return _run(lambda: _client.post("/ads/sync"))
 
 

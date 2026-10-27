@@ -146,6 +146,15 @@ class GoogleAdsClient:
             raise GoogleAdsError(_error_message(response))
         return response.json()
 
+    def mutate(self, operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Várias operações de uma vez, atômicas (tudo ou nada). Os recursos novos usam ids temporários negativos."""
+        data = self._post("/googleAds:mutate", {"mutateOperations": operations})
+        return data.get("mutateOperationResponses") or []
+
+    def search(self, query: str) -> list[dict[str, Any]]:
+        """GAQL de leitura."""
+        return self._post("/googleAds:search", {"query": query}).get("results") or []
+
     def customer_currency(self) -> str | None:
         """Moeda da conta (o CPC do Planejador vem nela). Também prova que o
         developer token, o OAuth e o Customer ID funcionam juntos."""

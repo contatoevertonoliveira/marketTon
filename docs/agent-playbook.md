@@ -135,6 +135,14 @@ depois de dados suficientes (cliques e impressões), compare CTR e CPC entre os 
 A venda de afiliado não é atribuível a um anúncio (chega dias depois, sem origem): use cliques nos links da loja como sinal de interesse
 e cruze com as vendas do produto no período, dizendo que é correlação, não prova.
 
+### Google Ads (pesquisa)
+
+`google_ad_create` cria a campanha de PESQUISA de um produto (não usa criativo/imagem): `dry_run=true` primeiro e plano no chat; só com a
+aprovação do operador, `dry_run=false` (nasce PAUSADA; quem liga é o operador). A verba é **a mesma** do Meta (teto por dia e valor da semana
+somados). Pesquisa pega quem já procura: prefira produtos com demanda de busca (volume e CPC pelo Planejador, `search_opportunities`). Você pode
+escrever `keywords`, `headlines` (até 30 caracteres, sem "!") e `descriptions` (até 90); sem eles o sistema monta do produto. Nunca prometa o que
+não se prova (grátis, garantido, melhor, nº 1). Comece com `max_cpc_brl` baixo (R$ 1) e aprenda pelo CPC e pelos cliques antes de subir.
+
 ## 3.1 Pesquisar plataformas e fontes de demanda
 
 Cruze sempre: Google Trends (momento) + Planejador (volume/CPC) + vendas/ranking do marketplace +

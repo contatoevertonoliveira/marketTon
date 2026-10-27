@@ -80,7 +80,13 @@ def history(session: Session, *, limit: int = 50) -> dict:
             "ads": [ad_out(a) for a in ads],
             "product_results": _product_results(session, product.id, created) if product else None,
         })
-    return {"items": items, "totals": {"creatives": len(items), "cost_usd": round(usd, 4), "ads": sum(len(v) for v in ads_by_creative.values()),
+    search_ads = []
+    for ad in ads_by_creative.get(0, []):  # campanhas sem criativo: pesquisa no Google
+        product = session.get(Product, ad.product_id) if ad.product_id else None
+        spent += ad.spent_brl or 0
+        active += 1 if ad.status == "active" else 0
+        search_ads.append(ad_out(ad) | {"product": ({"id": product.id, "title": storefront.clean_title(product.title, 90)} if product else None)})
+    return {"items": items, "search_ads": search_ads, "totals": {"creatives": len(items), "cost_usd": round(usd, 4), "ads": sum(len(v) for v in ads_by_creative.values()),
                                        "active_ads": active, "spent_brl": round(spent, 2)}}
 
 

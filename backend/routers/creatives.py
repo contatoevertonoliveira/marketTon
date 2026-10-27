@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from backend.deps import get_session
 from backend.security import Principal, record_action, require
 from core.db.creatives import CreativeCampaign
-from core.services import aistudio, creative_history, meta_campaigns
+from core.services import ads_manager, aistudio, creative_history, google_campaigns, meta_campaigns
 from core.services.aistudio import AIStudioError
 
 router = APIRouter(tags=["criativos (AI Studio)"])
@@ -123,6 +123,17 @@ class AdCreate(BaseModel):
     variant: str | None = None
 
 
+class GoogleAdCreate(BaseModel):
+    product_id: int
+    daily_brl: float = Field(gt=0)
+    days: int = Field(3, ge=1, le=14)
+    dry_run: bool = True
+    max_cpc_brl: float = Field(1.0, gt=0, le=5)
+    headlines: list[str] | None = Field(None, max_length=15)
+    descriptions: list[str] | None = Field(None, max_length=4)
+    keywords: list[str] | None = Field(None, max_length=10)
+
+
 @router.get("/ads/budget", summary="Orçamento de anúncios: teto, verba comprometida e gasto da semana")
 def ads_budget_status(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
     return meta_campaigns.budget_status(session)
@@ -143,10 +154,27 @@ def create_meta_ad(payload: AdCreate, principal: Principal = Depends(require("po
     return result
 
 
+@router.post("/ads/google", summary="Criar a campanha de Pesquisa no Google de um produto (sempre PAUSADA; dry_run por padrão)", status_code=201)
+def create_google_ad(payload: GoogleAdCreate, principal: Principal = Depends(require("portfolio.manage")),
+                     session: Session = Depends(get_session)) -> dict:
+    try:
+        result = google_campaigns.create_campaign(
+            session, payload.product_id, daily_brl=payload.daily_brl, days=payload.days, dry_run=payload.dry_run, actor=principal.username,
+            headlines=payload.headlines, descriptions=payload.descriptions, keywords=payload.keywords, max_cpc_brl=payload.max_cpc_brl)
+    except meta_campaigns.AdsError as exc:
+        session.commit()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not payload.dry_run:
+        record_action(session, principal, action="ads.google_created_paused", resource_type="product", resource_id=str(payload.product_id),
+                      detail=f"R$ {payload.daily_brl:g}/dia por {payload.days} dia(s)")
+    session.commit()
+    return result
+
+
 @router.post("/ads/{ad_id}/activate", summary="LIGAR o anúncio (só o operador: passa a gastar até a verba diária)")
 def activate_ad(ad_id: int, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
     try:
-        ad = meta_campaigns.activate(session, ad_id, actor=principal.username)
+        ad = ads_manager.activate(session, ad_id, actor=principal.username)
     except meta_campaigns.AdsError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     record_action(session, principal, action="ads.activated", resource_type="ad", resource_id=str(ad_id),
@@ -158,7 +186,7 @@ def activate_ad(ad_id: int, principal: Principal = Depends(require("connectors.m
 @router.post("/ads/{ad_id}/pause", summary="Pausar um anúncio")
 def pause_ad(ad_id: int, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
     try:
-        ad = meta_campaigns.pause(session, ad_id)
+        ad = ads_manager.pause(session, ad_id)
     except meta_campaigns.AdsError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     record_action(session, principal, action="ads.paused", resource_type="ad", resource_id=str(ad_id))
@@ -168,16 +196,16 @@ def pause_ad(ad_id: int, principal: Principal = Depends(require("portfolio.manag
 
 @router.post("/ads/pause-all", summary="Botão de parada: pausa todos os anúncios ativos (só o operador)")
 def pause_all_ads(principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
-    n = meta_campaigns.pause_all(session)
+    n = ads_manager.pause_all(session)
     record_action(session, principal, action="ads.paused_all", resource_type="ad", detail=f"{n} anúncio(s)")
     session.commit()
     return {"paused": n}
 
 
-@router.post("/ads/sync", summary="Ler as métricas da Meta (gasto, impressões, cliques)")
+@router.post("/ads/sync", summary="Ler as métricas da Meta e do Google (gasto, impressões, cliques)")
 def sync_ads(principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
     try:
-        n = meta_campaigns.sync_metrics(session)
+        n = ads_manager.sync_metrics(session)
     except meta_campaigns.AdsError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()
