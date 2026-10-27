@@ -48,8 +48,10 @@ def _short(text: str, limit: int) -> str:
     text = re.sub(r"\s+", " ", text or "").strip(" -–|,.;:")
     if len(text) <= limit:
         return text
-    cut = text[:limit].rsplit(" ", 1)[0]
-    return cut.strip(" -–|,.;:") or text[:limit]
+    words = text[:limit].rsplit(" ", 1)[0].split()
+    while len(words) > 1 and words[-1].lower() in {"e", "ou", "com", "de", "da", "do", "para", "por", "em", "a", "o", "um", "uma"}:
+        words.pop()  # não termina em palavra solta ("… Quente ou")
+    return " ".join(words).strip(" -–|,.;:") or text[:limit]
 
 
 def default_copy(product: Product) -> tuple[list[str], list[str], list[str]]:
