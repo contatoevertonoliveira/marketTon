@@ -1,7 +1,8 @@
 """Slideshow vertical (Reels, TikTok, Shorts) montado das imagens do produto e do criativo, por código, sem IA e sem custo de crédito.
 
-Ordem: o criativo 9:16 (título, preço e botão) abre; seguem até 4 fotos reais do produto; o criativo fecha. Cada imagem entra em 1080x1920
-com o fundo desfocado da própria foto (nada fica esticado nem cortado), com zoom lento e transição suave. 3 s por imagem: 15 a 20 s no total.
+Ordem: o criativo 9:16 (título, preço e botão) abre; seguem a foto do produto (até 3, mas a API oficial da Shopee entrega só 1) e, quando
+há pouca foto, um "detalhe" (corte ampliado da foto); o criativo fecha. Cada imagem entra em 1080x1920 com o fundo desfocado da própria foto
+(nada fica esticado), com zoom lento e transição suave. 3,3 s por imagem, no máximo 5: de 10 a 15 s no total.
 Sem texto desenhado por nós (o texto vem do criativo). O vídeo sai com faixa de áudio **muda**: a música é escolhida no app do Instagram/TikTok
 (biblioteca comercial), porque a API não deixa escolher música.
 """
@@ -25,10 +26,10 @@ from core.services import aistudio
 logger = logging.getLogger(__name__)
 
 W, H = 1080, 1920
-SLIDE_S = 3.0
+SLIDE_S = 3.3
 FADE_S = 0.5
 FPS = 30
-MAX_PHOTOS = 4
+MAX_PHOTOS = 3
 MAX_DOWNLOAD = 8 * 1024 * 1024
 
 
@@ -72,6 +73,19 @@ def canvas(data: bytes) -> bytes:
     bg.paste(fg, ((W - fg.width) // 2, (H - fg.height) // 2))
     out = io.BytesIO()
     bg.save(out, "JPEG", quality=90)
+    return out.getvalue()
+
+
+def detail(data: bytes) -> bytes:
+    """Corte ampliado do centro da foto (70%): vira um segundo plano do mesmo produto, mais de perto. JPEG."""
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(data)).convert("RGB")
+    w, h = img.size
+    cw, ch = round(w * 0.7), round(h * 0.7)
+    left, top = (w - cw) // 2, (h - ch) // 2
+    out = io.BytesIO()
+    img.crop((left, top, left + cw, top + ch)).save(out, "JPEG", quality=92)
     return out.getvalue()
 
 
@@ -120,9 +134,12 @@ def collect(session: Session, creative: CreativeCampaign, *, download=_download)
         if len(photos) >= MAX_PHOTOS:
             break
     if photos:
-        return [hero_bytes, *photos, hero_bytes]
+        middle = list(photos)
+        if len(middle) < 2:  # uma foto só (o normal na Shopee): acrescenta o detalhe dela
+            middle.append(detail(middle[0]))
+        return [hero_bytes, *middle, hero_bytes]
     others = [creative_bytes(d) for d in pieces if d is not hero]  # sem foto do produto: usa os outros formatos do criativo
-    return [hero_bytes, *others, hero_bytes] if others else [hero_bytes, hero_bytes]
+    return [hero_bytes, *others[:3], hero_bytes] if others else [hero_bytes, hero_bytes]
 
 
 def build(session: Session, creative_id: int, *, runner=subprocess.run, ffmpeg: str | None = None, download=_download) -> dict:

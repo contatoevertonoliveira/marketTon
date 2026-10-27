@@ -85,9 +85,9 @@ def test_command_has_n_minus_1_transitions_right_duration_and_silent_audio(tmp_p
     slides = [tmp_path / f"s{i}.jpg" for i in range(5)]
     cmd = reels.command("ffmpeg", slides, tmp_path / "o.mp4")
     graph = cmd[cmd.index("-filter_complex") + 1]
-    assert graph.count("xfade") == 4 and cmd[cmd.index("-t") + 1] == "13.0"  # 5 x 3 s - 4 x 0,5 s
+    assert graph.count("xfade") == 4 and cmd[cmd.index("-t") + 1] == "14.5"  # 5 x 3,3 s - 4 x 0,5 s: dentro dos 15 s
     assert any("anullsrc" in c for c in cmd) and f"{len(slides)}:a" in cmd
-    assert "offset=2.5" in graph and "offset=10.0" in graph
+    assert "offset=2.8" in graph and "offset=11.2" in graph
     with pytest.raises(reels.ReelError):
         reels.command("ffmpeg", slides[:1], tmp_path / "o.mp4")
 
@@ -96,22 +96,30 @@ def test_order_is_creative_then_photos_then_creative_again(session, files):
     c = _creative(session, images=["https://x/1.jpg", "https://x/2.jpg", "https://x/3.jpg", "https://x/4.jpg", "https://x/5.jpg", "https://x/ruim"])
     photos = {f"https://x/{i}.jpg": _img(600, 600, "yellow") for i in range(1, 6)}
     got = reels.collect(session, c, download=lambda url: photos.get(url))
-    assert len(got) == 6 and got[0] == files["b"] == got[-1] and got[1:-1] == [photos[f"https://x/{i}.jpg"] for i in range(1, 5)]  # no máximo 4 fotos
+    assert len(got) == 5 and got[0] == files["b"] == got[-1] and got[1:-1] == [photos[f"https://x/{i}.jpg"] for i in range(1, 4)]  # no máximo 3 fotos: 5 imagens, até 15 s
+
+
+def test_a_single_product_photo_gets_a_zoomed_detail_so_the_video_is_not_too_short(session, files):
+    c = _creative(session, images=["https://x/1.jpg"])
+    photo = _img(800, 600, "yellow")
+    got = reels.collect(session, c, download=lambda url: photo)
+    assert len(got) == 4 and got[1] == photo and got[2] != photo  # criativo, foto, detalhe da foto, criativo
+    assert Image.open(io.BytesIO(got[2])).size == (560, 420)  # 70% do centro
 
 
 def test_without_product_photos_it_uses_the_other_creative_formats(session, files):
     c = _creative(session, images=None)
     got = reels.collect(session, c, download=lambda url: None)
-    assert got == [files["b"], files["a"], files["b"]]
+    assert got == [files["b"], files["a"], files["b"]]  # sem foto do produto: usa os outros formatos do criativo
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="sem ffmpeg nesta máquina")
 def test_a_real_video_is_made_with_the_right_size_and_duration(session, files):
     c = _creative(session, images=["https://x/1.jpg", "https://x/2.jpg"])
-    info = reels.build(session, c.id, download=lambda url: _img(800, 600, "orange"))
+    info = reels.build(session, c.id, download=lambda url: _img(800, 600, "orange"))  # 1 foto + detalhe + 2 do criativo = 4 imagens
     path = reels.reel_path(c.id)
-    assert info["slides"] == 4 and info["seconds"] == 10.5 and path.exists() and path.stat().st_size > 1000
+    assert info["slides"] == 4 and info["seconds"] == 11.7 and path.exists() and path.stat().st_size > 1000
     probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width,height,codec_name:format=duration", "-of", "default=nw=1", str(path)],
                            capture_output=True, text=True)
     assert "width=1080" in probe.stdout and "height=1920" in probe.stdout and "codec_name=h264" in probe.stdout and "codec_name=aac" in probe.stdout
-    assert abs(float(probe.stdout.split("duration=")[-1].split()[0]) - 10.5) < 0.6
+    assert abs(float(probe.stdout.split("duration=")[-1].split()[0]) - 11.7) < 0.6

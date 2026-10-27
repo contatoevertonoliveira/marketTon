@@ -289,7 +289,7 @@ function ReelBox({ it, caption, onMsg }) {
   const btn = { border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" };
   return (
     <div style={{ marginTop: 12, borderTop: "1px dashed #f3d6e6", paddingTop: 10 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#32325d" }}>🎞️ Reel (slideshow das imagens, sem custo de crédito)</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#32325d" }}>🎞️ Reel (slideshow de 10 a 15 s das imagens, sem custo de crédito)</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "8px 0" }}>
         <button style={btn} disabled={!!busy} onClick={build}>{busy === "build" ? "Montando…" : src ? "Montar de novo" : "Gerar slideshow"}</button>
         {src && <a href={src} download={`mural-reel-${it.id}.mp4`} style={{ ...btn, textDecoration: "none", color: "#525f7f" }}>⬇ Baixar vídeo</a>}
