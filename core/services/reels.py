@@ -142,10 +142,40 @@ def collect(session: Session, creative: CreativeCampaign, *, download=_download)
     return [hero_bytes, *others[:3], hero_bytes] if others else [hero_bytes, hero_bytes]
 
 
-def build(session: Session, creative_id: int, *, runner=subprocess.run, ffmpeg: str | None = None, download=_download) -> dict:
+def studio_slideshow(creative: CreativeCampaign) -> dict | None:
+    """Slideshow com trilha já pronto no AI Studio (peça `slideshow` do manifesto), se houver."""
+    for d in aistudio.deliverables(creative):
+        if d.get("kind") == "slideshow":  # `deliverables` já traz só as peças prontas
+            return d
+    return None
+
+
+def _from_studio(session: Session, creative_id: int, piece: dict) -> dict:
+    try:
+        data, _ = aistudio.fetch_file(session, session.get(CreativeCampaign, creative_id), piece["id"])
+    except aistudio.AIStudioError as exc:
+        raise ReelError(str(exc)) from exc
+    if len(data) < 1024:
+        raise ReelError("o slideshow do AI Studio veio vazio")
+    final = reel_path(creative_id)
+    final.parent.mkdir(parents=True, exist_ok=True)
+    final.write_bytes(data)
+    return {"creative_id": creative_id, "source": "aistudio", "music": True, "seconds": piece.get("duration_s"),
+            "size_kb": len(data) // 1024}
+
+
+def build(session: Session, creative_id: int, *, runner=subprocess.run, ffmpeg: str | None = None, download=_download,
+          prefer_studio: bool = True) -> dict:
+    """Prefere o slideshow com música do AI Studio; sem ele (ou se falhar), monta o mudo localmente com o ffmpeg."""
     creative = session.get(CreativeCampaign, creative_id)
     if creative is None:
         raise ReelError(f"criativo {creative_id} não encontrado")
+    piece = studio_slideshow(creative) if prefer_studio else None
+    if piece:
+        try:
+            return _from_studio(session, creative_id, piece)
+        except ReelError as exc:
+            logger.warning("slideshow do AI Studio indisponível (%s); montando localmente", exc)
     exe = ffmpeg or shutil.which("ffmpeg")
     if not exe:
         raise ReelError("o ffmpeg não está instalado neste servidor")
@@ -163,4 +193,4 @@ def build(session: Session, creative_id: int, *, runner=subprocess.run, ffmpeg: 
         final = reel_path(creative_id)
         shutil.move(str(out), final)
     n = len(images)
-    return {"creative_id": creative_id, "slides": n, "seconds": round(n * SLIDE_S - (n - 1) * FADE_S, 1), "size_kb": final.stat().st_size // 1024}
+    return {"creative_id": creative_id, "source": "local", "music": False, "slides": n, "seconds": round(n * SLIDE_S - (n - 1) * FADE_S, 1), "size_kb": final.stat().st_size // 1024}

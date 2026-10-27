@@ -208,7 +208,7 @@ def test_images_only_has_no_video_and_uses_only_true_benefits(session, net):
     record = ai.create(session, product.id, formats="images", quality="standard")
     body = net.calls[-1][3]["json"]
     kinds = [(d["kind"], d.get("aspect_ratio")) for d in body["deliverables"]]
-    assert kinds == [("image", "4:5"), ("image", "1:1"), ("image", "9:16"), ("copy", None)] and "-i" in record.external_ref
+    assert kinds == [("image", "4:5"), ("image", "1:1"), ("image", "9:16"), ("copy", None), ("slideshow", None)] and "-i" in record.external_ref
     assert body["creative"]["music"]["enabled"] is False and "merchandising" in body["creative"]["notes"]
     assert "Não desenhar texto" in body["creative"]["notes"]
     assert body["product"]["benefits"] == ["Nota 4,8 na Shopee", "120 vendidos", "Preço abaixo do anterior (28% menos)"]  # só o que o marketTon sabe

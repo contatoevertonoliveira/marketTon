@@ -123,3 +123,36 @@ def test_a_real_video_is_made_with_the_right_size_and_duration(session, files):
                            capture_output=True, text=True)
     assert "width=1080" in probe.stdout and "height=1920" in probe.stdout and "codec_name=h264" in probe.stdout and "codec_name=aac" in probe.stdout
     assert abs(float(probe.stdout.split("duration=")[-1].split()[0]) - 11.7) < 0.6
+
+
+def _with_slideshow(c, status="ready"):
+    c.manifest = {"deliverables": [*c.manifest["deliverables"],
+                                   {"id": "s", "kind": "slideshow", "status": status, "aspect_ratio": "9:16", "duration_s": 12}]}
+
+
+def test_the_studio_slideshow_with_music_is_used_when_ready(session, monkeypatch):
+    c = _creative(session)
+    _with_slideshow(c)
+    monkeypatch.setattr(aistudio, "fetch_file", lambda s, creative, dlv: (b"mp4" * 1000 if dlv == "s" else b"", "video/mp4"))
+    info = reels.build(session, c.id, ffmpeg="/nao/existe")  # sem ffmpeg: nem precisa
+    assert (info["source"], info["music"]) == ("aistudio", True) and reels.reel_path(c.id).read_bytes() == b"mp4" * 1000
+
+
+def test_falls_back_to_the_local_silent_one_when_the_studio_fails_or_has_none(session, files, monkeypatch):
+    c = _creative(session)
+    assert reels.studio_slideshow(c) is None
+    _with_slideshow(c)
+
+    def boom(s, creative, dlv):
+        if dlv == "s":
+            raise aistudio.AIStudioError("fora do ar")
+        return files[dlv], "image/png"
+
+    monkeypatch.setattr(aistudio, "fetch_file", boom)
+    if not shutil.which("ffmpeg"):
+        pytest.skip("sem ffmpeg")
+    info = reels.build(session, c.id, download=lambda url: _img(800, 600, "orange"))
+    assert (info["source"], info["music"]) == ("local", False)
+    c.manifest = {"deliverables": [d for d in c.manifest["deliverables"] if d["kind"] != "slideshow"]}
+    _with_slideshow(c, status="generating")
+    assert reels.studio_slideshow(c) is None

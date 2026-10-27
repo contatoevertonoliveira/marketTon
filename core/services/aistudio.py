@@ -34,6 +34,8 @@ from core.services import storefront
 
 logger = logging.getLogger(__name__)
 
+SLIDESHOW_S = 12  # segundos do slideshow com trilha (o contrato aceita 10 a 15)
+
 SERVICE = "aistudio"
 TIMEOUT = 40
 DEFAULT_MAX_USD = 2.0
@@ -178,7 +180,9 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
     copy_piece = {"kind": "copy", "channel": "instagram", "fields": ["caption", "hashtags", "headline"]}
     if images_only:
         deliverables = [{"kind": "image", "channel": "feed", "aspect_ratio": "4:5"}, {"kind": "image", "channel": "feed", "aspect_ratio": "1:1"},
-                        {"kind": "image", "channel": "instagram", "aspect_ratio": "9:16"}, copy_piece]
+                        {"kind": "image", "channel": "instagram", "aspect_ratio": "9:16"}, copy_piece,
+                        # Slideshow 9:16 de 10 a 15 s com trilha, montado pelo estúdio (ffmpeg local, sem IA; trilha < US$ 0,01).
+                        {"kind": "slideshow", "duration_s": SLIDESHOW_S, "include_product_photos": True}]
     else:
         deliverables = [{"kind": "video", "channel": "instagram_reels", "aspect_ratio": "9:16", "duration_s": 15, "variants": hook_variants},
                         {"kind": "video", "channel": "feed", "aspect_ratio": "1:1", "duration_s": 15, "derive_from": "instagram_reels"},

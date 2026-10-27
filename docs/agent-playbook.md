@@ -178,7 +178,7 @@ produto que já teve post no dia. A verificação do meio-dia **não publica**: 
    mode="live", formats="images", notes="<o que corrigir>")`. Espere ficar pronto (`creative_status`). **No máximo 2 refeitos por produto**; o
    sistema também limita a 3 criativos ao vivo por produto em 24 h. Passou disso: registre no relatório (`report_add`, kind=alerta) e pule.
 4. **Se estiver certo:** `creative_review_submit(..., "image", "approved", "<o que conferi>")`.
-5. `reel_build(creative_id)` e `creative_review` de novo (agora vem a faixa com 4 quadros do slideshow): transições, imagem cortada, borrão
+5. `reel_build(creative_id)` (usa o slideshow COM MÚSICA do AI Studio quando o criativo tem; criativos antigos caem no slideshow mudo local, e a resposta traz `source` e `music`) e `creative_review` de novo (agora vem a faixa com 4 quadros do slideshow): transições, imagem cortada, borrão
    demais. Aprove ou recuse o `reel` do mesmo jeito (recusado: não publique o Reel; o post de imagem pode sair).
 6. `social_publish(creative_id, <next_kind>)` (sem `caption` usa o texto sugerido, que já tem o aviso de afiliado). Só **uma** por janela:
    o que ficar sobrando sai na próxima. A resposta traz também o resultado do Facebook; se `facebook_error` vier preenchido, registre no relatório.
