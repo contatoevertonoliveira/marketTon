@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { getJSON, postJSON } from "../lib/apiClient";
+import { API_BASE, getJSON, getTokens, postJSON } from "../lib/apiClient";
 
 const card = { background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)", marginBottom: 16 };
 const MODE = { sandbox: ["#eef0f6", "#525f7f", "teste (sandbox)"], live: ["#e5faf1", "#1a7a54", "ao vivo"] };
@@ -28,19 +28,36 @@ function Metric({ label, value, hint }) {
   );
 }
 
+// As peças ficam no AI Studio (rede interna): o marketTon as entrega, e o navegador as busca com o login.
+function useBlob(path) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!path) return undefined;
+    let revoke = null;
+    let alive = true;
+    fetch(`${API_BASE}${path}`, { headers: { Authorization: `Bearer ${getTokens().access}` } })
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+      .then((b) => { revoke = URL.createObjectURL(b); if (alive) setUrl(revoke); })
+      .catch(() => {});
+    return () => { alive = false; if (revoke) URL.revokeObjectURL(revoke); };
+  }, [path]);
+  return url;
+}
+
 function Piece({ d }) {
+  const src = useBlob(d.file);
   const box = { background: "#f6f9fc", borderRadius: 8, padding: 8, fontSize: 12, color: "#525f7f", maxWidth: 230 };
   if (d.kind === "video")
     return (
       <div style={box}>
-        {d.download ? <video src={d.download} controls preload="none" style={{ width: "100%", borderRadius: 6, background: "#000" }} /> : null}
+        {src ? <video src={src} controls preload="none" style={{ width: "100%", borderRadius: 6, background: "#000" }} /> : null}
         <div style={{ marginTop: 4 }}>Vídeo {d.aspect_ratio} {d.duration_s ? `· ${d.duration_s}s` : ""} {d.variant ? `· gancho ${d.variant}` : ""}</div>
       </div>
     );
   if (d.kind === "image" || d.kind === "thumbnail")
     return (
       <div style={box}>
-        {d.download ? <img src={d.download} alt="" style={{ width: "100%", borderRadius: 6 }} /> : null}
+        {src ? <img src={src} alt="" style={{ width: "100%", borderRadius: 6 }} /> : null}
         <div style={{ marginTop: 4 }}>{d.kind === "image" ? "Imagem" : "Miniatura"} {d.aspect_ratio}</div>
       </div>
     );
@@ -55,7 +72,7 @@ function Piece({ d }) {
       </div>
     );
   }
-  return <div style={box}>{d.kind}{d.download ? <> · <a href={d.download} target="_blank" rel="noreferrer">abrir</a></> : null}</div>;
+  return <div style={box}>{d.kind}{src ? <> · <a href={src} target="_blank" rel="noreferrer">abrir</a></> : null}</div>;
 }
 
 function AdActions({ ad, onDone, onMsg }) {

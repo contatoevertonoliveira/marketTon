@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 from sqlalchemy import select
@@ -298,13 +299,38 @@ def reconcile(session: Session) -> int:
 
 
 def deliverables(record: CreativeCampaign) -> list[dict]:
-    """As peças prontas do manifesto (sem as refeitas), resumidas para o agente e para a tela."""
+    """As peças prontas do manifesto (sem as refeitas), resumidas para o agente e para a tela.
+
+    `file` é o caminho, no marketTon, que entrega a peça (o AI Studio fica na rede interna; o endereço público dele pode não existir).
+    """
     out = []
     for d in (record.manifest or {}).get("deliverables", []):
         if d.get("status") == "ready":
             out.append({k: d.get(k) for k in ("id", "kind", "channel", "variant", "aspect_ratio", "duration_s", "content", "expires_at") if d.get(k) is not None}
-                       | ({"download": (d.get("url_signed") or {}).get("href") or d.get("url")} if d.get("kind") != "copy" else {}))
+                       | ({"download": (d.get("url_signed") or {}).get("href") or d.get("url"),
+                           "file": f"/creatives/{record.id}/files/{d.get('id')}"} if d.get("kind") != "copy" else {}))
     return out
+
+
+def fetch_file(session: Session, record: CreativeCampaign, deliverable_id: str) -> tuple[bytes, str]:
+    """Baixa uma peça pelo endereço interno do AI Studio (o link assinado do manifesto pode apontar para um host que só ele enxerga)."""
+    cfg = _require(session)
+    for d in (record.manifest or {}).get("deliverables", []):
+        if d.get("id") == deliverable_id and d.get("status") == "ready" and d.get("kind") != "copy":
+            href = (d.get("url_signed") or {}).get("href") or d.get("url") or ""
+            parsed = urlparse(href)
+            if not parsed.path:
+                break
+            origin = urlparse(cfg.base_url)
+            url = f"{origin.scheme}://{origin.netloc}{parsed.path}" + (f"?{parsed.query}" if parsed.query else "")
+            try:
+                response = requests.get(url, headers={"Authorization": f"Bearer {cfg.api_key}"}, timeout=TIMEOUT)
+            except requests.RequestException as exc:
+                raise AIStudioError(f"sem conexão com o AI Studio: {exc}", retryable=True) from exc
+            if not response.ok:
+                raise AIStudioError(f"o AI Studio recusou a peça (HTTP {response.status_code})")
+            return response.content, response.headers.get("Content-Type", "application/octet-stream")
+    raise AIStudioError("peça não encontrada ou ainda não está pronta", code="not_found")
 
 
 # ------------------------------------------------------------------------------ webhook ----------

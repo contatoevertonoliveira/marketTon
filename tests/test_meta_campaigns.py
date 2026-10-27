@@ -47,6 +47,8 @@ def meta(monkeypatch):
         path = url.split("/v21.0/")[1]
         m.posts.append((path, dict(data or {})))
         M.counter += 1
+        if path.endswith("/adimages"):
+            return _Resp(200, {"images": {"bytes": {"hash": "hash_abc"}}})
         return _Resp(200, {"id": f"id_{M.counter}"})
 
     def get(url, params=None, timeout=None):
@@ -56,6 +58,7 @@ def meta(monkeypatch):
         raise AssertionError(f"GET inesperado {url}")
 
     monkeypatch.setattr(mc.requests, "post", post)
+    monkeypatch.setattr(mc.aistudio, "fetch_file", lambda session, creative, dlv: (b"PNGDATA", "image/png"))
     monkeypatch.setattr(meta_ads.requests, "get", get)
     return m
 
@@ -114,12 +117,12 @@ def test_real_creation_makes_everything_paused_with_the_right_money(session, met
     creative = _creative(session)
     out = mc.create_ad(session, creative.id, daily_brl=12.5, days=3, dry_run=False, actor="claude_agent", now=NOW)
     paths = [p for p, _ in meta.posts]
-    assert paths == ["act_123/campaigns", "act_123/adsets", "act_123/adcreatives", "act_123/ads"]
+    assert paths == ["act_123/campaigns", "act_123/adsets", "act_123/adimages", "act_123/adcreatives", "act_123/ads"]
     statuses = {p: d.get("status") for p, d in meta.posts}
     assert statuses["act_123/campaigns"] == statuses["act_123/adsets"] == statuses["act_123/ads"] == "PAUSED"  # nada gasta ao criar
     adset = dict(meta.posts)["act_123/adsets"]
     assert adset["daily_budget"] == 1250 and adset["optimization_goal"] == "LINK_CLICKS" and adset["billing_event"] == "IMPRESSIONS"
-    assert "act_123/adcreatives" in paths and "picture" in dict(meta.posts)["act_123/adcreatives"]["object_story_spec"]
+    assert "act_123/adcreatives" in paths and "hash_abc" in dict(meta.posts)["act_123/adcreatives"]["object_story_spec"]
     ad = session.get(AdCampaign, out["ad_id"])
     assert (ad.status, ad.meta_status, ad.daily_budget_brl, ad.duration_days, ad.created_by) == ("paused", "PAUSED", 12.5, 3, "claude_agent") and ad.external_ad_id
 

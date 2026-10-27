@@ -1,7 +1,7 @@
 """Criativos de anúncio feitos pelo AI Studio: pedir, acompanhar e receber o resultado (webhook)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -72,6 +72,19 @@ class AdUpdate(BaseModel):
     clicks: int | None = None
     daily_budget_brl: float | None = None
     notes: str | None = None
+
+
+@router.get("/creatives/{creative_id}/files/{deliverable_id}", summary="Entrega uma peça do criativo (imagem ou vídeo) pelo marketTon")
+def creative_file(creative_id: int, deliverable_id: str, _: Principal = Depends(require("creatives.view")),
+                  session: Session = Depends(get_session)) -> Response:
+    creative = session.get(CreativeCampaign, creative_id)
+    if creative is None:
+        raise HTTPException(status_code=404, detail="criativo não encontrado")
+    try:
+        data, content_type = aistudio.fetch_file(session, creative, deliverable_id)
+    except AIStudioError as exc:
+        raise HTTPException(status_code=404 if exc.code == "not_found" else 502, detail=str(exc)) from exc
+    return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.get("/creatives/history", summary="Histórico gerencial: criativos, produto, anúncios e resultados")

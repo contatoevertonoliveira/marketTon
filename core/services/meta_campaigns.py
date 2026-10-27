@@ -14,6 +14,7 @@ Regras que valem aqui, todas em código e não em confiança:
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -119,10 +120,11 @@ def _guard(session: Session, creative: CreativeCampaign, daily_brl: float, days:
 # ----------------------------------------------------------------------------- criar -------------
 
 
-def _creative_image(creative: CreativeCampaign) -> str | None:
+def _creative_image(creative: CreativeCampaign) -> dict | None:
+    """A imagem do anúncio: a primeira peça `image` pronta (o formato 4:5 vem primeiro, o melhor para o feed)."""
     for d in aistudio.deliverables(creative):
-        if d.get("kind") == "image" and d.get("download", "").startswith("https://"):
-            return d["download"]
+        if d.get("kind") == "image" and d.get("download"):
+            return d
     return None
 
 
@@ -137,8 +139,8 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
     """O que seria enviado à Meta (sem enviar). Valida tudo, inclusive as travas."""
     if creative.status not in ("completed", "partial"):
         raise AdsError(f"o criativo está “{creative.status}”: só dá para anunciar criativo pronto.")
-    image = _creative_image(creative)
-    if not image:
+    piece = _creative_image(creative)
+    if not piece:
         raise AdsError("o criativo não tem imagem pronta (peça `image` com endereço de download).")
     copy = _creative_copy(creative)
     headline = str(copy.get("headline") or "").strip()[:40]
@@ -153,7 +155,7 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
     tag = f"mural-{creative.external_ref}"[:80]
     url = f"{cfg.public_url}/p/p{product.id}?utm_source=meta&utm_medium=paid&utm_campaign={tag}"
     return {"name": tag, "objective": "OUTCOME_TRAFFIC", "daily_budget_brl": daily_brl, "days": days, "headline": headline, "message": caption,
-            "image": image, "link": url, "targeting": {"geo_locations": {"countries": ["BR"]}, "age_min": 18, "age_max": 65,
+            "image": piece["download"], "image_id": piece["id"], "link": url, "targeting": {"geo_locations": {"countries": ["BR"]}, "age_min": 18, "age_max": 65,
                                                            "publisher_platforms": ["facebook", "instagram"]}}
 
 
@@ -180,7 +182,16 @@ def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int
                       billing_event="IMPRESSIONS", optimization_goal="LINK_CLICKS", bid_strategy="LOWEST_COST_WITHOUT_CAP",
                       targeting=json.dumps(plan["targeting"]), status="PAUSED")
         ad.external_adset_id = adset["id"]
-        story = {"page_id": page, "link_data": {"link": plan["link"], "message": plan["message"], "name": plan["headline"], "picture": plan["image"],
+        # A Meta não alcança o AI Studio (rede interna): o marketTon baixa a imagem e a envia à conta de anúncios.
+        try:
+            data, _ = aistudio.fetch_file(session, creative, plan["image_id"])
+        except aistudio.AIStudioError as exc:
+            raise AdsError(f"não foi possível baixar a imagem do criativo: {exc}") from exc
+        uploaded = _post(f"{account}/adimages", token, bytes=base64.b64encode(data).decode())
+        image_hash = next(iter((uploaded.get("images") or {}).values()), {}).get("hash")
+        if not image_hash:
+            raise AdsError("a Meta não devolveu o código da imagem enviada")
+        story = {"page_id": page, "link_data": {"link": plan["link"], "message": plan["message"], "name": plan["headline"], "image_hash": image_hash,
                                                 "call_to_action": {"type": "LEARN_MORE", "value": {"link": plan["link"]}}}}
         adcreative = _post(f"{account}/adcreatives", token, name=plan["name"], object_story_spec=json.dumps(story))
         made = _post(f"{account}/ads", token, name=plan["name"], adset_id=adset["id"], creative=json.dumps({"creative_id": adcreative["id"]}), status="PAUSED")
