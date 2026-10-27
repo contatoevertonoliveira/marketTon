@@ -9,6 +9,7 @@ import Opportunities from "./pages/Opportunities";
 import Profile from "./pages/Profile";
 import Vitrine from "./pages/Vitrine";
 import Criativos from "./pages/Criativos";
+import Relatorios from "./pages/Relatorios";
 import AgentSwitch from "./components/AgentSwitch";
 import AgentChat from "./pages/AgentChat";
 import Login from "./pages/Login";
@@ -24,6 +25,7 @@ const PAGES = [
   { id: "vitrine", label: "Vitrine (loja)", icon: "🛍️" },
   { id: "criativos", label: "Criativos e anúncios", icon: "🎬" },
   { id: "agente", label: "Agente (chat)", icon: "🤖" },
+  { id: "relatorios", label: "Relatórios do agente", icon: "📋" },
   { id: "integracoes", label: "Integrações", icon: "🔌" },
   { id: "perfil", label: "Perfil", icon: "👤" },
 ];
@@ -131,6 +133,13 @@ export default function App() {
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Criativos e anúncios</h3>
             <Criativos />
+          </div>
+        );
+      case "relatorios":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Relatórios do agente</h3>
+            <Relatorios />
           </div>
         );
       case "vitrine":

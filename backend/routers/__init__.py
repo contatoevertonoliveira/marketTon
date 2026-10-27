@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from backend.routers import (
     agent,
+    agent_reports,
     auth,
     catalog,
     creative,
@@ -39,11 +40,13 @@ API_ROUTERS = [
     links.router,
     storefront.router,
     creatives.router,
+    agent_reports.router,
 ]
 
 __all__ = [
     "API_ROUTERS",
     "agent",
+    "agent_reports",
     "auth",
     "catalog",
     "creative",

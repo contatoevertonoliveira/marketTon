@@ -106,23 +106,29 @@ def test_operator_message_triggers_a_chat_run_with_a_cooldown(ready):
     assert ar.decide_trigger(ready, now=later) is None
 
 
-def test_daily_routines_only_in_independent_autonomy_and_once_per_period(ready):
+def test_four_daily_checks_only_in_independent_autonomy_and_once_per_slot(ready):
     assert ar.decide_trigger(ready, now=at(9)) is None  # supervisionado: sem rotina sozinha
     set_agent_autonomy(ready, level="independent", actor="x")
     ready.commit()
 
     assert ar.decide_trigger(ready, now=at(3)) is None  # de madrugada não roda
-    assert ar.decide_trigger(ready, now=at(9)) == "morning"
-    assert ar.decide_trigger(ready, now=at(20)) is None  # noite sem venda, clique nem mensagem: nada a analisar
-
-    agent_chat.post_message(ready, author="user", text="como foi o dia?")  # sinal novo...
-    agent_chat.mark_read(ready, "agent")  # ...que o agente já leu (senão seria uma rodada de chat)
-    ready.commit()
-    assert ar.decide_trigger(ready, now=at(20)) == "evening"
-
+    assert ar.decide_trigger(ready, now=at(9)) == "morning"  # a primeira do dia é a rotina completa
     now_local = datetime.now(UTC).astimezone()
-    _run(ready, "morning", started=now_local)
-    assert ar.decide_trigger(ready, now=now_local.replace(hour=9, minute=0)) is None  # manhã de hoje já foi
+    _run(ready, "morning", started=at(8, 5).astimezone(UTC))
+    assert ar.decide_trigger(ready, now=at(9)) is None  # este horário já foi feito
+    assert ar.decide_trigger(ready, now=at(12)) == "check"  # 12h: verificação
+    _run(ready, "check", started=at(12, 1).astimezone(UTC))
+    assert ar.decide_trigger(ready, now=at(13)) is None
+    assert ar.decide_trigger(ready, now=at(16)) == "check" and ar.decide_trigger(ready, now=at(20)) == "check"
+    assert ar.check_hours() == [8, 12, 16, 20]
+
+
+def test_server_back_late_runs_one_check_not_a_queue_of_missed_ones(ready):
+    set_agent_autonomy(ready, level="independent", actor="x")
+    ready.commit()
+    assert ar.decide_trigger(ready, now=at(17)) == "morning"  # nada feito hoje: faz a completa uma vez
+    _run(ready, "morning", started=at(17).astimezone(UTC))
+    assert ar.decide_trigger(ready, now=at(17)) is None  # e as de 12h e 16h perdidas não entram na fila
 
 
 def test_only_one_run_at_a_time_and_stale_running_rows_do_not_block(ready):
@@ -209,7 +215,7 @@ def test_expired_claude_login_becomes_a_chat_request_renewed_instead_of_duplicat
 
 def test_other_failures_timeouts_and_start_errors_are_recorded_and_reported(ready, factory, fake_claude):
     run = ar.execute_run(factory, "morning", runner=lambda *a, **k: _Proc(out="x", err="boom", code=2))
-    timed = ar.execute_run(factory, "evening", runner=lambda *a, **k: (_ for _ in ()).throw(subprocess.TimeoutExpired("claude", 5)))
+    timed = ar.execute_run(factory, "morning", runner=lambda *a, **k: (_ for _ in ()).throw(subprocess.TimeoutExpired("claude", 5)))
     oserr = ar.execute_run(factory, "manual", runner=lambda *a, **k: (_ for _ in ()).throw(OSError("sem acesso")))
     with factory() as s:
         assert (s.get(AgentRun, run).status, s.get(AgentRun, timed).status, s.get(AgentRun, oserr).status) == ("failed", "timeout", "failed")
@@ -261,7 +267,7 @@ def test_runtime_status_reports_the_last_runs_and_login_wait(ready, factory, fak
     with factory() as s:
         status = ar.runtime_status(s)
     assert status["waiting_for_login"] is True and status["claude_found"] is True
-    assert status["runs"][0]["status"] == "needs_login" and status["schedule"] == {"morning_from_hour": 8, "evening_from_hour": 19}
+    assert status["runs"][0]["status"] == "needs_login" and status["schedule"] == {"check_hours": [8, 12, 16, 20]}
     assert status["usage_today"]["runs"] == 1 and status["usage_today"]["cost_usd"] == 0
 
 
@@ -312,7 +318,7 @@ def test_daily_caps_stop_automatic_runs_but_not_the_manual_one(ready):
     now = datetime.now(UTC).astimezone()
     assert ar.decide_trigger(ready, now=now) == "chat"
     for _ in range(8):  # teto de rodadas automáticas por dia
-        _run(ready, "evening", started=now - timedelta(minutes=30))
+        _run(ready, "check", started=now - timedelta(minutes=30))
     assert ar.decide_trigger(ready, now=now) is None and ar.budget_exhausted(ready, now)
     assert ar.decide_trigger(ready, now=now, manual=True) == "manual"
 
@@ -328,3 +334,52 @@ def test_new_signal_means_an_operator_message_a_sale_or_a_click_since_the_last_r
     ready.commit()
     assert ar._has_new_signal(ready, datetime.now(UTC) - timedelta(hours=1)) is True
 
+
+
+# ----------------------------------------------------------------- verificação sem IA + relatório ---------
+
+
+def test_quiet_check_ends_without_calling_claude_and_leaves_a_report(ready, factory, fake_claude):
+    from core.db.agent_reports import AgentReport
+
+    calls = []
+    run_id = ar.execute_run(factory, "check", runner=lambda *a, **k: calls.append(1))
+    assert calls == []  # nada a analisar: nenhum token
+    with factory() as s:
+        run = s.get(AgentRun, run_id)
+        report = s.scalar(select(AgentReport))
+        assert run.status == "skipped" and run.cost_usd is None
+        assert report.kind == "monitor" and report.author == "system" and "tudo normal" in report.title
+        assert ar.usage_today(s)["runs"] == 0  # a verificação sem IA não gasta rodada do teto
+
+
+def test_check_with_news_calls_claude_with_the_digest_and_reports_the_answer(ready, factory, fake_claude):
+    from core.db.agent_reports import AgentReport
+    from core.db.tracking import Sale  # noqa: F401
+
+    seen = {}
+
+    def runner(cmd, **k):
+        seen["prompt"] = cmd[2]
+        return _Proc(out="vendi 1 e ajustei X", err="", code=0)
+
+    with factory() as s:
+        s.add(AgentMessage(author="user", kind="message", text="x", read_by_user=True, read_by_agent=True))
+        from core.db.service_credentials import ServiceCredential
+        s.add(ServiceCredential(service="meta_ads", enabled=True, values={}, last_check_status="error", last_check_message="token expirou"))
+        s.commit()
+    ar.execute_run(factory, "check", runner=runner)
+    assert "token expirou" in seen["prompt"] and "VERIFICAÇÃO" in seen["prompt"]
+    with factory() as s:
+        assert s.scalar(select(AgentReport).where(AgentReport.kind == "resumo")).body == "vendi 1 e ajustei X"
+
+
+def test_agent_reports_api_validates_kind_and_title(ready):
+    from core.services import agent_monitor as m
+
+    r = m.add_report(ready, kind="ideia", title="  Kit de pet em Reels  ", body="mostrar antes e depois")
+    assert r.title == "Kit de pet em Reels" and m.list_reports(ready, kind="ideia")[0]["id"] == r.id
+    with pytest.raises(m.ReportError):
+        m.add_report(ready, kind="qualquer", title="x")
+    with pytest.raises(m.ReportError):
+        m.add_report(ready, kind="achado", title="  ")

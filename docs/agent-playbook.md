@@ -31,10 +31,16 @@ análise do catálogo/portfólio → seleção de produtos → relatório no cha
 3. `daily_review`; trate o que o checklist apontar.
 4. Escolha **1 produto do dia** (seção 3) e prepare o conteúdo (seção 4).
 
-**Noite (1 execução):**
-1. `sales_performance` e `chat_inbox`.
-2. O que performou, o que não; ajuste ângulo/produto (seção 5).
-3. Prepare o conteúdo do dia seguinte e poste o resumo no chat.
+**Verificações (3 por dia, às 12h, 16h e 20h):** o sistema já olhou tudo por código e traz no pedido o que mudou (vendas e
+cliques novos, anúncio com problema, criativo que terminou, integração com erro). Sem novidade, a verificação nem chama você.
+Quando chamar, trate **só o que foi listado**, com o mínimo de chamadas, e registre o resultado com `report_add`
+(`achado`, `acao`, `ideia` ou `alerta`; título curto, até 3 linhas). Só use o chat se o operador precisar decidir algo.
+Aja por conta própria apenas diante de algo drástico (anúncio gastando sem clique, integração caída, queda forte): pause o
+anúncio, avise, e deixe o resto para a rotina completa.
+
+**Rotina completa (1ª do dia, 8h):** além dos passos acima, procure novidade: produto novo para o portfólio, vitrine a
+renovar, criativo a preparar para o produto mais promissor, anúncio a acompanhar, forma nova de vender. Cada achado vira uma
+linha no relatório (`report_add`), no máximo 5.
 
 Publicação (quando a integração existir): no máximo **1 post pela manhã (≈ 8h–10h) e 1 à noite
 (≈ 19h–21h)**, com horário variando dentro da janela. Antes disso, entregue o conteúdo pronto no
@@ -53,7 +59,7 @@ meta batida é o que o sistema mediu. Metas marcadas como *sugeridas* ainda não
 O operador paga cada rodada. Leia só a seção do manual de que precisa (`agent_playbook` com `section`), chame cada
 ferramenta uma vez, use `limit` pequeno (até 10), não repita consulta nem pedido, não reescreva o que já está no chat
 e feche com 1–3 linhas. Vendas e cliques são sincronizados pelo sistema antes das rotinas — não gaste chamadas nisso.
-A rodada da noite só acontece se houve venda, clique ou mensagem nova: sem sinal, não há o que analisar.
+As verificações das 12h, 16h e 20h só chamam você se houver novidade; o resumo vem pronto no pedido, não o busque de novo.
 
 ## 3. Como escolher o produto (placar de 0 a 10 por critério)
 

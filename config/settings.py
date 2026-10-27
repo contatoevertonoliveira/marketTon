@@ -88,8 +88,7 @@ class Settings(BaseSettings):
     agent_autorun: bool = True
     agent_claude_bin: str = ""  # vazio = procura `claude` no PATH
     agent_run_timeout_minutes: int = 25
-    agent_morning_hour: int = 8  # a rotina da manhã roda a partir desta hora local
-    agent_evening_hour: int = 19  # e a da noite a partir desta
+    agent_check_hours: str = "8,12,16,20"  # horas locais das verificações; a 1ª do dia é a rotina completa
     # Custo-benefício: modelo/esforço sob medida, tetos por rodada e por dia (valores em US$, preço de tabela da API —
     # em plano de assinatura servem como medida de consumo). Rodada que estoura o teto é encerrada.
     agent_model: str = "sonnet"

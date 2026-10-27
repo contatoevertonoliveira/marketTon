@@ -10,7 +10,7 @@ A Meta é simulada. O que os testes travam:
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import timedelta, UTC, datetime
 
 import pytest
 
@@ -22,7 +22,7 @@ from core.db.service_credentials import ServiceCredential
 from core.services import meta_ads
 from core.services import meta_campaigns as mc
 
-NOW = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)  # quinta-feira
+NOW = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)  # hoje ao meio-dia: created_at do banco é a hora real
 
 
 class _Resp:
@@ -182,7 +182,7 @@ def test_only_activate_turns_on_and_it_sets_the_end_and_rechecks_the_cap(session
     ad = mc.activate(session, ad_id, actor="operador", now=NOW)
     assert ad.status == "active" and ad.started_at == NOW
     ends = [d["end_time"] for path, d in meta.posts if "end_time" in d]
-    assert path_ids(meta) and ends == [int(datetime(2026, 10, 25, 12, 0, tzinfo=UTC).timestamp())]  # 3 dias depois
+    assert path_ids(meta) and ends == [int((NOW + timedelta(days=3)).timestamp())]  # 3 dias depois
     assert {d["status"] for _, d in meta.posts if "status" in d} == {"ACTIVE"}
     with pytest.raises(mc.AdsError, match="só dá para ligar"):
         mc.activate(session, ad_id, actor="operador", now=NOW)  # já ativo
@@ -205,8 +205,8 @@ def test_metrics_come_from_meta_and_a_finished_flight_is_marked_ended(session, m
     ad_id = mc.create_ad(session, _creative(session).id, daily_brl=10, days=1, dry_run=False, now=NOW)["ad_id"]
     ad = mc.activate(session, ad_id, actor="operador", now=NOW)
     meta.gets[ad.external_ad_id] = {"effective_status": "ACTIVE", "insights": {"data": [{"spend": "7.35", "impressions": "1800", "inline_link_clicks": "41"}]}}
-    assert mc.sync_metrics(session, now=datetime(2026, 10, 22, 20, 0, tzinfo=UTC)) == 1
+    assert mc.sync_metrics(session, now=NOW + timedelta(hours=8)) == 1
     assert (ad.spent_brl, ad.impressions, ad.clicks, ad.status, ad.meta_status) == (7.35, 1800, 41, "active", "ACTIVE")
     meta.gets[ad.external_ad_id] = {"effective_status": "ACTIVE", "insights": {"data": []}}  # sem linha: nada muda, nada é inventado
-    mc.sync_metrics(session, now=datetime(2026, 10, 23, 13, 0, tzinfo=UTC))
+    mc.sync_metrics(session, now=NOW + timedelta(days=1, hours=1))
     assert (ad.spent_brl, ad.status) == (7.35, "ended")  # passou do fim da veiculação

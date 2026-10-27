@@ -63,12 +63,12 @@ function Bubble({ m, onStatus }) {
 }
 
 
-const TRIGGERS = { activation: "ativação", chat: "chat", morning: "rotina da manhã", evening: "rotina da noite", manual: "manual" };
+const TRIGGERS = { activation: "ativação", chat: "chat", morning: "rotina completa do dia", check: "verificação", manual: "manual" };
 const usd = (v) => (v == null ? null : `US$ ${Number(v).toFixed(v < 0.1 ? 3 : 2)}`);
 const kTokens = (n) => (n == null ? null : n >= 1000 ? `${Math.round(n / 1000)} mil` : String(n));
 const RUN_STATUS = {
   ok: ["✓", "#2dce89", "concluída"], failed: ["✗", "#f5365c", "falhou"], timeout: ["⏱", "#f5365c", "estourou o tempo"],
-  needs_login: ["🔑", "#f6c944", "pediu login"], running: ["…", "#5e72e4", "em execução"],
+  needs_login: ["🔑", "#f6c944", "pediu login"], skipped: ["✓", "#8898aa", "tudo normal (sem IA)"], running: ["…", "#5e72e4", "em execução"],
 };
 
 function RuntimePanel() {
@@ -102,7 +102,7 @@ function RuntimePanel() {
   else if (!rt.claude_found) state = ["#c31e3f", "#fef1f4", "Claude Code não encontrado nesta máquina."];
   else if (rt.waiting_for_login) state = ["#8a6d1d", "#fff8e6", "Aguardando o login do Claude Code: abra um terminal, rode claude e use /login. O agente volta sozinho depois."];
   else if (rt.running_now) state = ["#3b4fb8", "#eef2ff", `Executando agora: ${TRIGGERS[rt.running_now] || rt.running_now}…`];
-  else state = ["#1a7a54", "#e5faf1", `Em segundo plano: roda sozinho na ativação, quando você escreve no chat e (autonomia independente) na rotina da manhã (a partir das ${rt.schedule.morning_from_hour}h) e da noite (a partir das ${rt.schedule.evening_from_hour}h).`];
+  else state = ["#1a7a54", "#e5faf1", `Em segundo plano: roda sozinho na ativação, quando você escreve no chat e (autonomia independente) em verificações às ${(rt.schedule.check_hours || []).join("h, ")}h (a primeira é a rotina completa; as outras só chamam a IA se houver novidade).`];
 
   return (
     <div style={card}>

@@ -33,6 +33,7 @@ from core.db.jobs import Job, JobEvent
 from core.db.learning import PredictionOutcome, ScoreCalibration
 from core.db.commission_rates import CommissionRate
 from core.db.agent_chat import AgentMessage
+from core.db.agent_reports import AgentReport
 from core.db.agent_runs import AgentRun
 from core.db.app_settings import AppSetting
 from core.db.marketplace_credentials import MarketplaceCredential
@@ -108,6 +109,7 @@ __all__ = [
     # credenciais de marketplace
     "CommissionRate",
     "AgentMessage",
+    "AgentReport",
     "AgentRun",
     "AppSetting",
     "MarketplaceCredential",

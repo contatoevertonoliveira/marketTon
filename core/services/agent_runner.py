@@ -5,7 +5,8 @@ há trabalho, e só então:
 
 * **ativação** — há uma tarefa de ativação aberta;
 * **chat** — o operador escreveu e o agente ainda não leu (com intervalo mínimo entre rodadas);
-* **manhã / noite** — rotinas diárias, só em autonomia `independent` (já calibrada);
+* **verificações** — `AGENT_CHECK_HOURS` (padrão 8, 12, 16 e 20h), só em autonomia `independent`. A 1ª do dia é a rotina
+  completa (`morning`); as outras (`check`) olham o sistema por código e só chamam o Claude se algo merece atenção;
 * **manual** — o operador pediu "rodar agora".
 
 Segurança — o que o Claude sem tela enxerga e pode fazer:
@@ -24,7 +25,8 @@ Custo-benefício (o foco de quem paga cada token):
 * **modelo e esforço sob medida** (`AGENT_MODEL`, `AGENT_EFFORT*`): responder o chat usa esforço baixo;
 * **o código faz o que não precisa de IA**: vendas e cliques são sincronizados pelo backend antes da rodada;
 * **tetos**: orçamento por rodada (`--max-budget-usd`), por dia e número de rodadas por dia;
-* **não roda à toa**: a rotina da noite só roda se houve venda, clique ou mensagem desde a última rodada;
+* **não roda à toa**: cada verificação faz o resumo por código (`agent_monitor.digest`); sem novidade, termina sem gastar token
+  e fica no relatório;
 * **medição**: custo, turnos e tokens de cada rodada ficam registrados e aparecem na tela.
 
 Login do Claude Code: acontece uma única vez, no terminal (`claude` → `/login`), e fica salvo na conta do
@@ -54,7 +56,8 @@ from core.db.agent_chat import AgentMessage
 from core.db.agent_runs import AgentRun
 from core.db.auth import Role, User
 from core.db.tracking import ClickEvent, Sale
-from core.services import agent_chat
+from core.db.agent_reports import AgentReport
+from core.services import agent_chat, agent_monitor
 from core.services.app_settings import agent_autonomy, agent_mode_enabled
 from core.services.auth import issue_agent_session
 
@@ -66,7 +69,6 @@ CHAT_COOLDOWN = timedelta(minutes=5)
 LOGIN_RETRY = timedelta(minutes=15)
 OUTPUT_TAIL = 3000
 PREFETCH_EVERY = timedelta(minutes=30)  # no máximo uma sincronização "grátis" a cada tanto
-MORNING_UNTIL, EVENING_UNTIL = 14, 24  # a rotina de cada turno ainda vale até estas horas locais
 
 # Único servidor liberado. Os nomes das ferramentas ficam `mcp__marketton__<ferramenta>`.
 ALLOWED_TOOLS = ["mcp__marketton"]
@@ -94,15 +96,16 @@ PROMPTS = {
         "só se precisar de uma regra), responda com `chat_send` e faça o que ele pediu dentro das suas ferramentas e limites."
     ),
     "morning": (
-        "Rotina da MANHÃ do marketTon (`agent_playbook` com section=\"1\" e section=\"2\"): `chat_inbox`, `system_health`, "
+        "Rotina COMPLETA do dia do marketTon (`agent_playbook` com section=\"1\" e section=\"2\"): `chat_inbox`, `system_health`, "
         "`goals_status` (metas do mês), `daily_review` (vendas e cliques já foram sincronizados pelo sistema: resuma as vendas novas), trate o que o "
-        "checklist apontar, escolha o produto do dia e deixe o plano de conteúdo no chat. Cobre os recursos pendentes mais "
-        "importantes com `request_resource` (renova, não duplica)."
+        "checklist apontar, escolha o produto do dia, veja se há produto novo para o portfólio, criativo a preparar ou anúncio a acompanhar. "
+        "Cobre os recursos pendentes mais importantes com `request_resource` (renova, não duplica). "
+        "Registre no relatório (`report_add`, no máximo 5 linhas): o que achou (`achado`), o que fez (`acao`) e ideias novas de venda (`ideia`)."
     ),
-    "evening": (
-        "Rotina da NOITE do marketTon (`agent_playbook` com section=\"2\"): `chat_inbox`, `goals_status`, `sales_performance` (vendas e "
-        "cliques já foram sincronizados pelo sistema), o que performou e o que não, ajuste de ângulo/produto, plano do dia "
-        "seguinte. Registre o resumo no chat."
+    "check": (
+        "VERIFICAÇÃO do marketTon (não é a rotina completa). O sistema já olhou tudo por código e achou o que segue; trate SÓ isso, "
+        "com o mínimo de chamadas. Se precisar de uma regra, `agent_playbook` com `section`. Registre no relatório (`report_add`) o que "
+        "achou/fez; escreva no chat (`chat_send`) só se o operador precisar decidir algo."
     ),
     "manual": (
         "O operador pediu uma rodada agora. Leia `chat_inbox` e `agent_playbook` (section=\"2\"), execute a rotina do "
@@ -177,15 +180,23 @@ def decide_trigger(session: Session, *, now: datetime | None = None, manual: boo
     if agent_autonomy(session) == "independent":
         midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
         today = _runs_since(session, midnight)
-        done = {r.trigger for r in today}
-        morning_from, evening_from = settings.agent_morning_hour, settings.agent_evening_hour
-        if evening_from <= now_local.hour < EVENING_UNTIL and "evening" not in done:
-            since = max([midnight] + [_local(r.started_at) for r in today if r.status == "ok"])
-            if _has_new_signal(session, since):  # sem venda, clique nem mensagem nova, a noite não teria o que analisar
-                return "evening"
-        if morning_from <= now_local.hour < MORNING_UNTIL and "morning" not in done:
-            return "morning"
+        passed = [h for h in check_hours() if h <= now_local.hour]
+        if passed:  # no máximo uma verificação por horário: se o servidor ficou fora do ar, não recupera as perdidas em fila
+            slot_start = midnight.replace(hour=passed[-1])
+            routine = [r for r in today if r.trigger in ("morning", "check")]
+            if not any((_local(r.started_at) or slot_start) >= slot_start for r in routine):
+                return "check" if any(r.trigger == "morning" for r in today) else "morning"
     return None
+
+
+def check_hours() -> list[int]:
+    """Horas locais das verificações diárias (`AGENT_CHECK_HOURS`), em ordem e sem repetição."""
+    hours = set()
+    for part in get_settings().agent_check_hours.split(","):
+        part = part.strip()
+        if part.isdigit() and 0 <= int(part) <= 23:
+            hours.add(int(part))
+    return sorted(hours) or [8]
 
 
 def _aware(dt: datetime | None) -> datetime | None:
@@ -209,7 +220,7 @@ def usage_today(session: Session, now_local: datetime | None = None) -> dict:
     runs = _runs_since(session, midnight)
     settings = get_settings()
     return {
-        "runs": len([r for r in runs if r.trigger != "manual"]),
+        "runs": len([r for r in runs if r.trigger != "manual" and r.status != "skipped"]),
         "max_runs": settings.agent_max_runs_per_day,
         "cost_usd": round(sum(r.cost_usd or 0 for r in runs), 4),
         "daily_budget_usd": settings.agent_daily_budget_usd,
@@ -377,9 +388,22 @@ def execute_run(
         token = issue_agent_session(session, user)
         session.commit()
 
-    if trigger in ("morning", "evening", "manual"):
+    if trigger in ("morning", "check", "manual"):
         prefetch(session_factory)
-    command = build_command(claude, PROMPTS[trigger] + COMMON, _write_mcp_config(), trigger=trigger)
+    prompt = PROMPTS[trigger]
+    if trigger == "check":
+        with session_factory() as session:
+            digest = agent_monitor.digest(session, _last_check_time(session, run_id))
+            text = agent_monitor.digest_text(digest)
+            if not digest["notable"]:  # nada a analisar: encerra sem chamar o Claude (zero token)
+                run = session.get(AgentRun, run_id)
+                _finish(session, run, status="skipped", output=text)
+                agent_monitor.add_report(session, kind="monitor", author="system", run_id=run_id,
+                                         title=f"Verificação das {_local(datetime.now(UTC)).hour}h: tudo normal", body=text)
+                session.commit()
+                return run_id
+        prompt += f"\n\nO que o sistema encontrou: {text}."
+    command = build_command(claude, prompt + COMMON, _write_mcp_config(), trigger=trigger)
     started = datetime.now(UTC)
     try:
         kwargs = {"capture_output": True, "stdin": subprocess.DEVNULL, "text": True, "encoding": "utf-8", "errors": "replace",
@@ -413,6 +437,11 @@ def execute_run(
                 "da sua conta expirou ou nunca foi feito.\nComo fornecer: abra um terminal, rode `claude` e use `/login`. "
                 "Depois disso o agente volta a trabalhar sozinho (o sistema tenta de novo em alguns minutos)."),
                 meta={"resource": "login_claude_code", "category": "credencial"})
+        elif status == "ok" and trigger in ("morning", "check"):
+            # Garante a linha no relatório mesmo que o agente não tenha usado `report_add`.
+            label = "Rotina completa" if trigger == "morning" else "Verificação"
+            agent_monitor.add_report(session, kind="resumo", run_id=run_id, title=f"{label} das {_local(datetime.now(UTC)).hour}h",
+                                     body=out)
         elif status in ("failed", "timeout"):
             agent_chat.post_message(session, author="system", kind="alert",
                                     text=f"⚠️ Rodada do agente ({trigger}) terminou com problema: {error}. Veja o painel de execução em segundo plano.")
@@ -420,12 +449,20 @@ def execute_run(
     return run_id
 
 
+def _last_check_time(session: Session, current_run_id: int) -> datetime:
+    """Desde quando olhar: a última rotina/verificação anterior (a de hoje ou de ontem), ou 24h atrás."""
+    previous = session.scalar(select(AgentRun).where(
+        AgentRun.trigger.in_(("morning", "check")), AgentRun.id < current_run_id,
+        AgentRun.status.in_(("ok", "skipped"))).order_by(AgentRun.id.desc()).limit(1))
+    return _aware(previous.started_at) if previous else datetime.now(UTC) - timedelta(hours=24)
+
+
 def _finish(session: Session, run: AgentRun, *, status: str, error: str | None = None, exit_code: int | None = None,
             output: str | None = None, started: datetime | None = None) -> None:
     now = datetime.now(UTC)
     run.status, run.error, run.exit_code = status, (error or None), exit_code
     run.finished_at = now
-    run.duration_seconds = round((now - (started or run.started_at)).total_seconds(), 1)
+    run.duration_seconds = round((now - _aware(started or run.started_at)).total_seconds(), 1)
     run.output_tail = _tail(output)
     session.flush()
 
@@ -511,7 +548,7 @@ def runtime_status(session: Session) -> dict:
         "usage_today": usage_today(session),
         "settings": {"model": get_settings().agent_model or "padrão do Claude Code", "effort": get_settings().agent_effort,
                      "effort_chat": get_settings().agent_effort_chat, "run_budget_usd": get_settings().agent_run_budget_usd},
-        "schedule": {"morning_from_hour": get_settings().agent_morning_hour, "evening_from_hour": get_settings().agent_evening_hour},
+        "schedule": {"check_hours": check_hours()},
         "runs": [{
             "id": r.id, "trigger": r.trigger, "status": r.status,
             "started_at": r.started_at.isoformat(), "finished_at": r.finished_at.isoformat() if r.finished_at else None,

@@ -281,6 +281,13 @@ def chat_send(text: str, kind: str = "message"):
 
 
 @mcp.tool(annotations=WRITE)
+def report_add(kind: str, title: str, body: str = ""):
+    """Registra uma linha no relatório do operador (página Relatórios). `kind`: achado (o que viu), acao (o que fez),
+    ideia (nova forma de vender) ou alerta (precisa de atenção). `title` curto; `body` em até 3 linhas. Não repita o chat."""
+    return _run(lambda: _client.post("/agent/reports", {"kind": kind, "title": title, "body": body or None}))
+
+
+@mcp.tool(annotations=WRITE)
 def request_resource(resource: str, why: str, how_to_provide: str):
     """Pede ao operador um recurso, acesso ou ferramenta que falta (aparece como cartão no chat).
 

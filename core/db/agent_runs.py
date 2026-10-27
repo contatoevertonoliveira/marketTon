@@ -8,8 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from core.db.base import Base, TimestampMixin
 
-TRIGGERS = ("activation", "chat", "morning", "evening", "manual")
-STATUSES = ("running", "ok", "failed", "needs_login", "timeout")
+TRIGGERS = ("activation", "chat", "morning", "check", "manual")
+STATUSES = ("running", "ok", "failed", "needs_login", "timeout", "skipped")
 
 
 class AgentRun(Base, TimestampMixin):
