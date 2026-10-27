@@ -26,7 +26,7 @@ from config.settings import get_settings
 from core.db.catalog import Product
 from core.db.creatives import CreativeCampaign
 from core.db.social import SocialPost
-from core.services import aistudio, meta_ads, meta_campaigns, storefront
+from core.services import aistudio, meta_ads, meta_campaigns, reels, storefront
 
 logger = logging.getLogger(__name__)
 TIMEOUT = 40
@@ -83,6 +83,11 @@ def _public_base(session: Session) -> str:
 def media_url(session: Session, creative_id: int, deliverable_id: str, *, now: float | None = None) -> str:
     exp = int((now if now is not None else time.time()) + MEDIA_TTL)
     return f"{_public_base(session)}/api/public/media/{creative_id}/{deliverable_id}.jpg?exp={exp}&sig={_sig(creative_id, deliverable_id, exp)}"
+
+
+def video_url(session: Session, creative_id: int, *, now: float | None = None) -> str:
+    exp = int((now if now is not None else time.time()) + MEDIA_TTL)
+    return f"{_public_base(session)}/api/public/video/{creative_id}.mp4?exp={exp}&sig={_sig(creative_id, 'reel', exp)}"
 
 
 # ------------------------------------------------------------------ texto ---------
@@ -173,6 +178,49 @@ def publish_image(session: Session, creative_id: int, *, caption: str, deliverab
             post.permalink = meta_ads._get(post.external_id, token, fields="permalink").get("permalink")
         except meta_ads.MetaError:
             logger.info("sem o link do post %s", post.external_id)
+        post.status = "published"
+    except (InstagramError, meta_ads.MetaError, KeyError) as exc:
+        post.error = str(exc)[:500]
+        session.flush()
+        raise InstagramError(str(exc) if isinstance(exc, InstagramError) else f"falha ao publicar: {exc}") from exc
+    session.flush()
+    return post
+
+
+def publish_reel(session: Session, creative_id: int, *, caption: str, actor: str, wait_s: float = 240.0, sleep=time.sleep) -> SocialPost:
+    """Publica como Reel o slideshow já gerado (`reels.build`). Vídeo demora mais para o Instagram processar."""
+    creative = session.get(CreativeCampaign, creative_id)
+    if creative is None:
+        raise InstagramError(f"criativo {creative_id} não encontrado")
+    if creative.mode != "live":
+        raise InstagramError("criativo de teste (sandbox) não pode ser publicado.")
+    caption = (caption or "").strip()
+    if not caption or len(caption) > CAPTION_MAX:
+        raise InstagramError(f"o texto precisa ter de 1 a {CAPTION_MAX} caracteres.")
+    if not reels.reel_path(creative_id).exists():
+        raise InstagramError("gere o slideshow antes de publicar o Reel.")
+    ig, token = _ig_user(session)
+    post = SocialPost(platform="instagram", kind="reel", creative_campaign_id=creative.id, product_id=creative.product_id, caption=caption,
+                      status="failed", created_by=actor[:64])
+    session.add(post)
+    session.flush()
+    try:
+        container = _post(f"{ig}/media", token, media_type="REELS", video_url=video_url(session, creative_id), caption=caption, share_to_feed="true")["id"]
+        waited = 0.0
+        while True:
+            status = meta_ads._get(container, token, fields="status_code").get("status_code")
+            if status == "FINISHED":
+                break
+            if status == "ERROR" or waited >= wait_s:
+                raise InstagramError("o Instagram não conseguiu processar o vídeo" if status == "ERROR" else "o Instagram demorou demais para processar o vídeo")
+            sleep(5)
+            waited += 5
+        made = _post(f"{ig}/media_publish", token, creation_id=container)
+        post.external_id = str(made.get("id"))
+        try:
+            post.permalink = meta_ads._get(post.external_id, token, fields="permalink").get("permalink")
+        except meta_ads.MetaError:
+            logger.info("sem o link do reel %s", post.external_id)
         post.status = "published"
     except (InstagramError, meta_ads.MetaError, KeyError) as exc:
         post.error = str(exc)[:500]

@@ -269,6 +269,38 @@ function MetaPostPanel({ it, onDone, onMsg }) {
   );
 }
 
+// Slideshow vertical (15 a 20 s) das imagens do produto: gerar, ver, baixar (para pôr a música no app) e publicar como Reel.
+function ReelBox({ it, caption, onMsg }) {
+  const [v, setV] = useState(0);
+  const [busy, setBusy] = useState("");
+  const [info, setInfo] = useState(null);
+  const src = useBlob(v > 0 ? `/social/reel/${it.id}/video?v=${v}` : null);
+  async function build() {
+    setBusy("build");
+    try { const r = await postJSON(`/social/reel/${it.id}/build`); setInfo(r); setV((x) => x + 1); onMsg({ ok: true, text: `Slideshow pronto: ${r.slides} imagens, ${r.seconds} s.` }); }
+    catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(""); }
+  }
+  async function publish() {
+    if (!window.confirm("PUBLICAR este slideshow como REEL no Instagram do Mural?\n\nO vídeo sai SEM música (a API não deixa escolher). Para pôr música, baixe o vídeo e poste pelo app do Instagram.")) return;
+    setBusy("pub");
+    try { const r = await postJSON("/social/instagram/publish-reel", { creative_id: it.id, caption }); onMsg({ ok: true, text: `Reel publicado. ${r.permalink || ""}` }); }
+    catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(""); }
+  }
+  const btn = { border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" };
+  return (
+    <div style={{ marginTop: 12, borderTop: "1px dashed #f3d6e6", paddingTop: 10 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#32325d" }}>🎞️ Reel (slideshow das imagens, sem custo de crédito)</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "8px 0" }}>
+        <button style={btn} disabled={!!busy} onClick={build}>{busy === "build" ? "Montando…" : src ? "Montar de novo" : "Gerar slideshow"}</button>
+        {src && <a href={src} download={`mural-reel-${it.id}.mp4`} style={{ ...btn, textDecoration: "none", color: "#525f7f" }}>⬇ Baixar vídeo</a>}
+        {src && <button style={{ ...btn, background: "#c13584", color: "#fff", border: "none", fontWeight: 700 }} disabled={!!busy} onClick={publish}>{busy === "pub" ? "Publicando…" : "Publicar Reel agora"}</button>}
+        {info && <span style={{ fontSize: 11, color: "#8898aa" }}>{info.slides} imagens · {info.seconds} s · {info.size_kb} KB</span>}
+      </div>
+      {src && <video src={src} controls style={{ width: 180, borderRadius: 10, background: "#000" }} />}
+    </div>
+  );
+}
+
 // Publicar a imagem do criativo no Instagram do Mural (só você publica; o agente só sugere o texto).
 function InstagramPanel({ it, onMsg }) {
   const [open, setOpen] = useState(false);
@@ -302,6 +334,7 @@ function InstagramPanel({ it, onMsg }) {
         <strong style={{ color: "#32325d", fontSize: 13 }}>Postar no Instagram (@mural_na_web)</strong>
         <button onClick={() => setOpen(false)} style={{ ...btn, padding: "2px 10px" }}>fechar</button>
       </div>
+      {open && sug && <ReelBox it={it} caption={caption} onMsg={onMsg} />}
       {done ? (
         <div style={{ marginTop: 10, fontSize: 13, color: "#1a7a54" }}>✓ Publicado. {done.permalink ? <a href={done.permalink} target="_blank" rel="noreferrer">Abrir o post</a> : null}</div>
       ) : (

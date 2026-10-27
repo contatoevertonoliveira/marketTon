@@ -155,3 +155,21 @@ def test_sandbox_creative_and_bad_text_do_not_publish_and_failure_is_recorded(se
         ig.publish_image(session, live.id, caption="ok", actor="dono", sleep=lambda s: None)
     failed = session.query(SocialPost).one()
     assert failed.status == "failed" and "processar" in failed.error and not any(p.endswith("/media_publish") for p, _ in meta.posts)
+
+
+def test_reel_needs_the_slideshow_then_publishes_with_a_signed_video_link(session, meta, tmp_path, monkeypatch):
+    from core.services import reels
+
+    monkeypatch.setenv("REELS_DIR", str(tmp_path))
+    _cards(session)
+    c = _creative(session)
+    with pytest.raises(ig.InstagramError, match="gere o slideshow"):
+        ig.publish_reel(session, c.id, caption="Reel da garrafa", actor="dono")
+    reels.reel_path(c.id).write_bytes(b"mp4")
+    post = ig.publish_reel(session, c.id, caption="Reel da garrafa", actor="dono", sleep=lambda s: None)
+    media = dict(meta.posts)["ig_77/media"]
+    assert media["media_type"] == "REELS" and "/api/public/video/" in media["video_url"] and "&sig=" in media["video_url"]
+    assert (post.kind, post.status, post.external_id) == ("reel", "published", "media_9")
+    exp = int(media["video_url"].split("exp=")[1].split("&")[0])
+    assert ig.verify_media(c.id, "reel", exp, media["video_url"].split("sig=")[1], now=exp - 10)
+    assert not ig.verify_media(c.id, "d1", exp, media["video_url"].split("sig=")[1], now=exp - 10)  # o link do vídeo não abre imagem

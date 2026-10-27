@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.deps import get_session
 from backend.security import Principal, record_action, require
 from core.db.creatives import CreativeCampaign
-from core.services import aistudio, instagram
+from core.services import aistudio, instagram, reels
 from core.services.aistudio import AIStudioError
 
 router = APIRouter(tags=["redes sociais"])
@@ -33,6 +34,49 @@ def public_media(creative_id: int, name: str, exp: int, sig: str, session: Sessi
     except AIStudioError as exc:
         raise HTTPException(status_code=404, detail="peça não encontrada") from exc
     return Response(content=instagram.to_jpeg(data), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=600"})
+
+
+@router.get("/public/video/{name}", summary="Slideshow em MP4 por link assinado (o Instagram busca aqui; sem login)", include_in_schema=False)
+def public_video(name: str, exp: int, sig: str) -> FileResponse:
+    try:
+        creative_id = int(name.removesuffix(".mp4"))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="não encontrado") from exc
+    if not instagram.verify_media(creative_id, "reel", exp, sig):
+        raise HTTPException(status_code=403, detail="link inválido ou vencido")
+    path = reels.reel_path(creative_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="não encontrado")
+    return FileResponse(path, media_type="video/mp4")
+
+
+@router.post("/social/reel/{creative_id}/build", summary="Montar o slideshow vertical (Reels/TikTok/Shorts) do criativo", status_code=201)
+def build_reel(creative_id: int, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        return reels.build(session, creative_id)
+    except (reels.ReelError, AIStudioError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/social/reel/{creative_id}/video", summary="O slideshow já montado (para ver e baixar)")
+def reel_video(creative_id: int, principal: Principal = Depends(require("portfolio.view"))) -> FileResponse:
+    path = reels.reel_path(creative_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="ainda não foi gerado")
+    return FileResponse(path, media_type="video/mp4", filename=f"mural-reel-{creative_id}.mp4")
+
+
+@router.post("/social/instagram/publish-reel", summary="PUBLICAR o slideshow como Reel (só o operador)", status_code=201)
+def publish_reel(payload: PublishIn, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        post = instagram.publish_reel(session, payload.creative_id, caption=payload.caption, actor=principal.username)
+    except instagram.InstagramError as exc:
+        session.commit()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_action(session, principal, action="social.instagram_reel_published", resource_type="creative", resource_id=str(payload.creative_id),
+                  detail=post.permalink or post.external_id)
+    session.commit()
+    return instagram.out(post)
 
 
 @router.get("/social/instagram/caption/{creative_id}", summary="Texto sugerido para o post do Instagram")

@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TZ=America/Sao_Paulo
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates tzdata bash \
+    && apt-get install -y --no-install-recommends curl ca-certificates tzdata bash ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -u 1000 app
