@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { API_BASE, getJSON, getTokens, postJSON } from "../lib/apiClient";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { API_BASE, deleteJSON, getJSON, getTokens, postJSON } from "../lib/apiClient";
 
 const card = { background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)", marginBottom: 16 };
 const MODE = { sandbox: ["#eef0f6", "#525f7f", "teste (sandbox)"], live: ["#e5faf1", "#1a7a54", "ao vivo"] };
@@ -9,21 +10,24 @@ const STATUS = {
   completed: ["#e5faf1", "#1a7a54", "pronto"], partial: ["#fff4e5", "#b8720a", "parcial"], failed: ["#fef1f4", "#c31e3f", "falhou"], canceled: ["#eef0f6", "#525f7f", "cancelado"],
 };
 const AD = { draft: ["#eef0f6", "#525f7f", "planejado"], paused: ["#fff4e5", "#b8720a", "pausado"], active: ["#e5faf1", "#1a7a54", "ativo"], ended: ["#eef0f6", "#525f7f", "encerrado"], failed: ["#fef1f4", "#c31e3f", "falhou"] };
+const NET = { meta: "Meta", google: "Google" };
 const brl = (v) => (v == null ? "—" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 const usd = (v) => (v == null ? "—" : `US$ ${Number(v).toFixed(2)}`);
 const num = (v) => (v == null ? "—" : Number(v).toLocaleString("pt-BR"));
+const pctTxt = (v) => (v == null ? "—" : `${String(v).replace(".", ",")}%`);
 const when = (iso) => (iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
+const short = (t, n = 22) => (t && t.length > n ? `${t.slice(0, n - 1)}…` : t || "—");
 
 function Chip({ map, k, fallback }) {
   const [bg, fg, label] = map[k] || ["#eef0f6", "#525f7f", fallback || k];
   return <span style={{ background: bg, color: fg, fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "2px 9px", whiteSpace: "nowrap" }}>{label}</span>;
 }
 
-function Metric({ label, value, hint }) {
+function Metric({ label, value, hint, big }) {
   return (
     <div title={hint}>
       <div style={{ fontSize: 10, color: "#8898aa", textTransform: "uppercase", letterSpacing: 0.4 }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: "#32325d" }}>{value}</div>
+      <div style={{ fontSize: big ? 20 : 15, fontWeight: 700, color: "#32325d" }}>{value}</div>
     </div>
   );
 }
@@ -112,182 +116,284 @@ function Piece({ d, onOpen }) {
   return <div style={box}>{d.kind}{src ? <> · <a href={src} target="_blank" rel="noreferrer">abrir</a></> : null}</div>;
 }
 
-function AdActions({ ad, onDone, onMsg }) {
+// Um anúncio (Meta) ou campanha (Google): números e os botões Ligar / Pausar / Parar / Excluir.
+function AdPanel({ ad, onDone, onMsg }) {
   const [busy, setBusy] = useState(false);
-  async function run(path, confirmText) {
+  const net = NET[ad.platform] || ad.platform;
+  const total = (ad.daily_budget_brl || 0) * (ad.duration_days || 1);
+  async function run(label, fn, confirmText) {
     if (confirmText && !window.confirm(confirmText)) return;
     setBusy(true);
-    try { await postJSON(path); onMsg({ ok: true, text: "Feito." }); onDone(); } catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
+    try { await fn(); onMsg({ ok: true, text: `${label}: feito.` }); onDone(); } catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
   }
-  const btn = (bg, color) => ({ border: "none", background: bg, color, borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" });
-  if (!ad.on_meta) return <span style={{ color: "#8898aa" }}>—</span>;
-  if (ad.status === "active") return <button disabled={busy} style={btn("#fff4e5", "#b8720a")} onClick={() => run(`/ads/${ad.id}/pause`)}>Pausar</button>;
-  if (ad.status === "paused" || ad.status === "draft")
-    return (
-      <button disabled={busy} style={btn("#2dce89", "#fff")}
-        onClick={() => run(`/ads/${ad.id}/activate`, `LIGAR este anúncio na Meta?\n\nEle começa a gastar até ${brl(ad.daily_budget_brl)} por dia, por ${ad.duration_days || 1} dia(s) (no máximo ${brl((ad.daily_budget_brl || 0) * (ad.duration_days || 1))} no total).`)}>
-        Ligar
-      </button>
-    );
-  return <span style={{ color: "#8898aa" }}>—</span>;
+  const big = (bg, color, border) => ({ border: border ? `1px solid ${border}` : "none", background: bg, color, borderRadius: 8, padding: "9px 22px", fontSize: 13, fontWeight: 800, cursor: busy ? "wait" : "pointer", opacity: busy ? 0.6 : 1 });
+  const small = (color) => ({ border: `1px solid ${color}`, background: "#fff", color, borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: busy ? "wait" : "pointer", opacity: busy ? 0.6 : 1 });
+  const remote = ad.on_meta;
+  const open = ["draft", "paused", "active"].includes(ad.status);
+  return (
+    <div style={{ border: "1px solid #eef0f6", borderRadius: 10, padding: 12, marginTop: 10, background: ad.status === "active" ? "#f4fcf8" : "#fbfcfe" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+        <strong style={{ color: "#32325d", fontSize: 13 }}>{net}</strong>
+        <Chip map={AD} k={ad.status} />
+        {ad.variant && <span style={{ fontSize: 11, color: "#8898aa" }}>gancho {ad.variant}</span>}
+        {ad.meta_status && !["PAUSED", "ACTIVE"].includes(ad.meta_status) && <span style={{ fontSize: 11, color: "#b8720a" }}>{net}: {ad.meta_status}</span>}
+        {ad.notes && ad.platform === "google" && <span style={{ fontSize: 11, color: "#8898aa" }}>{ad.notes}</span>}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 12 }}>
+        <Metric label="Gasto" value={brl(ad.spent_brl)} />
+        <Metric label="Impressões" value={num(ad.impressions)} />
+        <Metric label="Cliques" value={num(ad.clicks)} />
+        <Metric label="CTR" value={pctTxt(ad.ctr_pct)} hint="Cliques ÷ impressões" />
+        <Metric label="CPC" value={brl(ad.cpc_brl)} hint="Gasto ÷ cliques" />
+        <Metric label="Verba/dia" value={brl(ad.daily_budget_brl)} hint={`${ad.duration_days || 1} dia(s): até ${brl(total)} no total`} />
+        <Metric label="Início" value={when(ad.started_at)} />
+        <Metric label="Métricas de" value={when(ad.last_metrics_at)} />
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12 }}>
+        {remote && (ad.status === "paused" || ad.status === "draft") && (
+          <button disabled={busy} style={big("#2dce89", "#fff")}
+            onClick={() => run("Ligar", () => postJSON(`/ads/${ad.id}/activate`), `LIGAR este anúncio no ${net}?\n\nEle começa a gastar até ${brl(ad.daily_budget_brl)} por dia, por ${ad.duration_days || 1} dia(s) (no máximo ${brl(total)} no total).`)}>
+            ▶ Ligar
+          </button>
+        )}
+        {remote && ad.status === "active" && (
+          <button disabled={busy} style={big("#fb6340", "#fff")} onClick={() => run("Pausar", () => postJSON(`/ads/${ad.id}/pause`))}>⏸ Pausar</button>
+        )}
+        {remote && open && (
+          <button disabled={busy} style={small("#8898aa")}
+            onClick={() => run("Parar", () => postJSON(`/ads/${ad.id}/stop`), "PARAR de vez este anúncio?\n\nEle é pausado e encerrado: não dá mais para ligar de novo. As métricas continuam aqui.")}>
+            ⏹ Parar
+          </button>
+        )}
+        <button disabled={busy} style={small("#f5365c")}
+          onClick={() => run("Excluir", () => deleteJSON(`/ads/${ad.id}`), `EXCLUIR este anúncio?\n\nEle é apagado no ${net} e some desta tela. O gasto já feito continua na sua conta de anúncios, mas deixa de aparecer aqui.`)}>
+          🗑 Excluir
+        </button>
+        {!remote && ad.status !== "failed" && <span style={{ fontSize: 11, color: "#8898aa" }}>ainda não existe na rede de anúncios</span>}
+      </div>
+    </div>
+  );
 }
 
-function Item({ it, onDone, onMsg, onPreview }) {
+function ProductHead({ product, extra }) {
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ width: 52, height: 52, borderRadius: 8, overflow: "hidden", background: "#f6f9fc", flex: "none" }}>
+        {product?.image && <img src={product.image} alt="" referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+      </div>
+      <div style={{ flex: 1, minWidth: 200 }}>
+        <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14 }}>{product ? product.title : "Produto removido"}</div>
+        <div style={{ fontSize: 11, color: "#8898aa" }}>{product ? `${product.marketplace} · ${brl(product.price)}` : ""}</div>
+      </div>
+      {extra}
+    </div>
+  );
+}
+
+// Cartão do criativo de um produto: imagens, custo e, logo abaixo, os anúncios com números e botões.
+function CreativeCard({ it, onDone, onMsg, onPreview }) {
   const p = it.product;
   const r = it.product_results;
+  const [busy, setBusy] = useState(false);
+  async function del() {
+    if (!window.confirm("EXCLUIR este criativo da tela?\n\nEle some daqui (o histórico fica guardado). Só dá para excluir sem anúncio aberto.")) return;
+    setBusy(true);
+    try { await deleteJSON(`/creatives/${it.id}`); onMsg({ ok: true, text: "Criativo excluído." }); onDone(); } catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
+  }
   return (
     <div style={card}>
-      <div style={{ display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ width: 64, height: 64, borderRadius: 8, overflow: "hidden", background: "#f6f9fc", flex: "none" }}>
-          {p?.image && <img src={p.image} alt="" referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-        </div>
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14 }}>{p ? p.title : "Produto removido"}</div>
-          <div style={{ fontSize: 11, color: "#8898aa", margin: "3px 0 6px" }}>
-            {p ? `${p.marketplace} · ${brl(p.price)}` : ""} · criado {when(it.created_at)}{it.created_by ? ` por ${it.created_by}` : ""} · {it.external_ref}
-          </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-            <Chip map={MODE} k={it.mode} />
-            <Chip map={STATUS} k={it.status} />
-            <span style={{ fontSize: 11, color: "#8898aa" }}>qualidade {it.quality}{it.angle ? ` · ângulo ${it.angle}` : ""}</span>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
-          <Metric label="Custo do criativo" value={usd(it.cost_usd)} hint={`Teto da campanha: ${usd(it.budget_usd)}`} />
-          <Metric label="Teto" value={usd(it.budget_usd)} />
-        </div>
+      <ProductHead product={p} extra={
+        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+          <Chip map={MODE} k={it.mode} />
+          <Chip map={STATUS} k={it.status} />
+          <Metric label="Custo do criativo" value={usd(it.cost_usd)} hint={`Teto: ${usd(it.budget_usd)}`} />
+          <button disabled={busy} onClick={del} title="Excluir este criativo da tela" style={{ border: "1px solid #f5365c", background: "#fff", color: "#f5365c", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>🗑 Excluir criativo</button>
+        </div>} />
+      <div style={{ fontSize: 11, color: "#8898aa", margin: "6px 0 0" }}>
+        criado {when(it.created_at)}{it.created_by ? ` por ${it.created_by}` : ""} · qualidade {it.quality}{it.angle ? ` · ângulo ${it.angle}` : ""} · {it.external_ref}
       </div>
-
       {it.error && <div style={{ marginTop: 10, fontSize: 12, padding: "7px 10px", borderRadius: 8, color: "#c31e3f", background: "#fef1f4" }}>{it.error}</div>}
-
       {it.deliverables.length > 0 && (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>{it.deliverables.map((d) => <Piece key={d.id} d={d} onOpen={(piece) => { const imgs = it.deliverables.filter((x) => x.kind === "image" || x.kind === "thumbnail"); onPreview(imgs, Math.max(0, imgs.findIndex((x) => x.id === piece.id))); }} />)}</div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+          {it.deliverables.map((d) => (
+            <Piece key={d.id} d={d} onOpen={(piece) => {
+              const imgs = it.deliverables.filter((x) => x.kind === "image" || x.kind === "thumbnail");
+              onPreview(imgs, Math.max(0, imgs.findIndex((x) => x.id === piece.id)));
+            }} />
+          ))}
+        </div>
       )}
-
-      <div style={{ marginTop: 14, borderTop: "1px solid #f0f2f7", paddingTop: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#32325d", marginBottom: 6 }}>Anúncios feitos com este criativo</div>
-        {it.ads.length === 0 ? (
-          <div style={{ fontSize: 12, color: "#8898aa" }}>Nenhum anúncio ainda. Quando o agente (ou você) criar o anúncio na Meta, ele aparece aqui com gasto, impressões, cliques, CTR e CPC.</div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", minWidth: 640 }}>
-              <thead>
-                <tr style={{ color: "#8898aa", textAlign: "left" }}>
-                  {["Plataforma", "Gancho", "Estado", "Verba/dia", "Gasto", "Impressões", "Cliques", "CTR", "CPC", "Início", "Métricas de", ""].map((h) => <th key={h} style={{ padding: "4px 8px 4px 0", fontWeight: 600 }}>{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {it.ads.map((a) => (
-                  <tr key={a.id} style={{ borderTop: "1px solid #f6f9fc" }}>
-                    <td style={{ padding: "5px 8px 5px 0" }}>{a.platform}</td><td>{a.variant || "—"}</td><td><Chip map={AD} k={a.status} />{a.meta_status && a.meta_status !== "PAUSED" && a.meta_status !== "ACTIVE" ? <div style={{ fontSize: 10, color: "#b8720a" }}>Meta: {a.meta_status}</div> : null}</td>
-                    <td>{brl(a.daily_budget_brl)}</td><td>{brl(a.spent_brl)}</td><td>{num(a.impressions)}</td><td>{num(a.clicks)}</td>
-                    <td>{a.ctr_pct == null ? "—" : `${String(a.ctr_pct).replace(".", ",")}%`}</td><td>{brl(a.cpc_brl)}</td><td>{when(a.started_at)}</td><td>{when(a.last_metrics_at)}</td><td><AdActions ad={a} onDone={onDone} onMsg={onMsg} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <div style={{ marginTop: 12, borderTop: "1px solid #f0f2f7", paddingTop: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#32325d" }}>Anúncios deste produto</div>
+        {it.ads.length === 0
+          ? <div style={{ fontSize: 12, color: "#8898aa", marginTop: 4 }}>Nenhum anúncio ainda. Quando o agente (ou você) criar o anúncio na Meta com este criativo, ele aparece aqui com os números e os botões.</div>
+          : it.ads.map((a) => <AdPanel key={a.id} ad={a} onDone={onDone} onMsg={onMsg} />)}
       </div>
-
       {r && (
         <div style={{ marginTop: 12, display: "flex", gap: 22, flexWrap: "wrap", alignItems: "flex-end", background: "#f6f9fc", borderRadius: 8, padding: "10px 12px" }}>
           <Metric label="Cliques na loja desde o criativo" value={num(r.store_clicks)} hint="Cliques de pessoas nos links curtos do produto (não de robôs)" />
           <Metric label="Vendas desde o criativo" value={num(r.sales)} />
           <Metric label="Comissão (confirmada ou estimada)" value={brl(r.commission_brl)} />
-          <div style={{ fontSize: 11, color: "#8898aa", maxWidth: 360 }}>Resultado do produto no período, não atribuído a um anúncio: a venda de afiliado sai do marketplace dias depois e não diz de qual anúncio veio.</div>
+          <div style={{ fontSize: 11, color: "#8898aa", maxWidth: 360 }}>Resultado do produto no período, não atribuído a um anúncio: a venda de afiliado sai do marketplace dias depois.</div>
         </div>
       )}
     </div>
   );
 }
 
-function SearchAds({ ads, onDone, onMsg }) {
-  if (!ads || ads.length === 0) return null;
+// Campanha de pesquisa (Google): não tem imagem, então o cartão é o produto + os números e botões.
+function AdCard({ ad, product, onDone, onMsg }) {
   return (
     <div style={card}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#32325d", marginBottom: 6 }}>Campanhas de pesquisa (Google)</div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", minWidth: 640 }}>
-          <thead>
-            <tr style={{ color: "#8898aa", textAlign: "left" }}>
-              {["Produto", "Estado", "Verba/dia", "Gasto", "Impressões", "Cliques", "CTR", "CPC", "Início", ""].map((h) => <th key={h} style={{ padding: "4px 8px 4px 0", fontWeight: 600 }}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {ads.map((a) => (
-              <tr key={a.id} style={{ borderTop: "1px solid #f6f9fc" }}>
-                <td style={{ padding: "5px 8px 5px 0", maxWidth: 260 }}>{a.product ? a.product.title : "—"}<div style={{ fontSize: 10, color: "#8898aa" }}>{a.notes}</div></td>
-                <td><Chip map={AD} k={a.status} /></td>
-                <td>{brl(a.daily_budget_brl)}</td><td>{brl(a.spent_brl)}</td><td>{num(a.impressions)}</td><td>{num(a.clicks)}</td>
-                <td>{a.ctr_pct == null ? "—" : `${String(a.ctr_pct).replace(".", ",")}%`}</td><td>{brl(a.cpc_brl)}</td><td>{when(a.started_at)}</td>
-                <td><AdActions ad={a} onDone={onDone} onMsg={onMsg} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ProductHead product={product} />
+      <AdPanel ad={ad} onDone={onDone} onMsg={onMsg} />
     </div>
   );
 }
 
+function Empty({ children }) {
+  return <div style={card}><span style={{ fontSize: 13, color: "#8898aa" }}>{children}</span></div>;
+}
+
+function sum(list, key) {
+  return list.reduce((acc, a) => acc + (a[key] || 0), 0);
+}
+
+function Overview({ ads, totals, budget, onSync, onPauseAll }) {
+  const spent = sum(ads, "spent_brl"), imps = sum(ads, "impressions"), clicks = sum(ads, "clicks");
+  const active = ads.filter((a) => a.status === "active").length;
+  const ctr = imps ? Math.round((clicks / imps) * 10000) / 100 : null;
+  const cpc = clicks ? spent / clicks : null;
+  const byNet = ["meta", "google"].map((n) => {
+    const list = ads.filter((a) => a.platform === n);
+    const c = sum(list, "clicks");
+    return { net: n, count: list.length, active: list.filter((a) => a.status === "active").length, spent: sum(list, "spent_brl"), clicks: c, imps: sum(list, "impressions"), cpc: c ? sum(list, "spent_brl") / c : null };
+  });
+  const data = ads.map((a) => ({ label: `${short(a.product_title, 16)} · ${NET[a.platform] || a.platform}`, Gasto: Number((a.spent_brl || 0).toFixed(2)), Cliques: a.clicks || 0, Impressões: a.impressions || 0 }));
+  return (
+    <div>
+      <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 16 }}>
+        <Metric big label="Gasto em anúncios" value={brl(spent)} />
+        <Metric big label="Impressões" value={num(imps)} />
+        <Metric big label="Cliques" value={num(clicks)} />
+        <Metric big label="CTR" value={pctTxt(ctr)} />
+        <Metric big label="CPC médio" value={brl(cpc)} />
+        <Metric big label="Anúncios ativos" value={`${active} de ${ads.length}`} />
+        <Metric big label="Gasto em criativos" value={usd(totals.cost_usd)} hint="Custo das gerações no AI Studio (só o modo ao vivo gasta)" />
+      </div>
+      {budget && budget.configured ? (
+        <div style={{ ...card, display: "flex", gap: 22, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <Metric label="Verba da semana" value={`${brl(budget.week_committed_brl)} de ${brl(budget.weekly_brl)}`} hint="Compromisso: verba por dia × dias dos anúncios criados nesta semana (Meta + Google)" />
+          <Metric label="Por dia agora" value={`${brl(budget.daily_committed_brl)} de ${brl(budget.daily_cap_brl)}`} hint="Anúncios abertos (planejados, pausados ou ativos)" />
+          <Metric label="Produtos na semana" value={`${budget.week_products} de ${budget.max_products}`} />
+          <Metric label="Gasto lido (semana)" value={brl(budget.week_spent_brl)} />
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button onClick={onSync} style={{ border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer" }}>Atualizar métricas</button>
+            <button onClick={onPauseAll} style={{ border: "none", background: "#f5365c", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Pausar tudo</button>
+          </div>
+        </div>
+      ) : budget ? <div style={{ ...card, fontSize: 12, color: "#b8720a" }}>Defina o Orçamento de anúncios em Integrações (valor por semana e teto por dia) para o agente poder planejar anúncios.</div> : null}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+        {byNet.map((n) => (
+          <div key={n.net} style={card}>
+            <div style={{ fontWeight: 700, color: "#32325d", marginBottom: 8 }}>{NET[n.net]}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+              <Metric label="Campanhas" value={`${n.active} ativas de ${n.count}`} />
+              <Metric label="Gasto" value={brl(n.spent)} />
+              <Metric label="Cliques" value={num(n.clicks)} />
+              <Metric label="Impressões" value={num(n.imps)} />
+              <Metric label="CPC" value={brl(n.cpc)} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {data.length === 0 ? <Empty>Sem anúncios ainda. Quando houver, os gráficos de gasto, cliques e impressões por campanha aparecem aqui.</Empty> : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+          {[["Gasto por campanha (R$)", "Gasto", "#fb6340"], ["Cliques por campanha", "Cliques", "#5e72e4"], ["Impressões por campanha", "Impressões", "#2dce89"]].map(([title, key, color]) => (
+            <div key={key} style={card}>
+              <div style={{ fontWeight: 700, color: "#32325d", marginBottom: 6 }}>{title}</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef0f6" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={64} />
+                  <YAxis tick={{ fontSize: 11 }} width={44} allowDecimals={key === "Gasto"} />
+                  <Tooltip formatter={(v) => (key === "Gasto" ? brl(v) : num(v))} />
+                  <Bar dataKey={key} fill={color} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TABS = [["geral", "Visão geral"], ["live", "Ao vivo"], ["meta", "Meta Ads"], ["google", "Google (pesquisa)"], ["testes", "Testes"]];
+
 export default function Criativos() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
-  const [mode, setMode] = useState("todos");
-  const load = useCallback(() => getJSON("/creatives/history?limit=100").then(setData).catch((e) => setError(e.message)), []);
-  useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [load]);
   const [budget, setBudget] = useState(null);
   const [msg, setMsg] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [tab, setTab] = useState(() => { try { return localStorage.getItem("criativos_tab") || "geral"; } catch { return "geral"; } });
+  const pick = (k) => { setTab(k); try { localStorage.setItem("criativos_tab", k); } catch { /* sem armazenamento: segue sem lembrar a aba */ } };
+
+  const load = useCallback(() => getJSON("/creatives/history?limit=100").then((d) => { setData(d); setError(""); }).catch((e) => setError(e.message)), []);
   const loadAll = useCallback(() => { load(); getJSON("/ads/budget").then(setBudget).catch(() => {}); }, [load]);
-  useEffect(() => { getJSON("/ads/budget").then(setBudget).catch(() => {}); }, [data]);
-  async function stopAll() {
-    if (!window.confirm("PAUSAR todos os anúncios ativos agora?")) return;
+  useEffect(() => { loadAll(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [loadAll, load]);
+
+  async function pauseAll() {
+    if (!window.confirm("PAUSAR todos os anúncios ativos agora (Meta e Google)?")) return;
     try { const r = await postJSON("/ads/pause-all"); setMsg({ ok: true, text: `${r.paused} anúncio(s) pausado(s).` }); loadAll(); } catch (e) { setMsg({ ok: false, text: e.message }); }
   }
   async function syncNow() {
     try { const r = await postJSON("/ads/sync"); setMsg({ ok: true, text: `Métricas atualizadas em ${r.updated} anúncio(s).` }); loadAll(); } catch (e) { setMsg({ ok: false, text: e.message }); }
   }
-  const items = useMemo(() => (data?.items || []).filter((i) => mode === "todos" || i.mode === mode), [data, mode]);
 
-  if (error) return <p style={{ color: "#f5365c" }}>Não foi possível carregar os criativos ({error}).</p>;
+  const items = data?.items || [];
+  const liveItems = useMemo(() => items.filter((i) => i.mode === "live"), [items]);
+  const testItems = useMemo(() => items.filter((i) => i.mode !== "live"), [items]);
+  const metaAds = useMemo(() => items.flatMap((it) => it.ads.filter((a) => a.platform === "meta").map((a) => ({ ad: a, product: it.product }))), [items]);
+  const googleAds = useMemo(() => (data?.search_ads || []).map((a) => ({ ad: a, product: a.product })), [data]);
+  const allAds = useMemo(() => [...metaAds, ...googleAds].map(({ ad, product }) => ({ ...ad, product_title: product?.title })), [metaAds, googleAds]);
+  const counts = { live: liveItems.length, meta: metaAds.length, google: googleAds.length, testes: testItems.length };
+
+  if (error && !data) return <p style={{ color: "#f5365c" }}>Não foi possível carregar os criativos ({error}).</p>;
   if (!data) return <p style={{ color: "#8898aa" }}>Carregando…</p>;
-  const t = data.totals;
+  const onPreview = (pieces, index) => setPreview({ pieces, index });
+
   return (
     <div>
       {preview && <Preview pieces={preview.pieces} index={preview.index} onIndex={(i) => setPreview({ ...preview, index: i })} onClose={() => setPreview(null)} />}
-      <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14 }}>
-        <Metric label="Criativos" value={num(t.creatives)} />
-        <Metric label="Gasto em criativos" value={usd(t.cost_usd)} hint="Custo das gerações no AI Studio (só modo ao vivo gasta)" />
-        <Metric label="Anúncios" value={`${num(t.ads)} (${num(t.active_ads)} ativos)`} />
-        <Metric label="Gasto em anúncios" value={brl(t.spent_brl)} />
-      </div>
-      {budget && budget.configured && (
-        <div style={{ ...card, display: "flex", gap: 22, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <Metric label="Verba da semana" value={`${brl(budget.week_committed_brl)} de ${brl(budget.weekly_brl)}`} hint="Compromisso: verba por dia × dias dos anúncios criados nesta semana" />
-          <Metric label="Por dia agora" value={`${brl(budget.daily_committed_brl)} de ${brl(budget.daily_cap_brl)}`} hint="Anúncios abertos (planejados, pausados ou ativos)" />
-          <Metric label="Produtos na semana" value={`${budget.week_products} de ${budget.max_products}`} />
-          <Metric label="Gasto lido da Meta (semana)" value={brl(budget.week_spent_brl)} />
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <button onClick={syncNow} style={{ border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>Atualizar métricas</button>
-            <button onClick={stopAll} style={{ border: "none", background: "#f5365c", color: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Pausar tudo</button>
-          </div>
-        </div>
-      )}
-      {budget && !budget.configured && <div style={{ ...card, fontSize: 12, color: "#b8720a" }}>Defina o Orçamento de anúncios em Integrações (valor por semana e teto por dia) para o agente poder planejar anúncios.</div>}
-      {msg && <div style={{ marginBottom: 12, fontSize: 12, padding: "8px 10px", borderRadius: 8, color: msg.ok ? "#1a7a54" : "#c31e3f", background: msg.ok ? "#e5faf1" : "#fef1f4" }}>{msg.text}</div>}
-      <SearchAds ads={data?.search_ads} onDone={loadAll} onMsg={setMsg} />
-      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        {[["todos", "Todos"], ["live", "Ao vivo"], ["sandbox", "Testes"]].map(([k, label]) => (
-          <button key={k} onClick={() => setMode(k)} style={{ border: "none", borderRadius: 999, padding: "4px 14px", fontSize: 12, cursor: "pointer", background: mode === k ? "#5e72e4" : "#eef0f6", color: mode === k ? "#fff" : "#525f7f" }}>{label}</button>
+      <div role="tablist" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14, borderBottom: "1px solid #e9ecef", paddingBottom: 8 }}>
+        {TABS.map(([k, label]) => (
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => pick(k)}
+            style={{ border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", background: tab === k ? "#5e72e4" : "#eef0f6", color: tab === k ? "#fff" : "#525f7f" }}>
+            {label}{counts[k] != null ? <span style={{ marginLeft: 6, opacity: 0.8, fontWeight: 600 }}>{counts[k]}</span> : null}
+          </button>
         ))}
       </div>
-      {items.length === 0 ? (
-        <div style={card}><span style={{ fontSize: 13, color: "#8898aa" }}>Nenhum criativo ainda. Configure o cartão do AI Studio em Integrações; o agente pede os criativos dos produtos escolhidos e eles aparecem aqui, em ordem do mais recente.</span></div>
-      ) : (
-        items.map((it) => <Item key={it.id} it={it} onDone={loadAll} onMsg={setMsg} onPreview={(pieces, index) => setPreview({ pieces, index })} />)
-      )}
+      {msg && <div style={{ marginBottom: 12, fontSize: 12, padding: "8px 10px", borderRadius: 8, color: msg.ok ? "#1a7a54" : "#c31e3f", background: msg.ok ? "#e5faf1" : "#fef1f4" }}>{msg.text}</div>}
+
+      {tab === "geral" && <Overview ads={allAds} totals={data.totals} budget={budget} onSync={syncNow} onPauseAll={pauseAll} />}
+
+      {tab === "live" && (liveItems.length === 0
+        ? <Empty>Nenhum criativo ao vivo ainda. Quando o agente (ou você) pedir criativos de verdade ao AI Studio, eles aparecem aqui com as imagens, os anúncios e os botões.</Empty>
+        : liveItems.map((it) => <CreativeCard key={it.id} it={it} onDone={loadAll} onMsg={setMsg} onPreview={onPreview} />))}
+
+      {tab === "meta" && (metaAds.length === 0
+        ? <Empty>Nenhum anúncio na Meta ainda. O agente cria o anúncio (pausado) a partir de um criativo ao vivo; você liga aqui.</Empty>
+        : metaAds.map(({ ad, product }) => <AdCard key={ad.id} ad={ad} product={product} onDone={loadAll} onMsg={setMsg} />))}
+
+      {tab === "google" && (googleAds.length === 0
+        ? <Empty>Nenhuma campanha de pesquisa no Google ainda. O agente cria a campanha (pausada) de um produto; você liga aqui.</Empty>
+        : googleAds.map(({ ad, product }) => <AdCard key={ad.id} ad={ad} product={product} onDone={loadAll} onMsg={setMsg} />))}
+
+      {tab === "testes" && (testItems.length === 0
+        ? <Empty>Nenhum teste. Criativos de teste (sandbox) não gastam crédito e nunca viram anúncio de verdade.</Empty>
+        : testItems.map((it) => <CreativeCard key={it.id} it={it} onDone={loadAll} onMsg={setMsg} onPreview={onPreview} />))}
     </div>
   );
 }

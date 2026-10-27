@@ -20,7 +20,7 @@ from core.db.tracking import AffiliateLink, ClickEvent, Commission, Sale
 from core.services import aistudio, storefront
 
 CANCELLED = {"CANCELLED", "CANCELED", "REFUNDED", "CHARGEBACK", "EXPIRED", "DUPLICATED"}
-AD_STATUSES = ("draft", "paused", "active", "ended", "failed")
+AD_STATUSES = ("draft", "paused", "active", "ended", "failed", "removed")
 
 
 class AdError(ValueError):
@@ -59,9 +59,10 @@ def _product_results(session: Session, product_id: int, since: datetime) -> dict
 
 
 def history(session: Session, *, limit: int = 50) -> dict:
-    rows = list(session.scalars(select(CreativeCampaign).order_by(CreativeCampaign.id.desc()).limit(max(1, min(limit, 200)))))
+    rows = list(session.scalars(select(CreativeCampaign).where(CreativeCampaign.hidden.is_(False))
+                                .order_by(CreativeCampaign.id.desc()).limit(max(1, min(limit, 200)))))
     ads_by_creative: dict[int, list[AdCampaign]] = {}
-    for ad in session.scalars(select(AdCampaign).order_by(AdCampaign.id)):
+    for ad in session.scalars(select(AdCampaign).where(AdCampaign.status != "removed").order_by(AdCampaign.id)):
         ads_by_creative.setdefault(ad.creative_campaign_id or 0, []).append(ad)
     items, spent, usd, active = [], 0.0, 0.0, 0
     for c in rows:

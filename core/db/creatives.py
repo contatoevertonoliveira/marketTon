@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.db.base import Base, TimestampMixin
@@ -29,6 +29,7 @@ class CreativeCampaign(Base, TimestampMixin):
     error: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str | None] = mapped_column(String(64))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")  # "excluído" da tela (fica no banco)
 
     __table_args__ = (UniqueConstraint("external_ref", name="uq_creative_campaigns_external_ref"),)
 

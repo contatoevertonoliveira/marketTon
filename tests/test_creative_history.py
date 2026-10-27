@@ -78,3 +78,17 @@ def test_invalid_ad_data_is_rejected(session, setup):
         ch.update_ad(session, ad.id, spent_brl=-1)
     with pytest.raises(ch.AdError, match="passar das impressões"):
         ch.update_ad(session, ad.id, impressions=10, clicks=20)
+
+
+def test_hidden_creatives_and_removed_ads_leave_the_screen(session, setup):
+    from core.db.ads import AdCampaign
+
+    product, _, creative = setup
+    session.add_all([AdCampaign(creative_campaign_id=creative.id, product_id=product.id, platform="meta", status="paused"),
+                     AdCampaign(creative_campaign_id=creative.id, product_id=product.id, platform="meta", status="removed")])
+    session.flush()
+    item = ch.history(session)["items"][0]
+    assert [a["status"] for a in item["ads"]] == ["paused"]  # o removido não aparece
+    creative.hidden = True
+    session.flush()
+    assert ch.history(session)["items"] == []  # criativo excluído da tela

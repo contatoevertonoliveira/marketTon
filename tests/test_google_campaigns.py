@@ -158,3 +158,16 @@ def test_activate_pause_and_metrics(session, google):
     assert google.mutations[-1][0]["campaignOperation"]["update"]["status"] == "PAUSED"
     with pytest.raises(gc.AdsError):
         ads_manager.activate(session, 9999, actor="dono")
+
+
+def test_stop_and_remove_on_google(session, google):
+    _cards(session)
+    a = gc.create_campaign(session, _product(session, 1).id, daily_brl=5, days=3, dry_run=False)["ad_id"]
+    b = gc.create_campaign(session, _product(session, 2, title="Outro produto aqui").id, daily_brl=5, days=3, dry_run=False)["ad_id"]
+    ads_manager.activate(session, a, actor="dono", now=NOW)
+    google.mutations.clear()
+    assert ads_manager.stop(session, a, now=NOW).status == "ended"
+    assert google.mutations[-1][0]["campaignOperation"]["update"]["status"] == "PAUSED"
+    google.mutations.clear()
+    assert ads_manager.remove(session, b).status == "removed"
+    assert google.mutations[-1][0]["campaignOperation"]["update"]["status"] == "REMOVED"

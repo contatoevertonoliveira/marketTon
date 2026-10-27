@@ -86,8 +86,8 @@ def budget_status(session: Session, now: datetime | None = None) -> dict:
     start, end = week_window(now)
     open_ads = list(session.scalars(select(AdCampaign).where(AdCampaign.status.in_(OPEN_STATUSES))))
     this_week = [a for a in session.scalars(select(AdCampaign)) if (c := a.created_at) is not None and start <= (c if c.tzinfo else c.replace(tzinfo=UTC)) < end]
-    committed = sum((a.daily_budget_brl or 0) * (a.duration_days or 1) for a in this_week if a.status != "failed")
-    products = {a.product_id for a in this_week if a.product_id and a.status != "failed"}
+    committed = sum((a.daily_budget_brl or 0) * (a.duration_days or 1) for a in this_week if a.status not in ("failed", "removed"))
+    products = {a.product_id for a in this_week if a.product_id and a.status not in ("failed", "removed")}
     return {"configured": True, "weekly_brl": budget.weekly_brl, "daily_cap_brl": budget.daily_cap_brl, "max_products": budget.max_products,
             "creatives_per_product": budget.creatives_per_product, "daily_committed_brl": round(sum(a.daily_budget_brl or 0 for a in open_ads), 2),
             "week_committed_brl": round(committed, 2), "week_products": len(products),
@@ -249,6 +249,34 @@ def pause(session: Session, ad_id: int) -> AdCampaign:
         _set_remote_status(session, ad, "PAUSED")
         ad.status = "paused"
         session.flush()
+    return ad
+
+
+def stop(session: Session, ad_id: int, *, now: datetime | None = None) -> AdCampaign:
+    """Para de vez: pausa na Meta e encerra (não dá mais para ligar). O histórico e as métricas ficam."""
+    ad = session.get(AdCampaign, ad_id)
+    if ad is None or ad.platform != "meta":
+        raise AdsError(f"anúncio {ad_id} não encontrado")
+    if ad.status in ("ended", "removed"):
+        return ad
+    if ad.external_ad_id and ad.status == "active":
+        _set_remote_status(session, ad, "PAUSED")
+    ad.status, ad.ended_at = "ended", now or datetime.now(UTC)
+    session.flush()
+    return ad
+
+
+def remove(session: Session, ad_id: int) -> AdCampaign:
+    """Exclui: apaga na Meta (anúncio, conjunto e campanha) e tira da tela. Anúncio ativo é pausado antes."""
+    ad = session.get(AdCampaign, ad_id)
+    if ad is None or ad.platform != "meta":
+        raise AdsError(f"anúncio {ad_id} não encontrado")
+    if ad.status == "removed":
+        return ad
+    if ad.external_ad_id:
+        _set_remote_status(session, ad, "DELETED")
+    ad.status = "removed"
+    session.flush()
     return ad
 
 

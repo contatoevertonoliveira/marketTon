@@ -31,6 +31,14 @@ def pause(session: Session, ad_id: int) -> AdCampaign:
     return _module(session, ad_id).pause(session, ad_id)
 
 
+def stop(session: Session, ad_id: int, *, now: datetime | None = None) -> AdCampaign:
+    return _module(session, ad_id).stop(session, ad_id, now=now)
+
+
+def remove(session: Session, ad_id: int) -> AdCampaign:
+    return _module(session, ad_id).remove(session, ad_id)
+
+
 def pause_all(session: Session) -> int:
     return meta_campaigns.pause_all(session) + google_campaigns.pause_all(session)
 

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.deps import get_session
 from backend.security import Principal, record_action, require
+from core.db.ads import AdCampaign
 from core.db.creatives import CreativeCampaign
 from core.services import ads_manager, aistudio, creative_history, google_campaigns, meta_campaigns
 from core.services.aistudio import AIStudioError
@@ -192,6 +193,43 @@ def pause_ad(ad_id: int, principal: Principal = Depends(require("portfolio.manag
     record_action(session, principal, action="ads.paused", resource_type="ad", resource_id=str(ad_id))
     session.commit()
     return creative_history.ad_out(ad)
+
+
+@router.post("/ads/{ad_id}/stop", summary="PARAR de vez: pausa e encerra o anúncio (só o operador; não liga mais)")
+def stop_ad(ad_id: int, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        ad = ads_manager.stop(session, ad_id)
+    except meta_campaigns.AdsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_action(session, principal, action="ads.stopped", resource_type="ad", resource_id=str(ad_id))
+    session.commit()
+    return creative_history.ad_out(ad)
+
+
+@router.delete("/ads/{ad_id}", summary="EXCLUIR o anúncio: apaga na rede de anúncios e tira da tela (só o operador)")
+def delete_ad(ad_id: int, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        ads_manager.remove(session, ad_id)
+    except meta_campaigns.AdsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_action(session, principal, action="ads.removed", resource_type="ad", resource_id=str(ad_id))
+    session.commit()
+    return {"removed": ad_id}
+
+
+@router.delete("/creatives/{creative_id}", summary="EXCLUIR o criativo da tela (fica no banco; só sem anúncio aberto)")
+def delete_creative(creative_id: int, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    creative = session.get(CreativeCampaign, creative_id)
+    if creative is None:
+        raise HTTPException(status_code=404, detail="criativo não encontrado")
+    open_ads = session.query(AdCampaign).filter(AdCampaign.creative_campaign_id == creative_id,
+                                                AdCampaign.status.in_(("draft", "paused", "active"))).count()
+    if open_ads:
+        raise HTTPException(status_code=422, detail=f"este criativo tem {open_ads} anúncio(s) aberto(s): pare ou exclua o anúncio antes.")
+    creative.hidden = True
+    record_action(session, principal, action="creatives.hidden", resource_type="creative", resource_id=str(creative_id))
+    session.commit()
+    return {"removed": creative_id}
 
 
 @router.post("/ads/pause-all", summary="Botão de parada: pausa todos os anúncios ativos (só o operador)")

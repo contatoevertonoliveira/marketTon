@@ -213,3 +213,20 @@ def test_metrics_come_from_meta_and_a_finished_flight_is_marked_ended(session, m
     meta.gets[ad.external_ad_id] = {"effective_status": "ACTIVE", "insights": {"data": []}}  # sem linha: nada muda, nada é inventado
     mc.sync_metrics(session, now=NOW + timedelta(days=1, hours=1))
     assert (ad.spent_brl, ad.status) == (7.35, "ended")  # passou do fim da veiculação
+
+
+def test_stop_ends_for_good_and_remove_deletes_on_meta_and_frees_the_budget(session, meta):
+    _cards(session)
+    a, b = [mc.create_ad(session, _creative(session, n).id, daily_brl=8, days=2, dry_run=False, now=NOW)["ad_id"] for n in (1, 2)]
+    mc.activate(session, a, actor="operador", now=NOW)
+    meta.posts.clear()
+    ad = mc.stop(session, a, now=NOW)
+    assert ad.status == "ended" and ad.ended_at == NOW and {d["status"] for _, d in meta.posts} == {"PAUSED"}  # parou na Meta
+    with pytest.raises(mc.AdsError, match="só dá para ligar"):
+        mc.activate(session, a, actor="operador", now=NOW)  # parado não liga mais
+    before = mc.budget_status(session, NOW)["week_committed_brl"]
+    meta.posts.clear()
+    removed = mc.remove(session, b)
+    assert removed.status == "removed" and {d["status"] for _, d in meta.posts} == {"DELETED"} and len(meta.posts) == 3  # anúncio, conjunto, campanha
+    assert mc.budget_status(session, NOW)["week_committed_brl"] == before - 16  # o excluído deixa de contar no compromisso
+    assert mc.remove(session, b).status == "removed"  # de novo: nada acontece

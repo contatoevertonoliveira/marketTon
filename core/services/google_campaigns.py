@@ -238,6 +238,34 @@ def pause(session: Session, ad_id: int) -> AdCampaign:
     return ad
 
 
+def stop(session: Session, ad_id: int, *, now: datetime | None = None) -> AdCampaign:
+    """Para de vez: pausa no Google e encerra (não dá mais para ligar). O histórico e as métricas ficam."""
+    ad = session.get(AdCampaign, ad_id)
+    if ad is None or ad.platform != "google":
+        raise AdsError(f"campanha {ad_id} não encontrada")
+    if ad.status in ("ended", "removed"):
+        return ad
+    if ad.external_campaign_id and ad.status == "active":
+        _set_status(session, ad, "PAUSED")
+    ad.status, ad.ended_at = "ended", now or datetime.now(UTC)
+    session.flush()
+    return ad
+
+
+def remove(session: Session, ad_id: int) -> AdCampaign:
+    """Exclui: remove a campanha no Google e tira da tela."""
+    ad = session.get(AdCampaign, ad_id)
+    if ad is None or ad.platform != "google":
+        raise AdsError(f"campanha {ad_id} não encontrada")
+    if ad.status == "removed":
+        return ad
+    if ad.external_campaign_id:
+        _set_status(session, ad, "REMOVED")
+    ad.status = "removed"
+    session.flush()
+    return ad
+
+
 def pause_all(session: Session) -> int:
     n = 0
     for ad in session.scalars(select(AdCampaign).where(AdCampaign.status == "active", AdCampaign.platform == "google")):
