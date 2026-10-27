@@ -111,7 +111,8 @@ PROMPTS = {
         "VERIFICAÇÃO do marketTon (não é a rotina completa). O sistema já olhou tudo por código e achou o que segue; trate SÓ isso, "
         "com o mínimo de chamadas. Se precisar de uma regra, `agent_playbook` com `section`. Registre no relatório (`report_add`) o que "
         "achou/fez; escreva no chat (`chat_send`) só se o operador precisar decidir algo. Se houver tendência começando a subir, siga a seção "
-        "3.08 do manual (produto no catálogo, conta de CPC x comissão, portfólio, proposta de campanha)."
+        "3.08 do manual (produto no catálogo, conta de CPC x comissão, portfólio, proposta de campanha). Se houver conteúdo para publicar, siga a "
+        "seção 3.09 (conferir as imagens com `creative_review`, refazer o que estiver errado, montar o Reel e publicar)."
     ),
     "research": (
         "PESQUISA SEMANAL de formas de vender como afiliado. Use WebSearch/WebFetch (no máximo 6 buscas e 4 páginas) para achar o que "

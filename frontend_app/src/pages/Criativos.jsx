@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { API_BASE, deleteJSON, getJSON, getTokens, postJSON } from "../lib/apiClient";
+import { API_BASE, deleteJSON, getJSON, getTokens, postJSON, putJSON } from "../lib/apiClient";
 
 const card = { background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 0 2rem 0 rgba(136,152,170,.15)", marginBottom: 16 };
 const MODE = { sandbox: ["#eef0f6", "#525f7f", "teste (sandbox)"], live: ["#e5faf1", "#1a7a54", "ao vivo"] };
@@ -427,7 +427,50 @@ function sum(list, key) {
   return list.reduce((acc, a) => acc + (a[key] || 0), 0);
 }
 
-function Overview({ ads, totals, budget, onSync, onPauseAll }) {
+// Chave da publicação automática no Instagram: o agente cria, confere, refaz e publica; você só liga, desliga e fixa o teto por dia.
+function AutoPublishCard({ onMsg }) {
+  const [st, setSt] = useState(null);
+  const [max, setMax] = useState(2);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => getJSON("/social/autopublish").then((d) => { setSt(d); setMax(d.max_per_day); }).catch(() => {}), []);
+  useEffect(() => { load(); const id = setInterval(load, 60000); return () => clearInterval(id); }, [load]);
+  async function save(enabled) {
+    if (enabled && !window.confirm("LIGAR a publicação automática?\n\nO agente passa a criar, conferir as imagens, refazer o que estiver errado e PUBLICAR no Instagram do Mural sozinho, até " + max + " por dia, mesmo sem você abrir o sistema.\n\nAnúncios (que gastam dinheiro) continuam só com você. Você pode desligar a qualquer momento.")) return;
+    setBusy(true);
+    try { const d = await putJSON("/social/autopublish", { enabled, max_per_day: Number(max) }); setSt(d); onMsg({ ok: true, text: enabled ? "Publicação automática ligada." : "Publicação automática desligada." }); }
+    catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
+  }
+  if (!st) return null;
+  return (
+    <div style={{ ...card, borderLeft: `4px solid ${st.enabled ? "#2dce89" : "#adb5bd"}` }}>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14 }}>🤖 Publicação automática no Instagram {st.enabled ? <span style={{ color: "#1a7a54" }}>· ligada</span> : <span style={{ color: "#8898aa" }}>· desligada</span>}</div>
+          <div style={{ fontSize: 12, color: "#525f7f", margin: "4px 0" }}>O agente cria o conteúdo, <strong>confere as imagens com senso crítico</strong>, refaz o que ficar errado e publica sozinho. Cada post tem o aviso de afiliado e o link da bio. Hoje saíram <strong>{st.published_today}</strong> de {st.max_per_day}.</div>
+        </div>
+        <label style={{ fontSize: 12 }}>Teto por dia <input type="number" min="1" max="6" value={max} onChange={(e) => setMax(e.target.value)} style={{ width: 52, padding: "4px 6px", border: "1px solid #dee2e6", borderRadius: 6 }} /></label>
+        {st.enabled
+          ? <button disabled={busy} onClick={() => save(false)} style={{ border: "none", background: "#f5365c", color: "#fff", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Desligar</button>
+          : <button disabled={busy} onClick={() => save(true)} style={{ border: "none", background: "#2dce89", color: "#fff", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Ligar</button>}
+        {st.enabled && <button disabled={busy} onClick={() => save(true)} style={{ border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer" }}>Salvar teto</button>}
+      </div>
+      {st.posts && st.posts.length > 0 && (
+        <div style={{ marginTop: 10, borderTop: "1px solid #f0f2f7", paddingTop: 8, fontSize: 12 }}>
+          <div style={{ fontWeight: 700, color: "#32325d", marginBottom: 4 }}>Últimas publicações</div>
+          {st.posts.map((p) => (
+            <div key={p.id} style={{ display: "flex", gap: 8, padding: "2px 0", color: p.status === "published" ? "#525f7f" : "#c31e3f" }}>
+              <span style={{ width: 120 }}>{when(p.created_at)}</span><span style={{ width: 56 }}>{p.kind === "reel" ? "Reel" : "Imagem"}</span>
+              <span style={{ flex: 1 }}>{p.status === "published" ? (p.permalink ? <a href={p.permalink} target="_blank" rel="noreferrer">ver post</a> : "publicado") : `falhou: ${p.error || ""}`}</span>
+              <span style={{ color: "#8898aa" }}>{p.created_by}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Overview({ ads, totals, budget, onSync, onPauseAll, onMsg }) {
   const spent = sum(ads, "spent_brl"), imps = sum(ads, "impressions"), clicks = sum(ads, "clicks");
   const active = ads.filter((a) => a.status === "active").length;
   const ctr = imps ? Math.round((clicks / imps) * 10000) / 100 : null;
@@ -440,6 +483,7 @@ function Overview({ ads, totals, budget, onSync, onPauseAll }) {
   const data = ads.map((a) => ({ label: `${short(a.product_title, 16)} · ${NET[a.platform] || a.platform}`, Gasto: Number((a.spent_brl || 0).toFixed(2)), Cliques: a.clicks || 0, Impressões: a.impressions || 0 }));
   return (
     <div>
+      <AutoPublishCard onMsg={onMsg} />
       <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 16 }}>
         <Metric big label="Gasto em anúncios" value={brl(spent)} />
         <Metric big label="Impressões" value={num(imps)} />
@@ -557,7 +601,7 @@ export default function Criativos() {
       </div>
       {msg && <div style={{ marginBottom: 12, fontSize: 12, padding: "8px 10px", borderRadius: 8, color: msg.ok ? "#1a7a54" : "#c31e3f", background: msg.ok ? "#e5faf1" : "#fef1f4" }}>{msg.text}</div>}
 
-      {tab === "geral" && <Overview ads={allAds} totals={data.totals} budget={budget} onSync={syncNow} onPauseAll={pauseAll} />}
+      {tab === "geral" && <Overview ads={allAds} totals={data.totals} budget={budget} onSync={syncNow} onPauseAll={pauseAll} onMsg={setMsg} />}
 
       {tab === "live" && (liveItems.length === 0
         ? <Empty>Nenhum criativo ao vivo ainda. Quando o agente (ou você) pedir criativos de verdade ao AI Studio, eles aparecem aqui com as imagens, os anúncios e os botões.</Empty>

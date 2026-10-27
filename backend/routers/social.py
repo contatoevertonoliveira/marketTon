@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from backend.deps import get_session
 from backend.security import Principal, record_action, require
 from core.db.creatives import CreativeCampaign
-from core.services import aistudio, instagram, reels
+from core.services import aistudio, content_pipeline, instagram, reels
 from core.services.aistudio import AIStudioError
 
 router = APIRouter(tags=["redes sociais"])
@@ -97,6 +97,77 @@ def publish(payload: PublishIn, principal: Principal = Depends(require("connecto
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     record_action(session, principal, action="social.instagram_published", resource_type="creative", resource_id=str(payload.creative_id),
                   detail=post.permalink or post.external_id)
+    session.commit()
+    return instagram.out(post)
+
+
+class AutoIn(BaseModel):
+    enabled: bool
+    max_per_day: int = Field(2, ge=1, le=6)
+
+
+class ReviewIn(BaseModel):
+    creative_id: int
+    kind: str
+    verdict: str
+    notes: str | None = Field(None, max_length=1500)
+
+
+class AutoPublishIn(BaseModel):
+    creative_id: int
+    kind: str
+    caption: str | None = Field(None, max_length=2200)
+
+
+@router.get("/social/autopublish", summary="Publicação automática: chave, teto por dia, quantas saíram hoje e os últimos posts")
+def autopublish_status(principal: Principal = Depends(require("operations.view")), session: Session = Depends(get_session)) -> dict:
+    return content_pipeline.status(session)
+
+
+@router.put("/social/autopublish", summary="Ligar/desligar a publicação automática e o teto por dia (só o operador)")
+def autopublish_set(payload: AutoIn, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        content_pipeline.set_settings(session, enabled=payload.enabled, max_per_day=payload.max_per_day, actor=principal.username)
+    except content_pipeline.ContentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_action(session, principal, action="social.autopublish_set", resource_type="social", detail=f"ligada={payload.enabled}, teto={payload.max_per_day}/dia")
+    session.commit()
+    return content_pipeline.status(session)
+
+
+@router.get("/social/pending", summary="Criativos prontos que ainda não têm post de imagem ou Reel")
+def pending(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
+    return {"settings": content_pipeline.get_settings(session), "published_today": content_pipeline.published_today(session),
+            "pending": content_pipeline.pending_content(session)}
+
+
+@router.get("/social/review/{creative_id}", summary="Imagens pequenas e fatos para o agente conferir o criativo e o slideshow")
+def review_assets(creative_id: int, principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
+    try:
+        return content_pipeline.review_assets(session, creative_id)
+    except (content_pipeline.ContentError, AIStudioError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/social/review", summary="Registrar o parecer (aprovado ou recusado) sobre um criativo ou slideshow", status_code=201)
+def submit_review(payload: ReviewIn, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        row = content_pipeline.submit_review(session, payload.creative_id, payload.kind, payload.verdict, payload.notes, principal.username)
+    except content_pipeline.ContentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"id": row.id, "verdict": row.verdict}
+
+
+@router.post("/social/auto/publish", summary="Publicar automaticamente (só com a chave ligada, parecer aprovado e dentro do teto do dia)", status_code=201)
+def auto_publish(payload: AutoPublishIn, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        post = content_pipeline.auto_publish(session, payload.creative_id, payload.kind, caption=payload.caption, actor=principal.username)
+    except content_pipeline.ContentError as exc:
+        session.commit()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_action(session, principal, action="social.auto_published", resource_type="creative", resource_id=str(payload.creative_id),
+                  detail=f"{payload.kind}: {post.permalink or post.external_id}")
     session.commit()
     return instagram.out(post)
 

@@ -1,6 +1,8 @@
 """Criativos de anúncio feitos pelo AI Studio: pedir, acompanhar e receber o resultado (webhook)."""
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -24,6 +26,7 @@ class CreativeIn(BaseModel):
     hook_variants: int = Field(2, ge=1, le=4)
     budget_usd: float | None = Field(None, gt=0)
     formats: str = "video"  # "images" = só imagens e texto (sem vídeo)
+    notes: str | None = Field(None, max_length=600)  # o que corrigir ao refazer (ex.: "título menor, sem cobrir o produto")
 
 
 def _out(c: CreativeCampaign) -> dict:
@@ -279,10 +282,14 @@ def estimate(payload: CreativeIn, principal: Principal = Depends(require("portfo
 @router.post("/creatives", summary="Pedir os criativos de um produto ao AI Studio", status_code=201)
 def create_creative(payload: CreativeIn, principal: Principal = Depends(require("portfolio.manage")),
                     session: Session = Depends(get_session)) -> dict:
+    recent = [c for c in session.scalars(select(CreativeCampaign).where(CreativeCampaign.product_id == payload.product_id, CreativeCampaign.mode == "live"))
+              if c.created_at and (datetime.now(UTC) - (c.created_at if c.created_at.tzinfo else c.created_at.replace(tzinfo=UTC))) < timedelta(hours=24)]
+    if payload.mode == "live" and len(recent) >= 3:
+        raise HTTPException(status_code=422, detail="este produto já teve 3 criativos ao vivo nas últimas 24 h: não refaço mais por hoje (gasto de crédito).")
     try:
         record = aistudio.create(session, payload.product_id, mode=payload.mode, quality=payload.quality, angle=payload.angle,
                                  hook_variants=payload.hook_variants, budget_usd=payload.budget_usd, actor=principal.username,
-                                 formats=payload.formats)
+                                 formats=payload.formats, extra_notes=payload.notes)
     except AIStudioError as exc:
         session.commit()  # guarda a tentativa (external_ref) mesmo quando falha
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -157,6 +157,31 @@ disputa). A verificação só chama você quando uma palavra **começa** a subir
 Palavras novas: `radar_watch` (até 40; o radar olha 12 por dia). Termos de outros países (`trending_abroad`) entram traduzidos, no que o
 brasileiro digitaria. Alta no Trends sem volume no Planejador (ou abaixo de 200 por mês) não vale campanha.
 
+## 3.09 Conteúdo orgânico no Instagram (criar, conferir, refazer e publicar)
+
+O operador pode ficar dias sem abrir o sistema: **você é a pessoa de confiança dele aqui**. Quando a chave da publicação automática está
+ligada (`content_pending` mostra `settings.enabled`), você cuida do conteúdo de ponta a ponta. Anúncios (que gastam dinheiro) continuam só do
+operador; aqui é só orgânico, que não gasta verba.
+
+**Rotina (uma vez por criativo, no máximo `max_per_day` publicações por dia, contando as do operador):**
+1. `content_pending`: o que falta publicar. Pegue o mais antigo. Se a chave estiver desligada ou o teto do dia já foi atingido, não faça nada.
+2. `creative_review(creative_id)`: **olhe** a imagem 4:5 com senso crítico, usando `o_que_conferir`. Perguntas que pesam: o produto é o da foto
+   original? o título cabe e está inteiro? o preço está certo e aparece uma vez? a logo cobre algo? tem logo ou marca de terceiros no produto
+   (risco de imitação)? o texto promete o que não se prova?
+3. **Se estiver errado:** `creative_review_submit(..., "image", "rejected", "<o que está errado>")` e refaça com `creative_create(product_id,
+   mode="live", formats="images", notes="<o que corrigir>")`. Espere ficar pronto (`creative_status`). **No máximo 2 refeitos por produto**; o
+   sistema também limita a 3 criativos ao vivo por produto em 24 h. Passou disso: registre no relatório (`report_add`, kind=alerta) e pule.
+4. **Se estiver certo:** `creative_review_submit(..., "image", "approved", "<o que conferi>")`.
+5. `reel_build(creative_id)` e `creative_review` de novo (agora vem a faixa com 4 quadros do slideshow): transições, imagem cortada, borrão
+   demais. Aprove ou recuse o `reel` do mesmo jeito (recusado: não publique o Reel; o post de imagem pode sair).
+6. `social_publish(creative_id, "image")` e, aprovado, `social_publish(creative_id, "reel")` (sem `caption` usa o texto sugerido, que já tem o
+   aviso de afiliado e o link da bio). Respeite o teto do dia: o que ficar sobrando sai na próxima verificação.
+7. `report_add` (kind=acao): o que publicou, o link do post e o que você achou de errado e refez. Se algo falhou, kind=alerta com o motivo.
+
+**Regras de ouro:** nunca publique sem parecer `approved` seu; nunca edite o texto para tirar o aviso de divulgação; nunca publique criativo de
+teste; se tiver dúvida sobre o produto (marca falsificada, foto de outro item), **não publique** e avise no relatório. Música: a API não deixa
+escolher; o Reel sai mudo (o operador pode baixar e repostar com música).
+
 ## 3.1 Pesquisar plataformas e fontes de demanda
 
 Cruze sempre: Google Trends (momento) + Planejador (volume/CPC) + vendas/ranking do marketplace +

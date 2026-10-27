@@ -16,7 +16,7 @@ from core.db.agent_reports import KINDS, AgentReport
 from core.db.creatives import CreativeCampaign
 from core.db.service_credentials import ServiceCredential
 from core.db.tracking import ClickEvent, Sale
-from core.services import trend_radar
+from core.services import content_pipeline, trend_radar
 
 CLICKS_NOTABLE = 25  # cliques novos na loja a partir dos quais vale uma análise
 META_OK = {None, "", "ACTIVE", "PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED", "IN_PROCESS", "PENDING_REVIEW"}
@@ -61,16 +61,22 @@ def digest(session: Session, since: datetime) -> dict:
     radar = [f"{r['keyword']} (+{r['growth_30d']:g}% em 30 dias" + (f", {r['monthly_volume']} buscas/mês" if r["monthly_volume"] else "") + ")"
              for r in trend_radar.new_rising(session, since)[:5]]
 
-    notable = bool(sales or ad_alerts or creative_events or integrations or radar or clicks >= CLICKS_NOTABLE)
+    content = []
+    cfg = content_pipeline.get_settings(session)
+    if cfg["enabled"] and content_pipeline.published_today(session) < cfg["max_per_day"]:  # só vale a pena acordar o agente se ele pode publicar
+        content = [f"criativo {p['creative_id']} ({p['product']}) sem {' e '.join('post' if k == 'image' else 'Reel' for k in p['missing'])}"
+                   for p in content_pipeline.pending_content(session)[:3]]
+
+    notable = bool(sales or ad_alerts or creative_events or integrations or radar or content or clicks >= CLICKS_NOTABLE)
     return {"since": since.isoformat(), "sales": sales, "clicks": clicks, "ad_alerts": ad_alerts,
-            "creative_events": creative_events, "integration_errors": integrations, "radar": radar, "notable": notable}
+            "creative_events": creative_events, "integration_errors": integrations, "radar": radar, "content": content, "notable": notable}
 
 
 def digest_text(d: dict) -> str:
     """O resumo em poucas linhas: vai no pedido ao Claude e no relatório."""
     parts = [f"vendas novas: {d['sales']}", f"cliques novos na loja: {d['clicks']}"]
     for key, label in (("ad_alerts", "anúncios"), ("creative_events", "criativos"), ("integration_errors", "integrações"),
-                       ("radar", "tendências começando a subir")):
+                       ("radar", "tendências começando a subir"), ("content", "conteúdo para publicar")):
         if d[key]:
             parts.append(f"{label}: " + "; ".join(d[key][:5]))
     return " | ".join(parts)

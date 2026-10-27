@@ -143,7 +143,7 @@ def ensure_logo_asset(session: Session, cfg: AIStudioConfig) -> str | None:
 
 def build_payload(session: Session, product: Product, *, external_ref: str, mode: str, quality: str, budget_usd: float,
                   angle: str, hook_variants: int, callback_url: str, logo_asset: str | None, store_url: str | None,
-                  formats: str = "video") -> dict:
+                  formats: str = "video", extra_notes: str | None = None) -> dict:
     row = None
     for p, r, _ in storefront._candidates(session):
         if p.id == product.id:
@@ -173,6 +173,8 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
     if images_only:
         notes += (" Peça de propaganda profissional (merchandising): produto em destaque, cenário limpo e coerente com o uso do produto, "
                   "composição de anúncio de marca, espaço para título e preço. Não desenhar texto na imagem: título, preço e selo entram na montagem.")
+    if extra_notes:
+        notes += " Ajuste pedido ao refazer: " + extra_notes.strip()[:600]
     copy_piece = {"kind": "copy", "channel": "instagram", "fields": ["caption", "hashtags", "headline"]}
     if images_only:
         deliverables = [{"kind": "image", "channel": "feed", "aspect_ratio": "4:5"}, {"kind": "image", "channel": "feed", "aspect_ratio": "1:1"},
@@ -232,7 +234,8 @@ def estimate(session: Session, product_id: int, *, quality: str = "economy", ang
 
 
 def create(session: Session, product_id: int, *, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution",
-           hook_variants: int = 2, budget_usd: float | None = None, actor: str = "agent", formats: str = "video") -> CreativeCampaign:
+           hook_variants: int = 2, budget_usd: float | None = None, actor: str = "agent", formats: str = "video",
+           extra_notes: str | None = None) -> CreativeCampaign:
     cfg = _require(session)
     if mode not in ("sandbox", "live") or quality not in QUALITIES or angle not in ANGLES or formats not in FORMATS:
         raise AIStudioError(f"parâmetros inválidos (modo sandbox|live; qualidade {', '.join(QUALITIES)}; ângulo {', '.join(ANGLES)})")
@@ -251,7 +254,7 @@ def create(session: Session, product_id: int, *, mode: str = "sandbox", quality:
     session.flush()  # o external_ref fica guardado ANTES da chamada: retentar nunca duplica
     payload = build_payload(session, product, external_ref=ref, mode=mode, quality=quality, budget_usd=budget, angle=angle,
                             hook_variants=hook_variants, callback_url=cfg.callback_url, logo_asset=ensure_logo_asset(session, cfg),
-                            store_url=_store_url(session, product_id), formats=formats)
+                            store_url=_store_url(session, product_id), formats=formats, extra_notes=extra_notes)
     record.request = payload
     try:
         body = _call(cfg, "POST", "/campaigns", idempotency_key=ref[:80], json=payload)

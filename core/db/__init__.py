@@ -35,6 +35,7 @@ from core.db.commission_rates import CommissionRate
 from core.db.agent_chat import AgentMessage
 from core.db.agent_reports import AgentReport
 from core.db.agent_runs import AgentRun
+from core.db.content_review import CreativeReview
 from core.db.finance import WalletBalance
 from core.db.social import SocialPost
 from core.db.trend_radar import TrendSnapshot
@@ -114,6 +115,7 @@ __all__ = [
     "AgentMessage",
     "AgentReport",
     "WalletBalance",
+    "CreativeReview",
     "SocialPost",
     "TrendSnapshot",
     "AgentRun",

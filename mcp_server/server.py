@@ -406,14 +406,18 @@ def creative_estimate(product_id: int, quality: str = "economy", angle: str = "p
 
 
 @mcp.tool(annotations=WRITE)
-def creative_create(product_id: int, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2, formats: str = "video"):
+def creative_create(product_id: int, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2, formats: str = "video",
+                    notes: str | None = None):
     """Pede ao AI Studio os criativos (vídeo 9:16 e 1:1, imagem 4:5 e texto) de um produto da vitrine. EXIGE o modo agente.
 
     `mode="sandbox"` (padrão) não gasta nada e devolve peças de exemplo: use para testar o fluxo. `mode="live"` gasta créditos e só funciona
     se o operador ligou a permissão no cartão do AI Studio; peça aprovação no chat antes. Nunca invente alegações: o produto só pode ser descrito
     pelos fatos que o marketTon tem. O resultado chega por webhook; acompanhe com `creative_status`.
     """
-    return _run(lambda: _client.post("/creatives", {"product_id": product_id, "mode": mode, "quality": quality, "angle": angle, "hook_variants": hook_variants, "formats": formats}))
+    body = {"product_id": product_id, "mode": mode, "quality": quality, "angle": angle, "hook_variants": hook_variants, "formats": formats}
+    if notes:
+        body["notes"] = notes  # ao REFAZER: o que corrigir (ex.: "título menor, sem cobrir o produto")
+    return _run(lambda: _client.post("/creatives", body))
 
 
 @mcp.tool(annotations=READ)
@@ -448,9 +452,61 @@ def ad_create(creative_id: int, daily_brl: float, days: int = 3, dry_run: bool =
 
 
 @mcp.tool(annotations=READ)
+def content_pending():
+    """Fila de conteúdo: criativos ao vivo prontos que ainda não têm post de imagem e/ou Reel no Instagram, a chave da publicação automática
+    (ligada ou não), o teto por dia e quantas publicações saíram hoje. Comece por aqui na rotina de conteúdo (manual 3.09)."""
+    return _run(lambda: _client.get("/social/pending"))
+
+
+@mcp.tool(annotations=READ)
+def creative_review(creative_id: int):
+    """VER o criativo (imagem 4:5) e, se já montado, o slideshow (4 quadros), com os fatos do produto e a lista do que conferir. Olhe com
+    senso crítico: texto cortado, preço errado ou repetido, logo cobrindo algo, produto diferente da foto, marca de terceiros. Depois registre o
+    parecer com `creative_review_submit`."""
+    try:
+        data = _client.get(f"/social/review/{creative_id}")
+    except ApiError as exc:
+        return {"ok": False, "status": exc.status, "message": str(exc)}
+    import base64
+
+    from mcp.server.fastmcp import Image
+
+    out: list = [data["facts"]]
+    for item in data["images"]:
+        out.append(item["name"])
+        out.append(Image(data=base64.b64decode(item["jpeg_b64"]), format="jpeg"))
+    return out
+
+
+@mcp.tool(annotations=WRITE)
+def creative_review_submit(creative_id: int, kind: str, verdict: str, notes: str = ""):
+    """Registra o seu parecer sobre o que viu: `kind` = image ou reel; `verdict` = approved ou rejected. Recusa precisa do motivo (o que está
+    errado). Só com `approved` recente a publicação automática libera. Se recusou, refaça (`creative_create` com `notes`) no máximo 2 vezes por
+    produto; passou disso, registre no relatório e não publique."""
+    return _run(lambda: _client.post("/social/review", {"creative_id": creative_id, "kind": kind, "verdict": verdict, "notes": notes}))
+
+
+@mcp.tool(annotations=WRITE)
+def reel_build(creative_id: int):
+    """Monta o slideshow vertical (10 a 15 s, sem custo de crédito) das imagens do produto. Depois confira com `creative_review`."""
+    return _run(lambda: _client.post(f"/social/reel/{creative_id}/build"))
+
+
+@mcp.tool(annotations=WRITE)
+def social_publish(creative_id: int, kind: str, caption: str | None = None):
+    """Publica no Instagram do Mural (`kind` = image ou reel). SÓ funciona com a chave da publicação automática ligada pelo operador, parecer
+    `approved` seu e recente, texto com o aviso de divulgação e dentro do teto do dia. Sem `caption`, usa o texto sugerido. Anúncios (que gastam
+    dinheiro) continuam só do operador. Registre no relatório (`report_add`) o que saiu, com o link."""
+    body = {"creative_id": creative_id, "kind": kind}
+    if caption:
+        body["caption"] = caption
+    return _run(lambda: _client.post("/social/auto/publish", body))
+
+
+@mcp.tool(annotations=READ)
 def instagram_caption(creative_id: int):
-    """Texto sugerido para o post do Instagram de um criativo pronto (com o link da bio e o aviso de divulgação). Você NÃO publica: mostre no
-    chat e o operador publica pelo botão na página Criativos e anúncios."""
+    """Texto sugerido para o post do Instagram de um criativo pronto (com o link da bio e o aviso de divulgação). Para publicar sozinho use
+    `social_publish` (com a chave ligada e o parecer aprovado); senão o operador publica pelo botão em Criativos e anúncios."""
     return _run(lambda: _client.get(f"/social/instagram/caption/{creative_id}"))
 
 
