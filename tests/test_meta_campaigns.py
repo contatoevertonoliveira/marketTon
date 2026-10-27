@@ -238,3 +238,36 @@ def test_headline_is_cut_on_a_word_and_campaign_disables_budget_sharing(session,
     _cards(session)
     mc.create_ad(session, _creative(session).id, daily_brl=10, days=3, dry_run=False, now=NOW)
     assert dict(meta.posts)["act_123/campaigns"]["is_adset_budget_sharing_enabled"] == "false"
+
+
+def test_ad_on_an_existing_page_post_skips_the_image_and_checks_the_post(session, meta):
+    _cards(session)
+    creative = _creative(session)
+    link = mc.build_plan(session, creative, daily_brl=1, days=1, check_budget=False)["link"]
+    post = {"id": "999_555", "is_published": True, "attachments": {"data": [{"unshimmed_url": link}]}}
+    meta.gets = {"999_555": post, "999/posts": {"data": [{**post, "message": "Garrafa", "full_picture": "https://img/x.jpg"}]}, "999": {"access_token": "pagetoken"}}
+
+    kit = mc.post_kit(session, creative.id)
+    assert kit["link"] == link and kit["headline"] == "Gelada por 24 h" and kit["image_file"] == f"/creatives/{creative.id}/files/d1"
+    assert mc.list_page_posts(session)[0]["link"] == link
+
+    plan = mc.create_ad(session, creative.id, daily_brl=10, days=3, now=NOW, post_id="555")["plan"]
+    assert plan["post_id"] == "555" and not meta.posts  # ensaio: nada enviado
+    out = mc.create_ad(session, creative.id, daily_brl=10, days=3, dry_run=False, now=NOW, post_id="555")
+    paths = [p for p, _ in meta.posts]
+    assert "act_123/adimages" not in paths and dict(meta.posts)["act_123/adcreatives"]["object_story_id"] == "999_555"
+    assert "object_story_spec" not in dict(meta.posts)["act_123/adcreatives"] and session.get(AdCampaign, out["ad_id"]).status == "paused"
+
+
+def test_a_post_without_the_product_link_or_not_published_is_refused(session, meta):
+    _cards(session)
+    creative = _creative(session)
+    meta.gets = {"999_555": {"id": "999_555", "is_published": True, "attachments": {"data": [{"unshimmed_url": "https://outro-site.com/x"}]}},
+                 "999": {"access_token": "pagetoken"}}
+    with pytest.raises(mc.AdsError, match="não tem o link do produto"):
+        mc.create_ad(session, creative.id, daily_brl=10, days=3, dry_run=False, now=NOW, post_id="555")
+    link = mc.build_plan(session, creative, daily_brl=1, days=1, check_budget=False)["link"]
+    meta.gets["999_555"] = {"id": "999_555", "is_published": False, "attachments": {"data": [{"unshimmed_url": link}]}}
+    with pytest.raises(mc.AdsError, match="não está publicado"):
+        mc.create_ad(session, creative.id, daily_brl=10, days=3, dry_run=False, now=NOW, post_id="555")
+    assert not meta.posts and session.query(AdCampaign).count() == 0  # nada foi criado na Meta nem guardado

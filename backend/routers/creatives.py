@@ -122,6 +122,7 @@ class AdCreate(BaseModel):
     days: int = Field(3, ge=1, le=14)
     dry_run: bool = True  # padrão: só mostra o que seria enviado à Meta, sem enviar nada
     variant: str | None = None
+    post_id: str | None = Field(None, max_length=80)  # anunciar um post já publicado na Página (em vez de criar o post pelo app)
 
 
 class GoogleAdCreate(BaseModel):
@@ -135,6 +136,22 @@ class GoogleAdCreate(BaseModel):
     keywords: list[str] | None = Field(None, max_length=10)
 
 
+@router.get("/ads/meta-post-kit/{creative_id}", summary="Texto, link e imagem para publicar na Página e depois anunciar esse post")
+def meta_post_kit(creative_id: int, principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
+    try:
+        return meta_campaigns.post_kit(session, creative_id)
+    except meta_campaigns.AdsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/ads/page-posts", summary="Posts publicados na Página (para escolher qual anunciar)")
+def page_posts(limit: int = 10, principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
+    try:
+        return {"posts": meta_campaigns.list_page_posts(session, limit)}
+    except meta_campaigns.AdsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/ads/budget", summary="Orçamento de anúncios por plataforma: teto, verba comprometida e gasto da semana")
 def ads_budget_status(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
     return {"meta": meta_campaigns.budget_status(session, platform="meta"), "google": meta_campaigns.budget_status(session, platform="google")}
@@ -144,7 +161,7 @@ def ads_budget_status(principal: Principal = Depends(require("portfolio.view")),
 def create_meta_ad(payload: AdCreate, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
     try:
         result = meta_campaigns.create_ad(session, payload.creative_id, daily_brl=payload.daily_brl, days=payload.days, dry_run=payload.dry_run,
-                                          actor=principal.username, variant=payload.variant)
+                                          actor=principal.username, variant=payload.variant, post_id=payload.post_id)
     except meta_campaigns.AdsError as exc:
         session.commit()  # guarda a tentativa que falhou
         raise HTTPException(status_code=422, detail=str(exc)) from exc

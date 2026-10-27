@@ -430,15 +430,33 @@ def ads_budget_status():
 
 
 @mcp.tool(annotations=WRITE)
-def ad_create(creative_id: int, daily_brl: float, days: int = 3, dry_run: bool = True):
+def ad_create(creative_id: int, daily_brl: float, days: int = 3, dry_run: bool = True, post_id: str | None = None):
     """Cria o anúncio na Meta a partir de um criativo PRONTO. EXIGE o modo agente.
 
     `dry_run=True` (padrão) só mostra o que seria enviado, sem tocar na Meta: use sempre primeiro e mostre o plano no chat. Com `dry_run=False`
     o anúncio nasce PAUSADO na Meta (nada gasta): quem LIGA é o operador, em Criativos e anúncios; você não consegue ligar. As travas
     (verba por dia, valor da semana, produtos e criativos por produto) são aplicadas pelo sistema e você não as altera. Criativo de teste
     (sandbox) nunca vira anúncio de verdade. Peça a aprovação do plano no chat ANTES de criar.
+
+    `post_id` (opcional): anunciar um post que o operador JÁ publicou na Página (use `meta_page_posts` para achar o id). Serve quando a Meta
+    recusa posts criados pelo app. O post precisa levar o link do produto (`meta_post_kit` dá o texto, o link e a imagem para o operador publicar).
     """
-    return _run(lambda: _client.post("/ads", {"creative_id": creative_id, "daily_brl": daily_brl, "days": days, "dry_run": dry_run}))
+    body = {"creative_id": creative_id, "daily_brl": daily_brl, "days": days, "dry_run": dry_run}
+    if post_id:
+        body["post_id"] = post_id
+    return _run(lambda: _client.post("/ads", body))
+
+
+@mcp.tool(annotations=READ)
+def meta_post_kit(creative_id: int):
+    """O que o operador publica na Página para anunciar um criativo: título, texto, link com UTM e a imagem. Entregue no chat; ele publica."""
+    return _run(lambda: _client.get(f"/ads/meta-post-kit/{creative_id}"))
+
+
+@mcp.tool(annotations=READ)
+def meta_page_posts(limit: int = 10):
+    """Posts recentes publicados na Página (id, texto, link): ache o post que o operador publicou e use o id em `ad_create(post_id=...)`."""
+    return _run(lambda: _client.get("/ads/page-posts", limit=max(1, min(int(limit), 25))))
 
 
 @mcp.tool(annotations=WRITE)

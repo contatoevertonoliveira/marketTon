@@ -147,7 +147,8 @@ def _creative_copy(creative: CreativeCampaign) -> dict:
     return {}
 
 
-def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float, days: int, now: datetime | None = None) -> dict:
+def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float, days: int, now: datetime | None = None,
+               check_budget: bool = True) -> dict:
     """O que seria enviado à Meta (sem enviar). Valida tudo, inclusive as travas."""
     if creative.status not in ("completed", "partial"):
         raise AdsError(f"o criativo está “{creative.status}”: só dá para anunciar criativo pronto.")
@@ -163,7 +164,8 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
     cfg = storefront.load_config(session)
     if not product or not cfg:
         raise AdsError("produto ou endereço da loja indisponível.")
-    _guard(session, creative.product_id, daily_brl, days, now)
+    if check_budget:
+        _guard(session, creative.product_id, daily_brl, days, now)
     tag = f"mural-{creative.external_ref}"[:80]
     url = f"{cfg.public_url}/p/p{product.id}?utm_source=meta&utm_medium=paid&utm_campaign={tag}"
     return {"name": tag, "objective": "OUTCOME_TRAFFIC", "daily_budget_brl": daily_brl, "days": days, "headline": headline, "message": caption,
@@ -171,18 +173,81 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
                                                            "publisher_platforms": ["facebook", "instagram"]}}
 
 
+def _page_token(session: Session) -> str:
+    """Token da Página (para ler os posts dela), obtido do token do operador."""
+    values = _meta_values(session)
+    try:
+        token = meta_ads._get(values["page_id"], values["access_token"], fields="access_token").get("access_token")
+    except meta_ads.MetaError as exc:
+        raise AdsError(f"não consegui acesso à Página: {exc}") from exc
+    if not token:
+        raise AdsError("a Meta não liberou o acesso à Página para este token (permissões de Página).")
+    return token
+
+
+def list_page_posts(session: Session, limit: int = 10) -> list[dict]:
+    """Posts publicados na Página (os mais recentes), com o link que cada um leva."""
+    values = _meta_values(session)
+    try:
+        data = meta_ads._get(f"{values['page_id']}/posts", _page_token(session), limit=max(1, min(limit, 25)),
+                             fields="id,message,created_time,permalink_url,full_picture,attachments{unshimmed_url,url}")
+    except meta_ads.MetaError as exc:
+        raise AdsError(f"não consegui ler os posts da Página: {exc}") from exc
+    out = []
+    for p in data.get("data", []):
+        attach = ((p.get("attachments") or {}).get("data") or [{}])[0]
+        out.append({"id": p.get("id"), "message": (p.get("message") or "")[:200], "created_time": p.get("created_time"),
+                    "permalink_url": p.get("permalink_url"), "image": p.get("full_picture"),
+                    "link": attach.get("unshimmed_url") or attach.get("url")})
+    return out
+
+
+def post_kit(session: Session, creative_id: int) -> dict:
+    """O que o operador publica na Página (texto, link com UTM e a imagem) para depois anunciar esse post."""
+    creative = session.get(CreativeCampaign, creative_id)
+    if creative is None:
+        raise AdsError(f"criativo {creative_id} não encontrado")
+    plan = build_plan(session, creative, daily_brl=1, days=1, check_budget=False)
+    return {"creative_id": creative.id, "headline": plan["headline"], "message": plan["message"], "link": plan["link"],
+            "image_file": next((d["file"] for d in aistudio.deliverables(creative) if d["id"] == plan["image_id"]), None),
+            "steps": ["Baixe a imagem (4:5) e publique na Página com o texto e o link abaixo (cole o link no texto do post).",
+                      "Volte aqui, atualize a lista de posts e escolha o post.", "O anúncio nasce pausado: você liga depois."]}
+
+
+def _check_post(session: Session, post_id: str, plan: dict) -> str:
+    """Confere que o post existe, está publicado na Página e leva o link do produto. Devolve o id completo (página_post)."""
+    values = _meta_values(session)
+    page = values["page_id"]
+    full = post_id if "_" in post_id else f"{page}_{post_id}"
+    try:
+        post = meta_ads._get(full, _page_token(session), fields="id,is_published,message,attachments{unshimmed_url,url}")
+    except meta_ads.MetaError as exc:
+        raise AdsError(f"não encontrei esse post na Página: {exc}") from exc
+    if post.get("is_published") is False:
+        raise AdsError("esse post não está publicado (é rascunho ou agendado): publique antes de anunciar.")
+    haystack = json.dumps(post, ensure_ascii=False)
+    product_path = plan["link"].split("?")[0].split("/p/")[-1]  # "p56"
+    if f"/p/{product_path}" not in haystack:
+        raise AdsError("o post não tem o link do produto no Mural (use o link do kit): sem ele o anúncio levaria a outro lugar.")
+    return post.get("id") or full
+
+
 def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int = 3, dry_run: bool = True, actor: str = "agent",
-              variant: str | None = None, now: datetime | None = None) -> dict:
+              variant: str | None = None, now: datetime | None = None, post_id: str | None = None) -> dict:
     creative = session.get(CreativeCampaign, creative_id)
     if creative is None:
         raise AdsError(f"criativo {creative_id} não encontrado")
     plan = build_plan(session, creative, daily_brl=daily_brl, days=days, now=now)
+    if post_id:
+        plan["post_id"] = post_id
+        plan["origin"] = "post já publicado na Página (não usa a imagem do criativo: a Meta usa o post)"
     if dry_run:
         return {"dry_run": True, "plan": plan, "note": "Nada foi enviado à Meta. Use dry_run=false para criar o anúncio PAUSADO."}
     if creative.mode != "live":
         raise AdsError("criativo de teste (sandbox) tem peças de exemplo e não pode virar anúncio de verdade. Gere o criativo em modo ao vivo.")
     values = _meta_values(session)
     token, account, page = values["access_token"], meta_ads.normalize_account(values["ad_account_id"]), values["page_id"]
+    story_id = _check_post(session, str(post_id).strip(), plan) if post_id else None
     ad = AdCampaign(creative_campaign_id=creative.id, product_id=creative.product_id, platform="meta", status="draft", variant=variant,
                     daily_budget_brl=daily_brl, duration_days=days, destination_url=plan["link"], created_by=actor[:64])
     session.add(ad)
@@ -195,18 +260,21 @@ def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int
                       billing_event="IMPRESSIONS", optimization_goal="LINK_CLICKS", bid_strategy="LOWEST_COST_WITHOUT_CAP",
                       targeting=json.dumps(plan["targeting"]), status="PAUSED")
         ad.external_adset_id = adset["id"]
-        # A Meta não alcança o AI Studio (rede interna): o marketTon baixa a imagem e a envia à conta de anúncios.
-        try:
-            data, _ = aistudio.fetch_file(session, creative, plan["image_id"])
-        except aistudio.AIStudioError as exc:
-            raise AdsError(f"não foi possível baixar a imagem do criativo: {exc}") from exc
-        uploaded = _post(f"{account}/adimages", token, bytes=base64.b64encode(data).decode())
-        image_hash = next(iter((uploaded.get("images") or {}).values()), {}).get("hash")
-        if not image_hash:
-            raise AdsError("a Meta não devolveu o código da imagem enviada")
-        story = {"page_id": page, "link_data": {"link": plan["link"], "message": plan["message"], "name": plan["headline"], "image_hash": image_hash,
-                                                "call_to_action": {"type": "LEARN_MORE", "value": {"link": plan["link"]}}}}
-        adcreative = _post(f"{account}/adcreatives", token, name=plan["name"], object_story_spec=json.dumps(story))
+        if story_id:  # anúncio em cima de um post que o operador publicou na Página (não é criado pelo app)
+            adcreative = _post(f"{account}/adcreatives", token, name=plan["name"], object_story_id=story_id)
+        else:
+            # A Meta não alcança o AI Studio (rede interna): o marketTon baixa a imagem e a envia à conta de anúncios.
+            try:
+                data, _ = aistudio.fetch_file(session, creative, plan["image_id"])
+            except aistudio.AIStudioError as exc:
+                raise AdsError(f"não foi possível baixar a imagem do criativo: {exc}") from exc
+            uploaded = _post(f"{account}/adimages", token, bytes=base64.b64encode(data).decode())
+            image_hash = next(iter((uploaded.get("images") or {}).values()), {}).get("hash")
+            if not image_hash:
+                raise AdsError("a Meta não devolveu o código da imagem enviada")
+            story = {"page_id": page, "link_data": {"link": plan["link"], "message": plan["message"], "name": plan["headline"], "image_hash": image_hash,
+                                                    "call_to_action": {"type": "LEARN_MORE", "value": {"link": plan["link"]}}}}
+            adcreative = _post(f"{account}/adcreatives", token, name=plan["name"], object_story_spec=json.dumps(story))
         made = _post(f"{account}/ads", token, name=plan["name"], adset_id=adset["id"], creative=json.dumps({"creative_id": adcreative["id"]}), status="PAUSED")
         ad.external_ad_id, ad.status, ad.meta_status = made["id"], "paused", "PAUSED"
     except (AdsError, KeyError) as exc:

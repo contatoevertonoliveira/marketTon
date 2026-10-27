@@ -190,6 +190,85 @@ function ProductHead({ product, extra }) {
   );
 }
 
+// Anunciar na Meta com um post que VOCÊ publica na Página (a Meta recusa posts criados pelo app enquanto ele não está publicado).
+function MetaPostPanel({ it, onDone, onMsg }) {
+  const [open, setOpen] = useState(false);
+  const [kit, setKit] = useState(null);
+  const [posts, setPosts] = useState(null);
+  const [pick, setPick] = useState("");
+  const [daily, setDaily] = useState("10");
+  const [days, setDays] = useState("3");
+  const [busy, setBusy] = useState(false);
+  const imgSrc = useBlob(open && kit ? kit.image_file : null);
+  const copy = async (text, label) => { try { await navigator.clipboard.writeText(text); onMsg({ ok: true, text: `${label} copiado.` }); } catch { onMsg({ ok: false, text: "Não consegui copiar: selecione o texto e copie." }); } };
+
+  async function openPanel() {
+    setOpen(true);
+    if (!kit) { try { setKit(await getJSON(`/ads/meta-post-kit/${it.id}`)); } catch (e) { onMsg({ ok: false, text: e.message }); } }
+  }
+  async function loadPosts() {
+    setBusy(true);
+    try { const r = await getJSON("/ads/page-posts?limit=10"); setPosts(r.posts); } catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
+  }
+  async function create() {
+    const d = Number(String(daily).replace(",", ".")), n = Number(days);
+    if (!pick) return onMsg({ ok: false, text: "Escolha o post." });
+    setBusy(true);
+    try {
+      const plan = await postJSON("/ads", { creative_id: it.id, daily_brl: d, days: n, dry_run: true, post_id: pick });
+      if (!window.confirm(`Criar o anúncio PAUSADO na Meta com este post?\n\nVerba: ${brl(d)} por dia, ${n} dia(s) (até ${brl(d * n)}).\nDestino: ${plan.plan.link}\n\nNada gasta até você ligar.`)) return;
+      await postJSON("/ads", { creative_id: it.id, daily_brl: d, days: n, dry_run: false, post_id: pick });
+      onMsg({ ok: true, text: "Anúncio criado pausado. Ele aparece abaixo: ligue quando quiser." });
+      setOpen(false);
+      onDone();
+    } catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
+  }
+
+  const btn = { border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" };
+  if (!open) return <button onClick={openPanel} style={{ ...btn, marginTop: 10, borderColor: "#5e72e4", color: "#5e72e4", fontWeight: 700 }}>📣 Anunciar com post da Página</button>;
+  return (
+    <div style={{ marginTop: 12, border: "1px solid #dfe4fb", background: "#f8f9ff", borderRadius: 10, padding: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <strong style={{ color: "#32325d", fontSize: 13 }}>Anunciar com um post da Página</strong>
+        <button onClick={() => setOpen(false)} style={{ ...btn, padding: "2px 10px" }}>fechar</button>
+      </div>
+      <ol style={{ fontSize: 12, color: "#525f7f", margin: "8px 0", paddingLeft: 18 }}>
+        <li>Publique na Página (Business Suite) com a imagem, o texto e o link abaixo. Cole o link no texto do post.</li>
+        <li>Volte aqui, clique em “Buscar posts da Página” e escolha o post.</li>
+        <li>Crie o anúncio: ele nasce pausado e você liga depois.</li>
+      </ol>
+      {kit && (
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+          {imgSrc && <div><img src={imgSrc} alt="" style={{ width: 120, borderRadius: 8 }} /><div><a href={imgSrc} download={`post-${it.id}.png`} style={{ fontSize: 12 }}>baixar a imagem</a></div></div>}
+          <div style={{ flex: 1, minWidth: 260, fontSize: 12, color: "#32325d" }}>
+            <div style={{ fontWeight: 700 }}>{kit.headline}</div>
+            <div style={{ whiteSpace: "pre-wrap", margin: "4px 0" }}>{kit.message}</div>
+            <button style={btn} onClick={() => copy(`${kit.message}\n\n${kit.link}`, "Texto com o link")}>Copiar texto + link</button>{" "}
+            <button style={btn} onClick={() => copy(kit.link, "Link")}>Copiar só o link</button>
+            <div style={{ color: "#8898aa", marginTop: 4, wordBreak: "break-all" }}>{kit.link}</div>
+          </div>
+        </div>
+      )}
+      <div style={{ marginTop: 12 }}>
+        <button style={btn} disabled={busy} onClick={loadPosts}>🔄 Buscar posts da Página</button>
+        {posts && posts.length === 0 && <span style={{ fontSize: 12, color: "#8898aa", marginLeft: 8 }}>Nenhum post publicado encontrado.</span>}
+        {posts && posts.map((p) => (
+          <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "6px 0", fontSize: 12, borderTop: "1px solid #eef0f6", marginTop: 6, cursor: "pointer" }}>
+            <input type="radio" name={`post-${it.id}`} checked={pick === p.id} onChange={() => setPick(p.id)} />
+            {p.image && <img src={p.image} alt="" referrerPolicy="no-referrer" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6 }} />}
+            <span style={{ flex: 1 }}><strong>{when(p.created_time)}</strong> · {short(p.message || "(sem texto)", 70)}<br /><span style={{ color: p.link && p.link.includes("/p/") ? "#1a7a54" : "#b8720a" }}>{p.link ? short(p.link, 60) : "sem link"}</span></span>
+          </label>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+        <label style={{ fontSize: 12 }}>Verba/dia R$ <input value={daily} onChange={(e) => setDaily(e.target.value)} style={{ width: 64, padding: "4px 6px", border: "1px solid #dee2e6", borderRadius: 6 }} /></label>
+        <label style={{ fontSize: 12 }}>Dias <input value={days} onChange={(e) => setDays(e.target.value)} style={{ width: 44, padding: "4px 6px", border: "1px solid #dee2e6", borderRadius: 6 }} /></label>
+        <button disabled={busy || !pick} onClick={create} style={{ border: "none", background: pick ? "#5e72e4" : "#adb5bd", color: "#fff", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 800, cursor: pick ? "pointer" : "default" }}>Criar anúncio pausado</button>
+      </div>
+    </div>
+  );
+}
+
 // Cartão do criativo de um produto: imagens, custo e, logo abaixo, os anúncios com números e botões.
 function CreativeCard({ it, onDone, onMsg, onPreview }) {
   const p = it.product;
@@ -223,6 +302,7 @@ function CreativeCard({ it, onDone, onMsg, onPreview }) {
           ))}
         </div>
       )}
+      {it.mode === "live" && (it.status === "completed" || it.status === "partial") && <MetaPostPanel it={it} onDone={onDone} onMsg={onMsg} />}
       <div style={{ marginTop: 12, borderTop: "1px solid #f0f2f7", paddingTop: 8 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#32325d" }}>Anúncios deste produto</div>
         {it.ads.length === 0
