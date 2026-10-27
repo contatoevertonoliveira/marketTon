@@ -220,3 +220,13 @@ def test_unknown_formats_are_rejected(session, net):
     _config(session)
     with pytest.raises(ai.AIStudioError, match="parâmetros inválidos"):
         ai.create(session, _product(session).id, formats="gif")
+
+
+def test_virtual_presenter_asks_for_one_narrated_vertical_video_and_no_children(session):
+    _config(session)
+    product = _product(session)
+    body = ai.build_payload(session, product, external_ref="r", mode="sandbox", quality="economy", budget_usd=1.0, angle="demo", hook_variants=1,
+                            callback_url="", logo_asset=None, store_url=None, presenter="virtual")
+    assert body["creative"]["presenter"] == {"type": "virtual"}
+    assert [(d["kind"], d.get("aspect_ratio")) for d in body["deliverables"]] == [("video", "9:16"), ("copy", None)]
+    assert "Sem crianças em cena" in body["creative"]["notes"]

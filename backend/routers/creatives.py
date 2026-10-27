@@ -26,6 +26,7 @@ class CreativeIn(BaseModel):
     hook_variants: int = Field(2, ge=1, le=4)
     budget_usd: float | None = Field(None, gt=0)
     formats: str = "video"  # "images" = só imagens e texto (sem vídeo)
+    presenter: str = "none"  # "virtual" = apresentadora virtual com narração curta (só em vídeo)
     notes: str | None = Field(None, max_length=600)  # o que corrigir ao refazer (ex.: "título menor, sem cobrir o produto")
 
 
@@ -274,7 +275,7 @@ def sync_ads(principal: Principal = Depends(require("portfolio.manage")), sessio
 def estimate(payload: CreativeIn, principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
     try:
         return aistudio.estimate(session, payload.product_id, quality=payload.quality, angle=payload.angle, hook_variants=payload.hook_variants,
-                               formats=payload.formats)
+                               formats=payload.formats, presenter=payload.presenter)
     except AIStudioError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -289,7 +290,7 @@ def create_creative(payload: CreativeIn, principal: Principal = Depends(require(
     try:
         record = aistudio.create(session, payload.product_id, mode=payload.mode, quality=payload.quality, angle=payload.angle,
                                  hook_variants=payload.hook_variants, budget_usd=payload.budget_usd, actor=principal.username,
-                                 formats=payload.formats, extra_notes=payload.notes)
+                                 formats=payload.formats, extra_notes=payload.notes, presenter=payload.presenter)
     except AIStudioError as exc:
         session.commit()  # guarda a tentativa (external_ref) mesmo quando falha
         raise HTTPException(status_code=422, detail=str(exc)) from exc

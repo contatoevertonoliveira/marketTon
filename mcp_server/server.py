@@ -407,14 +407,14 @@ def creative_estimate(product_id: int, quality: str = "economy", angle: str = "p
 
 @mcp.tool(annotations=WRITE)
 def creative_create(product_id: int, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2, formats: str = "video",
-                    notes: str | None = None):
+                    notes: str | None = None, presenter: str = "none"):
     """Pede ao AI Studio os criativos (vídeo 9:16 e 1:1, imagem 4:5 e texto) de um produto da vitrine. EXIGE o modo agente.
 
     `mode="sandbox"` (padrão) não gasta nada e devolve peças de exemplo: use para testar o fluxo. `mode="live"` gasta créditos e só funciona
     se o operador ligou a permissão no cartão do AI Studio; peça aprovação no chat antes. Nunca invente alegações: o produto só pode ser descrito
     pelos fatos que o marketTon tem. O resultado chega por webhook; acompanhe com `creative_status`.
     """
-    body = {"product_id": product_id, "mode": mode, "quality": quality, "angle": angle, "hook_variants": hook_variants, "formats": formats}
+    body = {"product_id": product_id, "mode": mode, "quality": quality, "angle": angle, "hook_variants": hook_variants, "formats": formats, "presenter": presenter}
     if notes:
         body["notes"] = notes  # ao REFAZER: o que corrigir (ex.: "título menor, sem cobrir o produto")
     return _run(lambda: _client.post("/creatives", body))

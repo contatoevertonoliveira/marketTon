@@ -145,7 +145,7 @@ def ensure_logo_asset(session: Session, cfg: AIStudioConfig) -> str | None:
 
 def build_payload(session: Session, product: Product, *, external_ref: str, mode: str, quality: str, budget_usd: float,
                   angle: str, hook_variants: int, callback_url: str, logo_asset: str | None, store_url: str | None,
-                  formats: str = "video", extra_notes: str | None = None) -> dict:
+                  formats: str = "video", extra_notes: str | None = None, presenter: str = "none") -> dict:
     row = None
     for p, r, _ in storefront._candidates(session):
         if p.id == product.id:
@@ -172,6 +172,11 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
         benefits.append(f"Preço abaixo do anterior ({round((1 - product.price / product.original_price) * 100)}% menos)")
     images_only = formats == "images"
     notes = "Mostrar só o produto da foto de referência. Sem pessoas reais identificáveis e sem promessas de resultado."
+    with_presenter = presenter == "virtual" and not images_only
+    if with_presenter:
+        notes = ("Uma apresentadora virtual adulta, simpática, segura o produto da foto de referência e apresenta rapidamente, em português do Brasil, "
+                 "com uma narração curta e natural, SÓ as características que constam na descrição e nos benefícios. Mostrar o produto idêntico à foto. "
+                 "Sem crianças em cena, sem prometer resultado nem tempo de conservação de temperatura, sem preço falado.")
     if images_only:
         notes += (" Peça de propaganda profissional (merchandising): produto em destaque, cenário limpo e coerente com o uso do produto, "
                   "composição de anúncio de marca, espaço para título e preço. Não desenhar texto na imagem: título, preço e selo entram na montagem.")
@@ -183,6 +188,8 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
                         {"kind": "image", "channel": "instagram", "aspect_ratio": "9:16"}, copy_piece,
                         # Slideshow 9:16 de 10 a 15 s com trilha, montado pelo estúdio (ffmpeg local, sem IA; trilha < US$ 0,01).
                         {"kind": "slideshow", "duration_s": SLIDESHOW_S, "include_product_photos": True}]
+    elif with_presenter:
+        deliverables = [{"kind": "video", "channel": "instagram_reels", "aspect_ratio": "9:16", "duration_s": 15, "variants": 1}, copy_piece]
     else:
         deliverables = [{"kind": "video", "channel": "instagram_reels", "aspect_ratio": "9:16", "duration_s": 15, "variants": hook_variants},
                         {"kind": "video", "channel": "feed", "aspect_ratio": "1:1", "duration_s": 15, "derive_from": "instagram_reels"},
@@ -197,7 +204,7 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
                   "voice_tone": ["direto", "amigável"], "banned_words": BANNED_WORDS,
                   **({"logo": {"asset_id": logo_asset, "placement": LOGO_PLACEMENT}} if logo_asset else {})},
         "audience": {"locale": "BR", "age_range": [20, 50]},
-        "creative": {"objective": "consideration", "angle": angle, "hook_variants": hook_variants, "presenter": {"type": "none"},
+        "creative": {"objective": "consideration", "angle": angle, "hook_variants": hook_variants, "presenter": {"type": "virtual" if with_presenter else "none"},
                      "voice": {"style": "warm_male"}, "music": {"mood": "upbeat_modern", "enabled": not images_only},
                      "cta": {"text": "Ver na loja", **({"url": store_url} if store_url else {})}, "notes": notes,
                      **({"offer": {"headline": f"De R$ {product.original_price:.2f} por R$ {product.price:.2f}".replace(".", ",")}} if discounted else {})},
@@ -228,20 +235,20 @@ def _store_url(session: Session, product_id: int) -> str | None:
 
 
 def estimate(session: Session, product_id: int, *, quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2,
-             formats: str = "video") -> dict:
+             formats: str = "video", presenter: str = "none") -> dict:
     cfg = _require(session)
     product = _product_for(session, product_id)
     payload = build_payload(session, product, external_ref=f"estimate-{product_id}", mode="sandbox", quality=quality, budget_usd=cfg.max_usd,
                             angle=angle, hook_variants=hook_variants, callback_url="", logo_asset=None, store_url=_store_url(session, product_id),
-                            formats=formats)
+                            formats=formats, presenter=presenter)
     return _call(cfg, "POST", "/campaigns/estimate", json=payload)
 
 
 def create(session: Session, product_id: int, *, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution",
            hook_variants: int = 2, budget_usd: float | None = None, actor: str = "agent", formats: str = "video",
-           extra_notes: str | None = None) -> CreativeCampaign:
+           extra_notes: str | None = None, presenter: str = "none") -> CreativeCampaign:
     cfg = _require(session)
-    if mode not in ("sandbox", "live") or quality not in QUALITIES or angle not in ANGLES or formats not in FORMATS:
+    if mode not in ("sandbox", "live") or quality not in QUALITIES or angle not in ANGLES or formats not in FORMATS or presenter not in ("none", "virtual"):
         raise AIStudioError(f"parâmetros inválidos (modo sandbox|live; qualidade {', '.join(QUALITIES)}; ângulo {', '.join(ANGLES)})")
     if mode == "live" and not cfg.allow_live:
         raise AIStudioError("geração ao vivo gasta créditos e está desligada: o operador precisa ligar \"Permitir geração ao vivo\" no cartão do AI Studio. "
@@ -258,7 +265,8 @@ def create(session: Session, product_id: int, *, mode: str = "sandbox", quality:
     session.flush()  # o external_ref fica guardado ANTES da chamada: retentar nunca duplica
     payload = build_payload(session, product, external_ref=ref, mode=mode, quality=quality, budget_usd=budget, angle=angle,
                             hook_variants=hook_variants, callback_url=cfg.callback_url, logo_asset=ensure_logo_asset(session, cfg),
-                            store_url=_store_url(session, product_id), formats=formats, extra_notes=extra_notes)
+                            store_url=_store_url(session, product_id), formats=formats, extra_notes=extra_notes,
+                            presenter=presenter)
     record.request = payload
     try:
         body = _call(cfg, "POST", "/campaigns", idempotency_key=ref[:80], json=payload)
