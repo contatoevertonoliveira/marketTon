@@ -28,6 +28,7 @@ python-dotenv==1.0.1
 pandas==2.2.3
 numpy==2.2.1
 trendspy>=0.1.6
+pillow>=10.0  # converte a imagem do criativo para JPEG (o Instagram só aceita JPEG)
 
 # --- Camada de IA -------------------------------------------------------------
 openai==1.59.6

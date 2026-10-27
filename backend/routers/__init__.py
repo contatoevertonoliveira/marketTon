@@ -21,6 +21,7 @@ from backend.routers import (
     portfolio,
     scoring,
     services,
+    social,
     storefront,
     trends,
 )
@@ -43,6 +44,7 @@ API_ROUTERS = [
     creatives.router,
     agent_reports.router,
     finance.router,
+    social.router,
 ]
 
 __all__ = [
@@ -54,6 +56,7 @@ __all__ = [
     "creative",
     "creatives",
     "finance",
+    "social",
     "jobs",
     "links",
     "marketplaces",

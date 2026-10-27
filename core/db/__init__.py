@@ -36,6 +36,7 @@ from core.db.agent_chat import AgentMessage
 from core.db.agent_reports import AgentReport
 from core.db.agent_runs import AgentRun
 from core.db.finance import WalletBalance
+from core.db.social import SocialPost
 from core.db.trend_radar import TrendSnapshot
 from core.db.app_settings import AppSetting
 from core.db.marketplace_credentials import MarketplaceCredential
@@ -113,6 +114,7 @@ __all__ = [
     "AgentMessage",
     "AgentReport",
     "WalletBalance",
+    "SocialPost",
     "TrendSnapshot",
     "AgentRun",
     "AppSetting",

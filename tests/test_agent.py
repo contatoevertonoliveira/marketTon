@@ -336,7 +336,7 @@ def test_mcp_exposes_exactly_the_intended_tools():
         "capabilities", "sync_sales", "refresh_catalog", "catalog_refresh_status",
         "create_tracked_link", "sync_clicks", "list_tracked_links",
         "storefront_status", "storefront_update_item", "storefront_publish", "goals_status",
-        "creative_estimate", "creative_create", "creative_status", "ads_budget_status", "ad_create", "ad_pause", "google_ad_create", "meta_post_kit", "meta_page_posts", "ads_sync_metrics", "report_add", "finance_summary", "radar_status", "radar_watch",
+        "creative_estimate", "creative_create", "creative_status", "ads_budget_status", "ad_create", "ad_pause", "google_ad_create", "meta_post_kit", "instagram_caption", "meta_page_posts", "ads_sync_metrics", "report_add", "finance_summary", "radar_status", "radar_watch",
     }
     # Nada de credenciais nem usuários. Anúncios: o agente PLANEJA, cria PAUSADO e pausa, mas nunca liga (ver teste abaixo).
     assert not any(w in n for n in names for w in ("credential", "user", "password"))

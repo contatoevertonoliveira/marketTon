@@ -448,6 +448,13 @@ def ad_create(creative_id: int, daily_brl: float, days: int = 3, dry_run: bool =
 
 
 @mcp.tool(annotations=READ)
+def instagram_caption(creative_id: int):
+    """Texto sugerido para o post do Instagram de um criativo pronto (com o link da bio e o aviso de divulgação). Você NÃO publica: mostre no
+    chat e o operador publica pelo botão na página Criativos e anúncios."""
+    return _run(lambda: _client.get(f"/social/instagram/caption/{creative_id}"))
+
+
+@mcp.tool(annotations=READ)
 def meta_post_kit(creative_id: int):
     """O que o operador publica na Página para anunciar um criativo: título, texto, link com UTM e a imagem. Entregue no chat; ele publica."""
     return _run(lambda: _client.get(f"/ads/meta-post-kit/{creative_id}"))

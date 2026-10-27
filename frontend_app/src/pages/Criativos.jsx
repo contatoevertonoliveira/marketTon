@@ -269,6 +269,61 @@ function MetaPostPanel({ it, onDone, onMsg }) {
   );
 }
 
+// Publicar a imagem do criativo no Instagram do Mural (só você publica; o agente só sugere o texto).
+function InstagramPanel({ it, onMsg }) {
+  const [open, setOpen] = useState(false);
+  const [sug, setSug] = useState(null);
+  const [caption, setCaption] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(null);
+  const imgSrc = useBlob(open && sug ? sug.image_file : null);
+
+  async function openPanel() {
+    setOpen(true);
+    if (!sug) {
+      try { const r = await getJSON(`/social/instagram/caption/${it.id}`); setSug(r); setCaption(r.caption); } catch (e) { onMsg({ ok: false, text: e.message }); }
+    }
+  }
+  async function publish() {
+    if (!window.confirm("PUBLICAR agora no Instagram do Mural (@mural_na_web)?\n\nO post fica público na hora, com a imagem e o texto abaixo.")) return;
+    setBusy(true);
+    try {
+      const r = await postJSON("/social/instagram/publish", { creative_id: it.id, caption, deliverable_id: sug.deliverable_id });
+      setDone(r);
+      onMsg({ ok: true, text: "Publicado no Instagram." });
+    } catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
+  }
+
+  const btn = { border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" };
+  if (!open) return <button onClick={openPanel} style={{ ...btn, marginTop: 10, marginLeft: 8, borderColor: "#c13584", color: "#c13584", fontWeight: 700 }}>📸 Postar no Instagram</button>;
+  return (
+    <div style={{ marginTop: 12, border: "1px solid #f3d6e6", background: "#fff8fc", borderRadius: 10, padding: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <strong style={{ color: "#32325d", fontSize: 13 }}>Postar no Instagram (@mural_na_web)</strong>
+        <button onClick={() => setOpen(false)} style={{ ...btn, padding: "2px 10px" }}>fechar</button>
+      </div>
+      {done ? (
+        <div style={{ marginTop: 10, fontSize: 13, color: "#1a7a54" }}>✓ Publicado. {done.permalink ? <a href={done.permalink} target="_blank" rel="noreferrer">Abrir o post</a> : null}</div>
+      ) : (
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, alignItems: "flex-start" }}>
+          {imgSrc ? <img src={imgSrc} alt="" style={{ width: 150, borderRadius: 8 }} /> : <div style={{ width: 150, fontSize: 12, color: "#8898aa" }}>Carregando a imagem…</div>}
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <textarea value={caption} onChange={(e) => setCaption(e.target.value)} rows={9} maxLength={2200}
+              style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: 8, border: "1px solid #dee2e6", borderRadius: 8, fontFamily: "inherit" }} />
+            <div style={{ fontSize: 11, color: "#8898aa", margin: "4px 0 8px" }}>
+              {caption.length} de 2200 caracteres. Legenda do Instagram não tem link clicável: o texto manda para o <strong>link da bio</strong>, que precisa ser o do Mural.
+            </div>
+            <button disabled={busy || !sug || !caption.trim()} onClick={publish}
+              style={{ border: "none", background: "#c13584", color: "#fff", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 800, cursor: busy ? "wait" : "pointer" }}>
+              {busy ? "Publicando…" : "Publicar agora"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Cartão do criativo de um produto: imagens, custo e, logo abaixo, os anúncios com números e botões.
 function CreativeCard({ it, onDone, onMsg, onPreview }) {
   const p = it.product;
@@ -302,7 +357,7 @@ function CreativeCard({ it, onDone, onMsg, onPreview }) {
           ))}
         </div>
       )}
-      {it.mode === "live" && (it.status === "completed" || it.status === "partial") && <MetaPostPanel it={it} onDone={onDone} onMsg={onMsg} />}
+      {it.mode === "live" && (it.status === "completed" || it.status === "partial") && <><MetaPostPanel it={it} onDone={onDone} onMsg={onMsg} /><InstagramPanel it={it} onMsg={onMsg} /></>}
       <div style={{ marginTop: 12, borderTop: "1px solid #f0f2f7", paddingTop: 8 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#32325d" }}>Anúncios deste produto</div>
         {it.ads.length === 0
