@@ -170,4 +170,4 @@ def test_stop_and_remove_on_google(session, google):
     assert google.mutations[-1][0]["campaignOperation"]["update"]["status"] == "PAUSED"
     google.mutations.clear()
     assert ads_manager.remove(session, b).status == "removed"
-    assert google.mutations[-1][0]["campaignOperation"]["update"]["status"] == "REMOVED"
+    assert google.mutations[-1][0]["campaignOperation"]["remove"] == "customers/1/campaigns/222"  # operação própria de remoção

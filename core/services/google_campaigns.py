@@ -260,7 +260,12 @@ def remove(session: Session, ad_id: int) -> AdCampaign:
     if ad.status == "removed":
         return ad
     if ad.external_campaign_id:
-        _set_status(session, ad, "REMOVED")
+        client = _client(session)
+        try:  # remover é uma operação própria (`remove`), não uma troca de estado
+            client.mutate([{"campaignOperation": {"remove": f"customers/{client.cfg.customer_id}/campaigns/{ad.external_campaign_id}"}}])
+        except GoogleAdsError as exc:
+            raise AdsError(f"o Google recusou: {exc}") from exc
+        ad.meta_status = "REMOVED"
     ad.status = "removed"
     session.flush()
     return ad
