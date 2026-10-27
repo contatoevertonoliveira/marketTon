@@ -6,7 +6,9 @@ Quem manda é o operador, por uma chave única (`social_autopublish`). Ligada, o
   `rejected` mais novo bloqueia. O parecer vale 48 h;
 * **texto**: precisa ter o aviso de divulgação (link de afiliado) e o endereço do Mural; até 2.200 caracteres;
 * **sem repetir**: o mesmo criativo não é publicado duas vezes como o mesmo tipo;
-* **teto por dia**: no máximo `max_per_day` publicações (padrão 2), contando as do operador;
+* **ritmo**: uma publicação por janela (manhã 7h–12h, tarde 14h–18h, noite 18h–24h), no máximo 3 por dia, **intercalando imagem e Reel** e
+  sempre de **produtos diferentes** no mesmo dia; cada publicação do Instagram ganha o par no Facebook;
+* **teto por dia**: no máximo `max_per_day` publicações (padrão 3), contando as do operador;
 * criativo de teste (sandbox) nunca; o dinheiro dos anúncios **não** entra aqui: ligar anúncio continua só do operador.
 
 Cada publicação cai no histórico (`social_posts`) e o agente a registra no relatório.
@@ -30,12 +32,14 @@ from core.db.catalog import Product
 from core.db.content_review import CreativeReview
 from core.db.creatives import CreativeCampaign
 from core.db.social import SocialPost
-from core.services import aistudio, instagram, reels, storefront
+from core.services import aistudio, facebook, instagram, reels, storefront
 
 logger = logging.getLogger(__name__)
 
 KEY = "social_autopublish"
-DEFAULTS = {"enabled": False, "max_per_day": 2}
+DEFAULTS = {"enabled": False, "max_per_day": 3}
+SLOTS = {"morning": (7, 12), "afternoon": (14, 18), "evening": (18, 24)}  # janelas (hora local) de uma publicação cada
+SLOT_NAMES = {"morning": "manhã", "afternoon": "tarde", "evening": "noite"}
 REVIEW_VALID = timedelta(hours=48)
 KINDS = ("image", "reel")
 CHECKLIST = [
@@ -66,8 +70,8 @@ def get_settings(session: Session) -> dict:
 
 
 def set_settings(session: Session, *, enabled: bool, max_per_day: int, actor: str) -> dict:
-    if not 1 <= int(max_per_day) <= 6:
-        raise ContentError("o teto por dia deve ficar entre 1 e 6 publicações")
+    if not 1 <= int(max_per_day) <= 3:
+        raise ContentError("o teto por dia deve ficar entre 1 e 3 publicações (uma de manhã, uma à tarde e uma à noite)")
     row = session.scalar(select(AppSetting).where(AppSetting.key == KEY))
     if row is None:
         row = AppSetting(key=KEY, value={})
@@ -77,16 +81,47 @@ def set_settings(session: Session, *, enabled: bool, max_per_day: int, actor: st
     return get_settings(session)
 
 
-def published_today(session: Session, now: datetime | None = None) -> int:
+def _published_instagram_today(session: Session, now: datetime | None = None) -> list[SocialPost]:
+    """Posts do Instagram de hoje (o Facebook é só o par do mesmo conteúdo e não conta à parte)."""
     local = (now or datetime.now(UTC)).astimezone()
     start = local.replace(hour=0, minute=0, second=0, microsecond=0)
-    return sum(1 for p in session.scalars(select(SocialPost).where(SocialPost.status == "published"))
-               if (a := _aware(p.created_at)) is not None and a.astimezone() >= start)
+    return [p for p in session.scalars(select(SocialPost).where(SocialPost.status == "published", SocialPost.platform == "instagram").order_by(SocialPost.id))
+            if (a := _aware(p.created_at)) is not None and a.astimezone() >= start]
+
+
+def published_today(session: Session, now: datetime | None = None) -> int:
+    return len(_published_instagram_today(session, now))
+
+
+def slot_of(dt: datetime) -> str | None:
+    hour = dt.astimezone().hour
+    return next((name for name, (lo, hi) in SLOTS.items() if lo <= hour < hi), None)
+
+
+def current_slot(now: datetime | None = None) -> str | None:
+    return slot_of(now or datetime.now(UTC))
+
+
+def slots_used_today(session: Session, now: datetime | None = None) -> set[str]:
+    return {s for p in _published_instagram_today(session, now) if (s := slot_of(_aware(p.created_at))) is not None}
+
+
+def next_kind(session: Session) -> str:
+    """Intercala: depois de uma imagem vem um Reel e vice-versa (a primeira é imagem)."""
+    last = session.scalar(select(SocialPost).where(SocialPost.status == "published", SocialPost.platform == "instagram").order_by(SocialPost.id.desc()).limit(1))
+    return "image" if last is None or last.kind == "reel" else "reel"
+
+
+def slot_open(session: Session, now: datetime | None = None) -> bool:
+    cfg = get_settings(session)
+    slot = current_slot(now)
+    return bool(cfg["enabled"] and slot and slot not in slots_used_today(session, now) and published_today(session, now) < cfg["max_per_day"])
 
 
 def status(session: Session, now: datetime | None = None) -> dict:
     cfg = get_settings(session)
-    return {**cfg, "published_today": published_today(session, now), "posts": instagram.list_posts(session, 8)}
+    return {**cfg, "published_today": published_today(session, now), "slot": current_slot(now), "slots_used": sorted(slots_used_today(session, now)),
+            "next_kind": next_kind(session), "posts": instagram.list_posts(session, 8)}
 
 
 # --------------------------------------------------------------------- parecer ---------
@@ -222,16 +257,39 @@ def check_can_publish(session: Session, creative_id: int, kind: str, caption: st
         raise ContentError("o texto precisa do aviso de divulgação (link de afiliado) e do endereço do Mural: use o texto sugerido.")
     if published_today(session, now) >= cfg["max_per_day"]:
         raise ContentError(f"o teto de {cfg['max_per_day']} publicação(ões) por dia já foi atingido: tente amanhã.")
+    slot = current_slot(now)
+    if slot is None:
+        raise ContentError("fora das janelas de publicação (manhã 7h–12h, tarde 14h–18h, noite 18h–24h): use esta hora para preparar e conferir.")
+    if slot in slots_used_today(session, now):
+        raise ContentError(f"a publicação da {SLOT_NAMES[slot]} já saiu: a próxima é na janela seguinte.")
+    expected = next_kind(session)
+    if kind != expected:
+        raise ContentError(f"a vez é de {'imagem' if expected == 'image' else 'Reel'} (intercalando): publique {'imagem' if expected == 'image' else 'Reel'} agora.")
+    if any(p.product_id == creative.product_id for p in _published_instagram_today(session, now)):
+        raise ContentError("este produto já teve publicação hoje: escolha outro produto (2 a 3 produtos diferentes por dia).")
 
 
-def auto_publish(session: Session, creative_id: int, kind: str, *, caption: str | None, actor: str, now: datetime | None = None) -> SocialPost:
+def auto_publish(session: Session, creative_id: int, kind: str, *, caption: str | None, actor: str, now: datetime | None = None) -> dict:
     if kind not in KINDS:
         raise ContentError("tipo: image ou reel")
     try:
         text = caption or instagram.default_caption(session, creative_id)["caption"]
         check_can_publish(session, creative_id, kind, text, now)
         if kind == "image":
-            return instagram.publish_image(session, creative_id, caption=text, actor=actor)
-        return instagram.publish_reel(session, creative_id, caption=text, actor=actor)
+            post = instagram.publish_image(session, creative_id, caption=text, actor=actor)
+        else:
+            post = instagram.publish_reel(session, creative_id, caption=text, actor=actor)
     except instagram.InstagramError as exc:
         raise ContentError(str(exc)) from exc
+    # O par no Facebook: se falhar, o Instagram já saiu e o erro fica no histórico (não derruba nada).
+    fb_post, fb_error = None, None
+    try:
+        fb_text = facebook.caption(session, creative_id)
+        if kind == "image":
+            fb_post = facebook.publish_photo(session, creative_id, text=fb_text, deliverable_id=post.deliverable_id or facebook.first_image(session, creative_id), actor=actor)
+        else:
+            fb_post = facebook.publish_reel(session, creative_id, text=fb_text, actor=actor)
+    except (facebook.FacebookError, instagram.InstagramError) as exc:
+        fb_error = str(exc)
+        logger.warning("par no Facebook do criativo %s falhou: %s", creative_id, exc)
+    return {"instagram": post, "facebook": fb_post, "facebook_error": fb_error}

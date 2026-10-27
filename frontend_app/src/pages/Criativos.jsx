@@ -446,9 +446,9 @@ function AutoPublishCard({ onMsg }) {
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ flex: 1, minWidth: 240 }}>
           <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14 }}>🤖 Publicação automática no Instagram {st.enabled ? <span style={{ color: "#1a7a54" }}>· ligada</span> : <span style={{ color: "#8898aa" }}>· desligada</span>}</div>
-          <div style={{ fontSize: 12, color: "#525f7f", margin: "4px 0" }}>O agente cria o conteúdo, <strong>confere as imagens com senso crítico</strong>, refaz o que ficar errado e publica sozinho. Cada post tem o aviso de afiliado e o link da bio. Hoje saíram <strong>{st.published_today}</strong> de {st.max_per_day}.</div>
+          <div style={{ fontSize: 12, color: "#525f7f", margin: "4px 0" }}>O agente cria o conteúdo, <strong>confere as imagens com senso crítico</strong>, refaz o que ficar errado e publica sozinho no <strong>Instagram e no Facebook</strong>: uma publicação de manhã, uma à tarde e uma à noite, intercalando imagem e Reel e produtos diferentes. Cada post tem o aviso de afiliado. Hoje saíram <strong>{st.published_today}</strong> de {st.max_per_day}{st.slots_used && st.slots_used.length ? ` (${st.slots_used.map((x) => ({ morning: "manhã", afternoon: "tarde", evening: "noite" }[x] || x)).join(", ")})` : ""}; a próxima é {st.next_kind === "reel" ? "um Reel" : "uma imagem"}.</div>
         </div>
-        <label style={{ fontSize: 12 }}>Teto por dia <input type="number" min="1" max="6" value={max} onChange={(e) => setMax(e.target.value)} style={{ width: 52, padding: "4px 6px", border: "1px solid #dee2e6", borderRadius: 6 }} /></label>
+        <label style={{ fontSize: 12 }}>Teto por dia <input type="number" min="1" max="3" value={max} onChange={(e) => setMax(e.target.value)} style={{ width: 52, padding: "4px 6px", border: "1px solid #dee2e6", borderRadius: 6 }} /></label>
         {st.enabled
           ? <button disabled={busy} onClick={() => save(false)} style={{ border: "none", background: "#f5365c", color: "#fff", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Desligar</button>
           : <button disabled={busy} onClick={() => save(true)} style={{ border: "none", background: "#2dce89", color: "#fff", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Ligar</button>}
@@ -459,7 +459,7 @@ function AutoPublishCard({ onMsg }) {
           <div style={{ fontWeight: 700, color: "#32325d", marginBottom: 4 }}>Últimas publicações</div>
           {st.posts.map((p) => (
             <div key={p.id} style={{ display: "flex", gap: 8, padding: "2px 0", color: p.status === "published" ? "#525f7f" : "#c31e3f" }}>
-              <span style={{ width: 120 }}>{when(p.created_at)}</span><span style={{ width: 56 }}>{p.kind === "reel" ? "Reel" : "Imagem"}</span>
+              <span style={{ width: 120 }}>{when(p.created_at)}</span><span style={{ width: 90 }}>{p.platform === "facebook" ? "Facebook " : "Instagram "}{p.kind === "reel" ? "Reel" : "imagem"}</span>
               <span style={{ flex: 1 }}>{p.status === "published" ? (p.permalink ? <a href={p.permalink} target="_blank" rel="noreferrer">ver post</a> : "publicado") : `falhou: ${p.error || ""}`}</span>
               <span style={{ color: "#8898aa" }}>{p.created_by}</span>
             </div>

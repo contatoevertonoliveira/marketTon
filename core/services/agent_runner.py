@@ -104,6 +104,7 @@ PROMPTS = {
         "Rotina COMPLETA do dia do marketTon (`agent_playbook` com section=\"1\" e section=\"2\"): `chat_inbox`, `system_health`, "
         "`goals_status` (metas do mês), `daily_review` (vendas e cliques já foram sincronizados pelo sistema: resuma as vendas novas), trate o que o "
         "checklist apontar, escolha o produto do dia, veja se há produto novo para o portfólio, criativo a preparar ou anúncio a acompanhar. "
+        "Se a publicação automática estiver ligada e a janela da manhã estiver aberta, faça a rotina de conteúdo (seção 3.09). "
         "Cobre os recursos pendentes mais importantes com `request_resource` (renova, não duplica). "
         "Registre no relatório (`report_add`, no máximo 5 linhas): o que achou (`achado`), o que fez (`acao`) e ideias novas de venda (`ideia`)."
     ),

@@ -63,7 +63,7 @@ def digest(session: Session, since: datetime) -> dict:
 
     content = []
     cfg = content_pipeline.get_settings(session)
-    if cfg["enabled"] and content_pipeline.published_today(session) < cfg["max_per_day"]:  # só vale a pena acordar o agente se ele pode publicar
+    if content_pipeline.slot_open(session):  # só vale a pena acordar o agente se ele pode publicar agora (janela aberta, teto e ritmo)
         content = [f"criativo {p['creative_id']} ({p['product']}) sem {' e '.join('post' if k == 'image' else 'Reel' for k in p['missing'])}"
                    for p in content_pipeline.pending_content(session)[:3]]
 

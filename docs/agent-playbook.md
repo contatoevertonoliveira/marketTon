@@ -163,8 +163,14 @@ O operador pode ficar dias sem abrir o sistema: **você é a pessoa de confianç
 ligada (`content_pending` mostra `settings.enabled`), você cuida do conteúdo de ponta a ponta. Anúncios (que gastam dinheiro) continuam só do
 operador; aqui é só orgânico, que não gasta verba.
 
-**Rotina (uma vez por criativo, no máximo `max_per_day` publicações por dia, contando as do operador):**
-1. `content_pending`: o que falta publicar. Pegue o mais antigo. Se a chave estiver desligada ou o teto do dia já foi atingido, não faça nada.
+**Ritmo (o sistema impõe, você só segue):** até 3 publicações por dia, **uma por janela**: manhã (7h–12h), tarde (14h–18h) e noite (18h–24h), em
+**2 a 3 produtos diferentes**, **intercalando imagem e Reel** (depois de imagem vem Reel). Cada publicação sai no **Instagram e no Facebook** ao mesmo
+tempo (o Facebook é o par e leva o link do produto clicável). O sistema recusa fora da janela, na janela já usada, na vez do outro tipo ou com
+produto que já teve post no dia. A verificação do meio-dia **não publica**: use para criar, conferir e deixar pronto o que sai à tarde.
+
+**Rotina (uma vez por criativo; a rodada da manhã, a das 16h e a das 20h publicam):**
+1. `content_pending`: `can_publish_now`, `slot`, `next_kind` (o tipo da vez) e a fila. Escolha, entre os pendentes, um produto que ainda não saiu
+   hoje e que tenha o tipo da vez (Reel só se já houver slideshow). Se `can_publish_now` for falso, prepare (itens 2 a 5) e não publique.
 2. `creative_review(creative_id)`: **olhe** a imagem 4:5 com senso crítico, usando `o_que_conferir`. Perguntas que pesam: o produto é o da foto
    original? o título cabe e está inteiro? o preço está certo e aparece uma vez? a logo cobre algo? tem logo ou marca de terceiros no produto
    (risco de imitação)? o texto promete o que não se prova?
@@ -174,9 +180,9 @@ operador; aqui é só orgânico, que não gasta verba.
 4. **Se estiver certo:** `creative_review_submit(..., "image", "approved", "<o que conferi>")`.
 5. `reel_build(creative_id)` e `creative_review` de novo (agora vem a faixa com 4 quadros do slideshow): transições, imagem cortada, borrão
    demais. Aprove ou recuse o `reel` do mesmo jeito (recusado: não publique o Reel; o post de imagem pode sair).
-6. `social_publish(creative_id, "image")` e, aprovado, `social_publish(creative_id, "reel")` (sem `caption` usa o texto sugerido, que já tem o
-   aviso de afiliado e o link da bio). Respeite o teto do dia: o que ficar sobrando sai na próxima verificação.
-7. `report_add` (kind=acao): o que publicou, o link do post e o que você achou de errado e refez. Se algo falhou, kind=alerta com o motivo.
+6. `social_publish(creative_id, <next_kind>)` (sem `caption` usa o texto sugerido, que já tem o aviso de afiliado). Só **uma** por janela:
+   o que ficar sobrando sai na próxima. A resposta traz também o resultado do Facebook; se `facebook_error` vier preenchido, registre no relatório.
+7. `report_add` (kind=acao): o que publicou (os links do Instagram e do Facebook) e o que você achou de errado e refez. Se algo falhou, kind=alerta com o motivo.
 
 **Regras de ouro:** nunca publique sem parecer `approved` seu; nunca edite o texto para tirar o aviso de divulgação; nunca publique criativo de
 teste; se tiver dúvida sobre o produto (marca falsificada, foto de outro item), **não publique** e avise no relatório. Música: a API não deixa

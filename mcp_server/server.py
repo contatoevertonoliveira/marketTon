@@ -453,8 +453,8 @@ def ad_create(creative_id: int, daily_brl: float, days: int = 3, dry_run: bool =
 
 @mcp.tool(annotations=READ)
 def content_pending():
-    """Fila de conteúdo: criativos ao vivo prontos que ainda não têm post de imagem e/ou Reel no Instagram, a chave da publicação automática
-    (ligada ou não), o teto por dia e quantas publicações saíram hoje. Comece por aqui na rotina de conteúdo (manual 3.09)."""
+    """Fila de conteúdo: criativos ao vivo prontos sem post de imagem e/ou Reel, a chave da publicação automática, a janela de agora (`slot`), as
+    janelas já usadas hoje, o tipo da vez (`next_kind`) e `can_publish_now`. Comece por aqui na rotina de conteúdo (manual 3.09)."""
     return _run(lambda: _client.get("/social/pending"))
 
 
@@ -494,9 +494,10 @@ def reel_build(creative_id: int):
 
 @mcp.tool(annotations=WRITE)
 def social_publish(creative_id: int, kind: str, caption: str | None = None):
-    """Publica no Instagram do Mural (`kind` = image ou reel). SÓ funciona com a chave da publicação automática ligada pelo operador, parecer
-    `approved` seu e recente, texto com o aviso de divulgação e dentro do teto do dia. Sem `caption`, usa o texto sugerido. Anúncios (que gastam
-    dinheiro) continuam só do operador. Registre no relatório (`report_add`) o que saiu, com o link."""
+    """Publica no Instagram e no Facebook do Mural (`kind` = image ou reel). SÓ funciona com a chave ligada pelo operador, parecer `approved` seu
+    e recente, texto com o aviso de divulgação, dentro da janela do dia (manhã 7–12h, tarde 14–18h, noite 18–24h), UMA por janela, intercalando
+    imagem e Reel (`content_pending` diz o `next_kind`) e com produto que ainda não saiu hoje. Sem `caption`, usa o texto sugerido. Anúncios (que
+    gastam dinheiro) continuam só do operador. Registre no relatório (`report_add`) o que saiu, com os links."""
     body = {"creative_id": creative_id, "kind": kind}
     if caption:
         body["caption"] = caption

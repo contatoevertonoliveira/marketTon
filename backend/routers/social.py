@@ -103,7 +103,7 @@ def publish(payload: PublishIn, principal: Principal = Depends(require("connecto
 
 class AutoIn(BaseModel):
     enabled: bool
-    max_per_day: int = Field(2, ge=1, le=6)
+    max_per_day: int = Field(3, ge=1, le=3)
 
 
 class ReviewIn(BaseModel):
@@ -137,7 +137,9 @@ def autopublish_set(payload: AutoIn, principal: Principal = Depends(require("con
 
 @router.get("/social/pending", summary="Criativos prontos que ainda não têm post de imagem ou Reel")
 def pending(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
-    return {"settings": content_pipeline.get_settings(session), "published_today": content_pipeline.published_today(session),
+    st = content_pipeline.status(session)
+    return {"settings": {"enabled": st["enabled"], "max_per_day": st["max_per_day"]}, "published_today": st["published_today"], "slot": st["slot"],
+            "slots_used": st["slots_used"], "next_kind": st["next_kind"], "can_publish_now": content_pipeline.slot_open(session),
             "pending": content_pipeline.pending_content(session)}
 
 
@@ -162,14 +164,15 @@ def submit_review(payload: ReviewIn, principal: Principal = Depends(require("por
 @router.post("/social/auto/publish", summary="Publicar automaticamente (só com a chave ligada, parecer aprovado e dentro do teto do dia)", status_code=201)
 def auto_publish(payload: AutoPublishIn, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
     try:
-        post = content_pipeline.auto_publish(session, payload.creative_id, payload.kind, caption=payload.caption, actor=principal.username)
+        result = content_pipeline.auto_publish(session, payload.creative_id, payload.kind, caption=payload.caption, actor=principal.username)
     except content_pipeline.ContentError as exc:
         session.commit()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    post, fb = result["instagram"], result["facebook"]
     record_action(session, principal, action="social.auto_published", resource_type="creative", resource_id=str(payload.creative_id),
-                  detail=f"{payload.kind}: {post.permalink or post.external_id}")
+                  detail=f"{payload.kind}: {post.permalink or post.external_id}" + (f" | facebook: {fb.permalink or fb.external_id}" if fb else f" | facebook falhou: {result['facebook_error']}"))
     session.commit()
-    return instagram.out(post)
+    return {**instagram.out(post), "facebook": instagram.out(fb) if fb else None, "facebook_error": result["facebook_error"]}
 
 
 @router.get("/social/posts", summary="Histórico do que foi publicado nas redes")
