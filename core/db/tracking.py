@@ -59,7 +59,7 @@ class AffiliateLink(Base, TimestampMixin):
     )
     channel: Mapped[str | None] = mapped_column(String(64), index=True)
 
-    destination_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    destination_url: Mapped[str] = mapped_column(String(4096), nullable=False)
     affiliate_url: Mapped[str] = mapped_column(String(4096), nullable=False)
     short_code: Mapped[str] = mapped_column(String(32), nullable=False)
 
