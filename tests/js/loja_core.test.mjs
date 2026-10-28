@@ -59,3 +59,15 @@ test("rejeita fotografia inválida ou grande demais", () => {
   const many = Array.from({ length: MAX_ITEMS + 1 }, (_, i) => item({ id: `p${i}` }));
   assert.throws(() => cleanSnapshot({ items: many }), /itens demais/);
 });
+
+test("galeria: só fotos https distintas, a principal primeiro; com uma só não há carrossel", () => {
+  const snap = cleanSnapshot({ items: [
+    item({ id: "p1", images: ["https://x/a.jpg", "https://x/b.jpg", "https://x/a.jpg", "http://inseguro/c.jpg", "javascript:alert(1)", "https://x/d.jpg"] }),
+    item({ id: "p2", image: "https://x/solo.jpg", images: ["https://x/solo.jpg"] }),
+    item({ id: "p3" }),
+  ] });
+  const by = Object.fromEntries(snap.items.map((i) => [i.id, i]));
+  assert.deepEqual(by.p1.images, ["https://cf.shopee.com.br/file/abc", "https://x/a.jpg", "https://x/b.jpg", "https://x/d.jpg"]);
+  assert.deepEqual(by.p2.images, ["https://x/solo.jpg"]);
+  assert.deepEqual(by.p3.images, ["https://cf.shopee.com.br/file/abc"]);
+});

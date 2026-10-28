@@ -42,3 +42,13 @@ test("a página do produto carrega o script do pixel (que só liga depois do ace
   assert.ok(html.includes('src="/loja/pixel.js"'));
   assert.ok(!html.includes("fbevents.js") && !html.includes("fbq("), "nada da Meta direto no HTML: só pelo script, depois do aceite");
 });
+
+test("a página do produto vira carrossel só quando há mais de uma foto", () => {
+  const store = snap([]).store;
+  const one = renderProductPage(item(), store, "https://mural.felixsystems.com.br");
+  assert.ok(!one.includes('class="car"') && !one.includes("car-track"));
+  const many = renderProductPage(item({ images: ["https://cf.shopee.com.br/file/a", "https://x/2.jpg", "https://x/3.jpg"] }), store, "https://mural.felixsystems.com.br");
+  assert.equal((many.match(/<img src="https:\/\/(cf\.shopee\.com\.br|x)\//g) || []).length, 3);
+  assert.ok(many.includes("car-track") && many.includes('src="/loja/carousel.js"') && many.includes("foto 2 de 3"));
+  assert.ok(many.includes('"image":["https://cf.shopee.com.br/file/a","https://x/2.jpg","https://x/3.jpg"]'), "os dados estruturados levam todas as fotos");
+});

@@ -327,3 +327,17 @@ dialog::backdrop { background: rgba(23, 25, 35, 0.66); }
   *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; transition-delay: 0ms !important; scroll-behavior: auto !important; }
   .rv { opacity: 1; transform: none; }
 }
+
+/* ---------------- carrossel de fotos do produto ---------------- */
+.car { position: absolute; inset: 0; }
+.car-track { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.car-track::-webkit-scrollbar { display: none; }
+.sheet-art .car-track img { position: static; flex: 0 0 100%; width: 100%; height: 100%; object-fit: contain; background: #fff; scroll-snap-align: center; }
+.car-btn { position: absolute; top: 50%; translate: 0 -50%; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .92); color: #171923;
+  font-size: 26px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); display: grid; place-items: center; padding: 0 0 3px; }
+.car-btn:hover { background: #fff; }
+.car-prev { left: 10px; } .car-next { right: 10px; }
+.car-dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 8px; pointer-events: none; }
+.car-dot { pointer-events: auto; width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .35); background: rgba(255, 255, 255, .9); cursor: pointer; }
+.car-dot[aria-current="true"] { background: var(--red, #a71920); border-color: var(--red, #a71920); }
+@media (max-width: 720px) { .car-btn { width: 34px; height: 34px; font-size: 22px; } }

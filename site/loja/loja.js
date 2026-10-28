@@ -209,6 +209,17 @@
   }
 
   // ---------------- detalhe ----------------
+  // Várias fotos do marketplace viram carrossel; com uma só, fica a imagem estática de sempre.
+  function photos(it) {
+    const list = (Array.isArray(it.images) ? it.images : []).map(safeUrl).filter(Boolean);
+    if (list.length < 2) return h("div", { class: "sheet-art" }, h("img", { src: safeUrl(it.image), alt: it.title, width: 600, height: 600, referrerpolicy: "no-referrer" }));
+    const art = h("div", { class: "sheet-art" },
+      h("div", { class: "car", "aria-roledescription": "carrossel", "aria-label": `Fotos de ${it.title}` },
+        h("div", { class: "car-track" }, ...list.map((src, i) => h("img", { src, alt: `${it.title} (foto ${i + 1} de ${list.length})`, width: 600, height: 600, loading: i === 0 ? "eager" : "lazy", decoding: "async", referrerpolicy: "no-referrer" })))));
+    queueMicrotask(() => window.muralCarousel && window.muralCarousel(art.querySelector(".car")));
+    return art;
+  }
+
   function openProduct(id) {
     const it = byId.get(id);
     if (!it) return;
@@ -219,7 +230,7 @@
     dlg.replaceChildren(
       h("button", { class: "close", type: "button", onclick: () => dlg.close() }, "Fechar"),
       h("div", { class: "sheet-body" },
-        h("div", { class: "sheet-art" }, h("img", { src: safeUrl(it.image), alt: it.title, width: 600, height: 600, referrerpolicy: "no-referrer" })),
+        photos(it),
         h("div", { class: "sheet-info" },
           h("span", { class: "tag", text: `${it.category} · ${it.marketplace_name}` }),
           h("h2", { id: "produto-titulo", text: it.title }),

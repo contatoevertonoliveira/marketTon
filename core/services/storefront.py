@@ -194,6 +194,17 @@ def _first_image(product: Product) -> str | None:
     return None
 
 
+def _gallery(product: Product, limit: int = 6) -> list[str]:
+    """Fotos distintas (https) do produto, na ordem, até `limit`. Só entra o que o marketplace realmente devolveu."""
+    out: list[str] = []
+    for image in product.images or []:
+        if isinstance(image, str) and image.startswith("https://") and image not in out:
+            out.append(image)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _eligibility(product: Product, row: StorefrontItem | None, state: PortfolioState | None) -> str | None:
     """`None` se o produto pode ir para a loja; senão o motivo, em português."""
     if row is not None and row.hidden:
@@ -349,6 +360,7 @@ def build_snapshot(session: Session, *, create_links: bool = False) -> dict:
             "id": f"p{product.id}",
             "title": (row.display_title if row and row.display_title else clean_title(product.title)),
             "image": _first_image(product),
+            "images": _gallery(product),
             "marketplace": product.marketplace.value,
             "marketplace_name": MARKETPLACE_NAMES.get(product.marketplace.value, product.marketplace.value),
             "category": row.category if row and row.category else guess_category(product.title, product.marketplace.value),

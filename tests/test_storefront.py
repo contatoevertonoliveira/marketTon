@@ -291,3 +291,12 @@ def test_backfill_adds_the_products_already_on_the_shelf(session):
     session.flush()
     assert sf.backfill_portfolio(session) == 1 and sf.backfill_portfolio(session) == 0
     assert session.query(PortfolioItem).filter_by(product_id=p.id).count() == 1
+
+
+def test_the_snapshot_carries_only_distinct_https_photos(session):
+    p = _product(session, 7)
+    p.images = ["https://x/1.jpg", "https://x/2.jpg", "https://x/1.jpg", "http://x/3.jpg", "https://x/4.jpg"]
+    session.flush()
+    sf.upsert_item(session, p.id, category="Casa")
+    item = [i for i in sf.build_snapshot(session)["items"] if i["id"] == f"p{p.id}"][0]
+    assert item["image"] == "https://x/1.jpg" and item["images"] == ["https://x/1.jpg", "https://x/2.jpg", "https://x/4.jpg"]

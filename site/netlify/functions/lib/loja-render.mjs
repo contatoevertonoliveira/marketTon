@@ -27,7 +27,7 @@ export function renderProductPage(it, store, origin) {
   const price = BRL(it.price);
   const was = it.original_price && it.price && it.original_price > it.price ? BRL(it.original_price) : null;
   const ld = {
-    "@context": "https://schema.org", "@type": "Product", name: it.title, image: [it.image], description: desc, category: it.category,
+    "@context": "https://schema.org", "@type": "Product", name: it.title, image: it.images && it.images.length > 1 ? it.images : [it.image], description: desc, category: it.category,
     ...(it.price ? { offers: { "@type": "Offer", url, priceCurrency: "BRL", price: it.price, availability: "https://schema.org/InStock" } } : {}),
   };
   const name = store?.name || "Mural na Web";
@@ -50,6 +50,7 @@ ${it.price ? `<meta property="product:price:amount" content="${esc(Number(it.pri
 <link rel="icon" href="/loja/img/favicon-64.png">
 <link rel="stylesheet" href="/loja/loja.css">
 <script src="/loja/pixel.js" defer></script>
+<script src="/loja/carousel.js" defer></script>
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>
 </head>
 <body>
@@ -57,7 +58,7 @@ ${it.price ? `<meta property="product:price:amount" content="${esc(Number(it.pri
 <a class="btn btn-soft btn-small" href="/#achados" style="margin-left:auto">Ver todos os achados</a></div></header>
 <main class="wrap" style="padding-block:32px 64px">
 <article class="sheet-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:28px;background:var(--white);border-radius:16px;overflow:hidden">
-<div class="sheet-art" style="min-height:320px;position:relative"><img src="${esc(it.image)}" alt="${esc(it.title)}" referrerpolicy="no-referrer" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></div>
+${galleryHtml(it)}
 <div class="sheet-info" style="padding:24px 28px 28px">
 <span class="tag">${esc(it.category)} · ${esc(MARKETPLACE_TEXT(it))}</span>
 <h1 style="font-size:var(--s-head)">${esc(it.title)}</h1>
@@ -72,6 +73,16 @@ ${it.blurb ? `<p>${esc(it.blurb)}</p>` : ""}
 </main>
 </body>
 </html>`;
+}
+
+/** Uma foto: imagem estática. Mais de uma: carrossel (rolagem com encaixe funciona até sem JavaScript). */
+export function galleryHtml(it) {
+  const list = Array.isArray(it.images) && it.images.length > 1 ? it.images : null;
+  if (!list) {
+    return `<div class="sheet-art" style="min-height:320px;position:relative"><img src="${esc(it.image)}" alt="${esc(it.title)}" referrerpolicy="no-referrer" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></div>`;
+  }
+  const slides = list.map((src, i) => `<img src="${esc(src)}" alt="${esc(it.title)} (foto ${i + 1} de ${list.length})" referrerpolicy="no-referrer"${i === 0 ? "" : ' loading="lazy"'}>`).join("");
+  return `<div class="sheet-art" style="min-height:320px;position:relative"><div class="car" aria-roledescription="carrossel" aria-label="Fotos de ${esc(it.title)}"><div class="car-track">${slides}</div></div></div>`;
 }
 
 export function renderNotFound() {

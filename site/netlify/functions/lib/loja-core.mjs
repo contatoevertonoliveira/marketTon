@@ -28,11 +28,18 @@ export function cleanItem(raw) {
   const url = https(raw.url);
   const image = https(raw.image);
   if (!id || !title || !url || !image) return null; // sem link, sem foto ou sem nome: não entra
+  // Galeria: só fotos https distintas, a principal primeiro; com uma foto só, não há carrossel.
+  const gallery = [image];
+  for (const extra of Array.isArray(raw.images) ? raw.images : []) {
+    const u = https(extra);
+    if (u && !gallery.includes(u) && gallery.length < 8) gallery.push(u);
+  }
   const category = CATEGORIES.includes(raw.category) ? raw.category : "Achados diversos";
   return {
     id,
     title,
     image,
+    images: gallery.length > 1 ? gallery : [image],
     url,
     category,
     marketplace: text(raw.marketplace, 32),
