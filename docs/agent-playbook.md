@@ -104,7 +104,10 @@ não estiver configurado, peça a configuração (`request_resource`) em vez de 
 
 ## 3.06 Vitrine pública (Mural na Web)
 
-A loja pública mostra os produtos do portfólio para quem vem das redes. Você a mantém:
+A loja pública mostra os produtos do portfólio para quem vem das redes. Você a mantém.
+
+**Prazo de entrega (regra do operador):** dê preferência a produtos **enviados do Brasil** e com entrega curta. Produto com prazo acima de **10 dias** não entra na vitrine nem vira criativo/anúncio. Quando o prazo não for conhecido (a API padrão do AliExpress não informa), não afirme que é rápido: trate como "prazo desconhecido" e prefira os que têm prazo confirmado.
+
 1. `storefront_status` — o que está na loja e o que ficou de fora (e o motivo).
 2. Para cada produto novo: `storefront_update_item` com nome curto (`display_title`), categoria e **uma** frase honesta
    (`blurb`). Sem promessa de resultado, sem avaliação inventada, sem preço ou estoque que você não viu.
