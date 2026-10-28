@@ -432,6 +432,7 @@ function AutoPublishCard({ onMsg }) {
   const [st, setSt] = useState(null);
   const [max, setMax] = useState(2);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem("autopublish_open") === "1"; } catch { return false; } });
   const load = useCallback(() => getJSON("/social/autopublish").then((d) => { setSt(d); setMax(d.max_per_day); }).catch(() => {}), []);
   useEffect(() => { load(); const id = setInterval(load, 60000); return () => clearInterval(id); }, [load]);
   async function save(enabled) {
@@ -440,12 +441,21 @@ function AutoPublishCard({ onMsg }) {
     try { const d = await putJSON("/social/autopublish", { enabled, max_per_day: Number(max) }); setSt(d); onMsg({ ok: true, text: enabled ? "Publicação automática ligada." : "Publicação automática desligada." }); }
     catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
   }
+  const toggle = () => setOpen((v) => { const n = !v; try { localStorage.setItem("autopublish_open", n ? "1" : "0"); } catch { /* sem armazenamento */ } return n; });
   if (!st) return null;
+  const failed = (st.posts || []).filter((p) => p.status !== "published").length;
   return (
     <div style={{ ...card, borderLeft: `4px solid ${st.enabled ? "#2dce89" : "#adb5bd"}` }}>
+      <button type="button" onClick={toggle} aria-expanded={open} style={{ display: "flex", width: "100%", alignItems: "center", gap: 10, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}>
+        <span style={{ fontSize: 12, color: "#8898aa", width: 12 }}>{open ? "▼" : "▶"}</span>
+        <span style={{ flex: 1, fontWeight: 700, color: "#32325d", fontSize: 14 }}>🤖 Publicação automática no Instagram {st.enabled ? <span style={{ color: "#1a7a54" }}>· ligada</span> : <span style={{ color: "#8898aa" }}>· desligada</span>}
+          <span style={{ fontWeight: 400, color: "#525f7f", fontSize: 12 }}> · hoje {st.published_today} de {st.max_per_day}{failed ? <span style={{ color: "#c31e3f" }}> · {failed} com falha nas últimas</span> : null}</span>
+        </span>
+        <span style={{ fontSize: 12, color: "#5e72e4" }}>{open ? "recolher" : "ver detalhes e histórico"}</span>
+      </button>
+      {open && <div style={{ marginTop: 10 }}>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ flex: 1, minWidth: 240 }}>
-          <div style={{ fontWeight: 700, color: "#32325d", fontSize: 14 }}>🤖 Publicação automática no Instagram {st.enabled ? <span style={{ color: "#1a7a54" }}>· ligada</span> : <span style={{ color: "#8898aa" }}>· desligada</span>}</div>
           <div style={{ fontSize: 12, color: "#525f7f", margin: "4px 0" }}>O agente cria o conteúdo, <strong>confere as imagens com senso crítico</strong>, refaz o que ficar errado e publica sozinho no <strong>Instagram e no Facebook</strong>: uma publicação de manhã, uma à tarde e uma à noite, intercalando imagem e Reel e produtos diferentes. Cada post tem o aviso de afiliado. Hoje saíram <strong>{st.published_today}</strong> de {st.max_per_day}{st.slots_used && st.slots_used.length ? ` (${st.slots_used.map((x) => ({ morning: "manhã", afternoon: "tarde", evening: "noite" }[x] || x)).join(", ")})` : ""}; a próxima é {st.next_kind === "reel" ? "um Reel" : "uma imagem"}.</div>
         </div>
         <label style={{ fontSize: 12 }}>Teto por dia <input type="number" min="1" max="3" value={max} onChange={(e) => setMax(e.target.value)} style={{ width: 52, padding: "4px 6px", border: "1px solid #dee2e6", borderRadius: 6 }} /></label>
@@ -466,6 +476,7 @@ function AutoPublishCard({ onMsg }) {
           ))}
         </div>
       )}
+      </div>}
     </div>
   );
 }
