@@ -481,8 +481,114 @@ function AutoPublishCard({ onMsg }) {
   );
 }
 
+// Lance máximo por clique das campanhas do Google: mostra o atual, o que o Google estima para aparecer e o sugerido; aplica à mão ou automático.
+const toNum = (v) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? n : NaN; };
+
+function GoogleBidsModal({ onClose, onDone, onMsg }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [mode, setMode] = useState("auto");
+  const [vals, setVals] = useState({});
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => getJSON("/ads/google/bids").then((d) => { setData(d); setError(""); setVals({}); }).catch((e) => setError(e.message)), []);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { const k = (e) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
+  const max = data?.max_allowed_brl ?? 5;
+  const items = data?.items || [];
+  const shown = (r) => (mode === "auto" ? (r.suggested_bid_brl ?? "") : (vals[r.ad_id] ?? (r.current_bid_brl ?? "")));
+  const invalid = (r) => { const v = toNum(shown(r)); return shown(r) !== "" && (Number.isNaN(v) || v < 0.01 || v > max); };
+  const changed = items.filter((r) => { const v = toNum(shown(r)); return shown(r) !== "" && !Number.isNaN(v) && Math.abs(v - (r.current_bid_brl ?? -1)) > 0.004; });
+  const blocked = busy || changed.length === 0 || items.some(invalid);
+  async function apply() {
+    setBusy(true);
+    try {
+      const d = mode === "auto"
+        ? await postJSON("/ads/google/bids/auto", { ad_ids: changed.filter((r) => r.has_estimate).map((r) => r.ad_id) })
+        : await putJSON("/ads/google/bids", { bids: changed.map((r) => ({ ad_id: r.ad_id, max_cpc_brl: toNum(shown(r)) })) });
+      const ok = d.results.filter((r) => r.max_cpc_brl != null && !r.skipped && !r.error).length;
+      const bad = d.results.filter((r) => r.error || r.skipped);
+      onMsg({ ok: bad.length === 0, text: `Lance alterado em ${ok} campanha(s).${bad.length ? " " + bad.map((r) => `#${r.ad_id}: ${r.error || r.skipped}`).join(" ") : ""}` });
+      onDone(); load();
+    } catch (e) { onMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
+  }
+  const th = { textAlign: "left", fontSize: 10, color: "#8898aa", textTransform: "uppercase", letterSpacing: 0.4, padding: "6px 8px", borderBottom: "1px solid #e9ecef" };
+  const td = { padding: "8px", fontSize: 13, color: "#32325d", borderBottom: "1px solid #f0f2f7", verticalAlign: "top" };
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Ajustar lances do Google" onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(20,24,40,.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 14, width: "min(920px, 100%)", maxHeight: "90vh", overflow: "auto", padding: 20, boxShadow: "0 10px 40px rgba(0,0,0,.3)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h3 style={{ margin: 0, flex: 1, color: "#32325d" }}>Ajustar lances do Google</h3>
+          <button onClick={onClose} aria-label="Fechar" style={{ border: "none", background: "none", fontSize: 22, cursor: "pointer", color: "#8898aa" }}>×</button>
+        </div>
+        <p style={{ fontSize: 12, color: "#525f7f", margin: "6px 0 12px" }}>
+          O lance é o <strong>máximo que você aceita pagar por clique</strong>. Se ele for menor que o que o Google pede para aparecer, o anúncio fica sem impressões, que é o caso de campanhas novas. O gasto continua limitado pela verba diária de cada campanha, e o lance nunca passa de {brl(max)}.
+        </p>
+        {error && <div style={{ color: "#c31e3f", background: "#fef1f4", padding: 8, borderRadius: 8, fontSize: 12 }}>{error}</div>}
+        {!data && !error && <p style={{ color: "#8898aa" }}>Lendo o Google…</p>}
+        {data && items.length === 0 && <p style={{ color: "#8898aa" }}>Nenhuma campanha do Google criada ainda.</p>}
+        {items.length > 0 && (
+          <>
+            <div role="radiogroup" aria-label="Modo" style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+              {[["auto", "Automático (usar a sugestão)"], ["manual", "Manual (eu digito)"]].map(([k, label]) => (
+                <button key={k} role="radio" aria-checked={mode === k} onClick={() => setMode(k)}
+                  style={{ border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", background: mode === k ? "#5e72e4" : "#eef0f6", color: mode === k ? "#fff" : "#525f7f" }}>{label}</button>
+              ))}
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                <thead><tr><th style={th}>Campanha / produto</th><th style={th}>Lance atual</th><th style={th} title="Estimativa do Google do CPC para aparecer na primeira página (mediana das palavras)">Mínimo estimado</th><th style={th}>Sugerido</th><th style={th}>Novo lance (R$)</th></tr></thead>
+                <tbody>
+                  {items.map((r) => {
+                    const v = toNum(shown(r));
+                    return (
+                      <tr key={r.ad_id}>
+                        <td style={td}>
+                          <div style={{ fontWeight: 700 }}>{short(r.product_title, 38)}</div>
+                          <div style={{ fontSize: 11, color: "#8898aa" }}>#{r.ad_id} · {AD[r.status]?.[2] || r.status} · verba {brl(r.daily_budget_brl)}/dia
+                            {r.rank_lost_pct != null && r.rank_lost_pct > 0 ? <span style={{ color: "#c31e3f" }}> · {r.rank_lost_pct}% das impressões perdidas por lance baixo</span> : null}</div>
+                          {r.keywords.length > 0 && <details style={{ fontSize: 11, color: "#525f7f", marginTop: 4 }}><summary style={{ cursor: "pointer" }}>{r.keywords.length} palavra(s)</summary>
+                            {r.keywords.map((w) => <div key={w.text}>{w.text}: {w.top_of_page_brl || w.first_page_brl ? brl(w.top_of_page_brl || w.first_page_brl) : "sem estimativa"}</div>)}</details>}
+                        </td>
+                        <td style={td}>{brl(r.current_bid_brl)}</td>
+                        <td style={td}>{r.entry_bid_brl != null ? <>{brl(r.entry_bid_brl)}<div style={{ fontSize: 11, color: "#8898aa" }}>a mais barata: {brl(r.min_word_bid_brl)}</div></> : <span style={{ color: "#8898aa", fontSize: 12 }}>sem estimativa (pouco volume)</span>}</td>
+                        <td style={td}>{r.has_estimate ? <strong style={{ color: "#1a7a54" }}>{brl(r.suggested_bid_brl)}</strong> : "—"}</td>
+                        <td style={td}>
+                          <input type="text" inputMode="decimal" disabled={mode === "auto"} value={String(shown(r)).replace(".", ",")}
+                            onChange={(e) => setVals({ ...vals, [r.ad_id]: e.target.value })}
+                            aria-label={`Novo lance da campanha ${r.ad_id}`}
+                            style={{ width: 80, padding: "5px 7px", border: `1px solid ${invalid(r) ? "#f5365c" : "#dee2e6"}`, borderRadius: 6, background: mode === "auto" ? "#f6f9fc" : "#fff" }} />
+                          {mode === "manual" && r.has_estimate && <button type="button" onClick={() => setVals({ ...vals, [r.ad_id]: String(r.suggested_bid_brl) })} style={{ marginLeft: 6, border: "none", background: "none", color: "#5e72e4", fontSize: 11, cursor: "pointer" }}>usar sugestão</button>}
+                          {mode === "auto" && !r.has_estimate && <div style={{ fontSize: 11, color: "#8898aa" }}>defina à mão</div>}
+                          {invalid(r) && <div style={{ fontSize: 11, color: "#c31e3f" }}>entre R$ 0,01 e {brl(max)}</div>}
+                          {!invalid(r) && !Number.isNaN(v) && r.daily_budget_brl != null && v > r.daily_budget_brl && <div style={{ fontSize: 11, color: "#b8720a" }}>maior que a verba do dia</div>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p style={{ fontSize: 11, color: "#8898aa", margin: "10px 0" }}>
+              A sugestão cobre cerca de 3 em cada 4 palavras da campanha, com 15% de folga, arredondada de R$ 0,05 em R$ 0,05. É estimativa do Google, não preço garantido; o que vale é o custo por clique real depois de um ou dois dias. Mudar o lance não liga nem pausa nada.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={onClose} style={{ border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>Fechar</button>
+              <button disabled={blocked} onClick={apply}
+                style={{ border: "none", background: "#5e72e4", color: "#fff", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 800, cursor: "pointer", opacity: blocked ? 0.5 : 1 }}>
+                {mode === "auto" ? `Aplicar sugestão (${changed.filter((r) => r.has_estimate).length})` : `Salvar lances (${changed.length})`}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Overview({ ads, totals, budget, onSync, onPauseAll, onMsg }) {
   const spent = sum(ads, "spent_brl"), imps = sum(ads, "impressions"), clicks = sum(ads, "clicks");
+  const [bidsOpen, setBidsOpen] = useState(false);
   const active = ads.filter((a) => a.status === "active").length;
   const ctr = imps ? Math.round((clicks / imps) * 10000) / 100 : null;
   const cpc = clicks ? spent / clicks : null;
@@ -495,6 +601,7 @@ function Overview({ ads, totals, budget, onSync, onPauseAll, onMsg }) {
   return (
     <div>
       <AutoPublishCard onMsg={onMsg} />
+      {bidsOpen && <GoogleBidsModal onClose={() => setBidsOpen(false)} onDone={() => {}} onMsg={onMsg} />}
       <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 16 }}>
         <Metric big label="Gasto em anúncios" value={brl(spent)} />
         <Metric big label="Impressões" value={num(imps)} />
@@ -505,6 +612,7 @@ function Overview({ ads, totals, budget, onSync, onPauseAll, onMsg }) {
         <Metric big label="Gasto em criativos" value={usd(totals.cost_usd)} hint="Custo das gerações no AI Studio (só o modo ao vivo gasta)" />
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}>
+        <button onClick={() => setBidsOpen(true)} style={{ border: "1px solid #5e72e4", background: "#fff", color: "#5e72e4", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Ajustar lances do Google</button>
         <button onClick={onSync} style={{ border: "1px solid #dee2e6", background: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer" }}>Atualizar métricas</button>
         <button onClick={onPauseAll} style={{ border: "none", background: "#f5365c", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Pausar tudo (Meta e Google)</button>
       </div>

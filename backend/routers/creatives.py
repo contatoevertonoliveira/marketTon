@@ -234,6 +234,54 @@ def create_google_ad(payload: GoogleAdCreate, principal: Principal = Depends(req
     return result
 
 
+class BidItem(BaseModel):
+    ad_id: int
+    max_cpc_brl: float
+
+
+class BidsIn(BaseModel):
+    bids: list[BidItem] = Field(min_length=1, max_length=50)
+
+
+class AutoBidsIn(BaseModel):
+    ad_ids: list[int] | None = None
+
+
+@router.get("/ads/google/bids", summary="Lances das campanhas do Google: atual, estimativa de primeira página e sugestão (só leitura)")
+def google_bids(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
+    try:
+        return {"items": google_campaigns.bid_overview(session), "max_allowed_brl": google_campaigns.MAX_CPC_LIMIT}
+    except meta_campaigns.AdsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.put("/ads/google/bids", summary="Definir o lance máximo por clique de campanhas do Google (só o operador; teto de R$ 5)")
+def put_google_bids(payload: BidsIn, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    results = []
+    for item in payload.bids:
+        try:
+            r = google_campaigns.set_bid(session, item.ad_id, item.max_cpc_brl)
+            record_action(session, principal, action="ads.google_bid_set", resource_type="ad", resource_id=str(item.ad_id), detail=f"lance máximo R$ {r['max_cpc_brl']:g}")
+            results.append(r)
+        except meta_campaigns.AdsError as exc:
+            results.append({"ad_id": item.ad_id, "error": str(exc)})
+    session.commit()
+    return {"results": results}
+
+
+@router.post("/ads/google/bids/auto", summary="Aplicar o lance sugerido automaticamente (só o operador; teto de R$ 5)")
+def auto_google_bids(payload: AutoBidsIn, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        results = google_campaigns.apply_suggested_bids(session, payload.ad_ids)
+    except meta_campaigns.AdsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    for r in results:
+        if "max_cpc_brl" in r and "from_brl" in r:
+            record_action(session, principal, action="ads.google_bid_auto", resource_type="ad", resource_id=str(r["ad_id"]), detail=f"lance máximo R$ {r['max_cpc_brl']:g}")
+    session.commit()
+    return {"results": results}
+
+
 @router.post("/ads/{ad_id}/activate", summary="LIGAR o anúncio (só o operador: passa a gastar até a verba diária)")
 def activate_ad(ad_id: int, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
     try:

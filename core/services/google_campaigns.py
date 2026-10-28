@@ -14,6 +14,7 @@ Mesmas travas da Meta, em código, mas com **orçamento próprio do Google** (ca
 from __future__ import annotations
 
 import logging
+import math
 import re
 from datetime import UTC, datetime, timedelta
 
@@ -314,3 +315,124 @@ def sync_metrics(session: Session, now: datetime | None = None) -> int:
         done += 1
     session.flush()
     return done
+
+
+# --- Lance máximo por clique (CPC) das campanhas que já existem ---------------------------------------------------------------------------------------
+BID_MIN = 0.20
+BID_STEP = 0.05
+BID_MARGIN = 1.15  # folga sobre a estimativa do Google, para disputar a primeira página em vez de ficar na beirada
+
+
+def _round_up(value: float) -> float:
+    return round(math.ceil(value / BID_STEP - 1e-9) * BID_STEP, 2)
+
+
+def _percentile(values: list[float], q: float) -> float:
+    ordered = sorted(values)
+    pos = (len(ordered) - 1) * q
+    low, high = math.floor(pos), math.ceil(pos)
+    return ordered[low] + (ordered[high] - ordered[low]) * (pos - low)
+
+
+def suggest_bid(estimates: list[float]) -> float | None:
+    """Lance sugerido a partir das estimativas de CPC de topo de página por palavra (R$): o 3º quartil das palavras com folga de 15%, em
+    múltiplos de R$ 0,05 e dentro de [BID_MIN, MAX_CPC_LIMIT]. Um lance só vale para o grupo todo, então cobre a maioria das palavras sem pagar
+    o preço da mais cara. Sem estimativa nenhuma (palavras com pouco volume), não há sugestão."""
+    values = [v for v in estimates if v and v > 0]
+    if not values:
+        return None
+    return min(MAX_CPC_LIMIT, max(BID_MIN, _round_up(_percentile(values, 0.75) * BID_MARGIN)))
+
+
+def _gaql_in(ids: list[str]) -> str:
+    return ", ".join(i for i in ids if i.isdigit())
+
+
+def bid_overview(session: Session) -> list[dict]:
+    """Campanhas do Google que existem (ligadas, pausadas ou planejadas) com o lance atual, o que o Google estima para aparecer na primeira
+    página e o lance sugerido. Só leitura."""
+    ads = list(session.scalars(select(AdCampaign).where(AdCampaign.platform == "google", AdCampaign.external_campaign_id.is_not(None),
+                                                       AdCampaign.status.in_(("active", "paused", "draft"))).order_by(AdCampaign.id)))
+    if not ads:
+        return []
+    client = _client(session)
+    ids = _gaql_in([a.external_campaign_id for a in ads])
+    try:
+        groups = client.search(f"SELECT campaign.id, ad_group.id, ad_group.cpc_bid_micros FROM ad_group WHERE campaign.id IN ({ids}) AND ad_group.status != 'REMOVED'")
+        kws = client.search("SELECT campaign.id, ad_group_criterion.keyword.text, ad_group_criterion.position_estimates.first_page_cpc_micros, "
+                            "ad_group_criterion.position_estimates.top_of_page_cpc_micros FROM ad_group_criterion "
+                            f"WHERE ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.negative = false AND ad_group_criterion.status != 'REMOVED' "
+                            f"AND campaign.id IN ({ids})")
+        stats = client.search("SELECT campaign.id, metrics.impressions, metrics.clicks, metrics.search_rank_lost_impression_share "
+                              f"FROM campaign WHERE campaign.id IN ({ids})")
+    except GoogleAdsError as exc:
+        raise AdsError(f"o Google recusou a leitura: {exc}") from exc
+    bid_by = {str((g.get("campaign") or {}).get("id")): int((g.get("adGroup") or {}).get("cpcBidMicros") or 0) / 1_000_000 for g in groups}
+    lost_by = {str((s.get("campaign") or {}).get("id")): (s.get("metrics") or {}).get("searchRankLostImpressionShare") for s in stats}
+    words: dict[str, list[dict]] = {}
+    for row in kws:
+        est = (row.get("adGroupCriterion") or {}).get("positionEstimates") or {}
+        first, top = int(est.get("firstPageCpcMicros") or 0) / 1_000_000, int(est.get("topOfPageCpcMicros") or 0) / 1_000_000
+        words.setdefault(str((row.get("campaign") or {}).get("id")), []).append(
+            {"text": ((row.get("adGroupCriterion") or {}).get("keyword") or {}).get("text"), "first_page_brl": first or None, "top_of_page_brl": top or None})
+    out = []
+    for ad in ads:
+        cid = ad.external_campaign_id
+        ws = words.get(cid, [])
+        firsts = [w["first_page_brl"] for w in ws if w["first_page_brl"]]
+        tops = [w["top_of_page_brl"] or w["first_page_brl"] for w in ws if w["top_of_page_brl"] or w["first_page_brl"]]
+        suggested = suggest_bid(tops)
+        product = session.get(Product, ad.product_id) if ad.product_id else None
+        current = bid_by.get(cid)
+        lost = lost_by.get(cid)
+        out.append({"ad_id": ad.id, "product_id": ad.product_id, "product_title": product.title if product else None, "status": ad.status,
+                    "daily_budget_brl": ad.daily_budget_brl, "current_bid_brl": current,
+                    "entry_bid_brl": round(_percentile(firsts, 0.5), 2) if firsts else None,
+                    "min_word_bid_brl": round(min(firsts), 2) if firsts else None,
+                    "suggested_bid_brl": suggested, "has_estimate": suggested is not None, "max_allowed_brl": MAX_CPC_LIMIT,
+                    "rank_lost_pct": round(float(lost) * 100) if lost is not None else None,
+                    "impressions": ad.impressions, "clicks": ad.clicks,
+                    "keywords": sorted(ws, key=lambda w: -(w["top_of_page_brl"] or w["first_page_brl"] or 0))})
+    return out
+
+
+def set_bid(session: Session, ad_id: int, max_cpc_brl: float, *, validate_only: bool = False) -> dict:
+    """Troca o lance máximo por clique do grupo de anúncios de uma campanha que já existe no Google. Mesma trava de teto da criação."""
+    ad = session.get(AdCampaign, ad_id)
+    if ad is None or ad.platform != "google":
+        raise AdsError(f"campanha {ad_id} não encontrada")
+    if not ad.external_adset_id or ad.status not in ("active", "paused", "draft"):
+        raise AdsError(f"a campanha está “{ad.status}”: só dá para mudar o lance de uma campanha que existe no Google e não foi encerrada.")
+    try:
+        bid = round(float(max_cpc_brl), 2)
+    except (TypeError, ValueError):
+        raise AdsError("informe o lance em reais, por exemplo 1,50.") from None
+    if bid < 0.01 or bid > MAX_CPC_LIMIT:
+        raise AdsError(f"o lance máximo por clique deve ficar entre R$ 0,01 e R$ {MAX_CPC_LIMIT:g} (trava de segurança).")
+    client = _client(session)
+    resource = f"customers/{client.cfg.customer_id}/adGroups/{ad.external_adset_id}"
+    try:
+        client.mutate([{"adGroupOperation": {"update": {"resourceName": resource, "cpcBidMicros": str(_micros(bid))}, "updateMask": "cpc_bid_micros"}}],
+                      validate_only=validate_only)
+    except GoogleAdsError as exc:
+        raise AdsError(f"o Google recusou: {exc}") from exc
+    return {"ad_id": ad.id, "max_cpc_brl": bid, "validated_only": validate_only}
+
+
+def apply_suggested_bids(session: Session, ad_ids: list[int] | None = None) -> list[dict]:
+    """Modo automático: aplica a sugestão a cada campanha que tem estimativa e ainda não está nesse lance. Devolve o resultado de cada uma."""
+    results = []
+    for row in bid_overview(session):
+        if ad_ids is not None and row["ad_id"] not in ad_ids:
+            continue
+        new, old = row["suggested_bid_brl"], row["current_bid_brl"]
+        if new is None:
+            results.append({"ad_id": row["ad_id"], "skipped": "sem estimativa do Google para estas palavras (pouco volume): defina o lance à mão."})
+        elif old is not None and abs(old - new) < 0.005:
+            results.append({"ad_id": row["ad_id"], "skipped": "já está no lance sugerido.", "max_cpc_brl": old})
+        else:
+            try:
+                results.append({**set_bid(session, row["ad_id"], new), "from_brl": old})
+            except AdsError as exc:
+                results.append({"ad_id": row["ad_id"], "error": str(exc)})
+    return results
