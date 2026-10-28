@@ -38,6 +38,7 @@ from core.db.agent_runs import AgentRun
 from core.db.content_review import CreativeReview
 from core.db.finance import WalletBalance
 from core.db.social import SocialPost
+from core.db.vetting import ProductVetting
 from core.db.trend_radar import TrendSnapshot
 from core.db.app_settings import AppSetting
 from core.db.marketplace_credentials import MarketplaceCredential

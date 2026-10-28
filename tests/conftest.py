@@ -27,6 +27,14 @@ os.environ.setdefault("ARGON2_MEMORY_COST", "8192")
 os.environ.setdefault("ARGON2_PARALLELISM", "1")
 
 
+@pytest.fixture(autouse=True)
+def _vetting_gate_off(monkeypatch):
+    """A trava de triagem do anúncio pago é testada em `test_product_vetting`; nos demais testes de anúncio ela fica de lado."""
+    from core.services import product_vetting
+
+    monkeypatch.setattr(product_vetting, "GATE_ENABLED", False)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _fast_password_hashing():
     """Reduz o custo do Argon2 para a suíte.

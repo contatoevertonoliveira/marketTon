@@ -319,6 +319,30 @@ def report_add(kind: str, title: str, body: str = ""):
 
 
 @mcp.tool(annotations=WRITE)
+def product_vet(product_id: int, keyword: str = ""):
+    """Tria um produto ANTES de gastar com anúncio: procura no Google (volume, CPC, tendência), demanda na plataforma, nota, prazo de entrega e a
+    conta do anúncio (quantos % dos cliques precisam virar venda para empatar). Parecer: `aprovado_pago` (pode receber anúncio), `so_organico`
+    ou `reprovado`. Passe em `keyword` a busca que as pessoas fazem para achar o produto (ex.: "afiador de facas", não o título do anúncio):
+    sem ela o sistema deduz do título, o que erra. Criar anúncio pago sem parecer `aprovado_pago` recente (45 dias) é recusado pelo sistema."""
+    return _run(lambda: _client.post(f"/vetting/{product_id}", {"keyword": keyword or None}))
+
+
+@mcp.tool(annotations=WRITE)
+def vetting_due(limit: int = 10):
+    """Refaz a triagem dos produtos da vitrine e com anúncio que ainda não têm parecer ou o têm velho (mais de 7 dias), do mais antigo ao mais novo."""
+    return _run(lambda: _client.post(f"/vetting/due?limit={int(limit)}", {}))
+
+
+@mcp.tool(annotations=READ)
+def vetting_review(period: str = "weekly", verdict: str = ""):
+    """Balanço da triagem. `period`: weekly (semanal), biweekly (quinzenal) ou monthly (mensal): quantos produtos foram triados, o que mudou de parecer
+    e onde há anúncio rodando SEM respaldo (parecer diferente de aprovado_pago). Com `verdict` (aprovado_pago|so_organico|reprovado), lista os pareceres atuais."""
+    if verdict:
+        return _run(lambda: _client.get("/vetting", verdict=verdict))
+    return _run(lambda: _client.get("/vetting/review", period=period))
+
+
+@mcp.tool(annotations=WRITE)
 def request_resource(resource: str, why: str, how_to_provide: str):
     """Pede ao operador um recurso, acesso ou ferramenta que falta (aparece como cartão no chat).
 

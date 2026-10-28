@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from core.db.ads import AdCampaign
 from core.db.catalog import Product
 from core.db.service_credentials import ServiceCredential
-from core.services import storefront
+from core.services import product_vetting, storefront
 from core.services.meta_campaigns import MAX_DAYS, AdsError, _guard, budget_status
 from integrations.google_ads import GoogleAdsClient, GoogleAdsConfig, GoogleAdsError
 
@@ -161,7 +161,9 @@ def create_campaign(session: Session, product_id: int, *, daily_brl: float, days
     plan = build_plan(session, product_id, daily_brl=daily_brl, days=days, headlines=headlines, descriptions=descriptions,
                       keywords=keywords, max_cpc_brl=max_cpc_brl, now=now)
     if dry_run:
-        return {"dry_run": True, "plan": plan, "note": "Nada foi enviado ao Google. Use dry_run=false para criar a campanha PAUSADA."}
+        return {"dry_run": True, "plan": plan, "triagem": product_vetting.out(product_vetting.latest(session, product_id)),
+                "note": "Nada foi enviado ao Google. Use dry_run=false para criar a campanha PAUSADA. Anúncio pago exige triagem `aprovado_pago` (product_vet)."}
+    product_vetting.require_paid_ok(session, product_id)
     client = _client(session)
     ad = AdCampaign(creative_campaign_id=None, product_id=product_id, platform="google", status="draft", daily_budget_brl=daily_brl,
                     duration_days=days, destination_url=plan["link"], created_by=actor[:64],

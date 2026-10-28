@@ -118,6 +118,20 @@ A loja pública mostra os produtos do portfólio para quem vem das redes. Você 
 O link da loja é o link curto rastreado (canal `vitrine`): os cliques da loja entram em `sync_clicks`. Comissão e custos
 nunca aparecem na loja. A compra e o pagamento acontecem no marketplace.
 
+## 3.065 Triagem de produtos: só se gasta com procura e demanda comprovadas
+
+O operador exige o mesmo filtro para TODO produto, de qualquer marketplace, antes de qualquer anúncio que gaste dinheiro. O sistema faz a conta; você escolhe a palavra-chave e interpreta.
+1. `product_vet(product_id, keyword)`: `keyword` é a busca que as pessoas digitam para achar o produto ("afiador de facas", não o título do anúncio). Sem ela o sistema deduz do título e erra.
+2. O parecer vem com os números: buscas por mês no Google, CPC, tendência (30 dias), vendas e nota na plataforma, prazo de entrega e **quantos % dos cliques precisam virar venda para o anúncio empatar**.
+   - `aprovado_pago`: procura (300+ buscas/mês), demanda (500+ vendas), busca sem queda, entrega até 10 dias (no AliExpress, prazo CONFIRMADO) e empate com até 4% de conversão.
+   - `so_organico`: vende, mas a conta do anúncio não fecha (item barato com CPC normal quase nunca fecha) ou falta dado. Divulgue só por Instagram, Facebook e vitrine.
+   - `reprovado`: ninguém procura, busca em queda forte, nota abaixo de 4, ou entrega acima de 10 dias. Não entra em anúncio nem em criativo.
+3. O sistema RECUSA `ad_create` e `google_ad_create` (sem dry_run) sem parecer `aprovado_pago` de até 45 dias. Não tente contornar: peça a triagem e mostre o resultado ao operador.
+4. Prazo: preferir produto enviado do Brasil; mais de 10 dias de entrega não entra. Prazo desconhecido não é "rápido": diga que está desconhecido.
+5. Cadência (o operador exige): **semanal** (`vetting_due` refaz quem não foi visto há 7 dias; roda sozinho antes das rodadas), **quinzenal** e **mensal** com `vetting_review(period=...)`.
+   No balanço, olhe `ads_without_backing`: anúncio rodando com parecer diferente de `aprovado_pago`. Registre com `report_add` e SUGIRA pausar (só o operador pausa/liga).
+6. Ao propor produto novo para a vitrine, rode a triagem antes e diga o parecer na proposta.
+
 ## 3.07 Criativos e anúncios (AI Studio e Meta)
 
 **Criativos (AI Studio):** `creative_estimate` (não gasta) → `creative_create` → `creative_status`. Comece sempre em `mode="sandbox"`

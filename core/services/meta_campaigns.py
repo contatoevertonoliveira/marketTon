@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from core.db.ads import AdCampaign
 from core.db.creatives import CreativeCampaign
 from core.db.service_credentials import ServiceCredential
-from core.services import aistudio, ads_budget, meta_ads, storefront
+from core.services import aistudio, ads_budget, meta_ads, product_vetting, storefront
 
 logger = logging.getLogger(__name__)
 TIMEOUT = 40
@@ -248,7 +248,9 @@ def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int
         plan["post_id"] = post_id
         plan["origin"] = "post já publicado na Página (não usa a imagem do criativo: a Meta usa o post)"
     if dry_run:
-        return {"dry_run": True, "plan": plan, "note": "Nada foi enviado à Meta. Use dry_run=false para criar o anúncio PAUSADO."}
+        return {"dry_run": True, "plan": plan, "triagem": product_vetting.out(product_vetting.latest(session, creative.product_id)) if creative.product_id else None,
+                "note": "Nada foi enviado à Meta. Use dry_run=false para criar o anúncio PAUSADO. Anúncio pago exige triagem `aprovado_pago` (product_vet)."}
+    product_vetting.require_paid_ok(session, creative.product_id)
     if creative.mode != "live":
         raise AdsError("criativo de teste (sandbox) tem peças de exemplo e não pode virar anúncio de verdade. Gere o criativo em modo ao vivo.")
     values = _meta_values(session)
