@@ -67,7 +67,7 @@ def _cards(session, weekly="140", daily="30", products="3"):
     ok = {"last_check_status": "ok"}
     session.add_all([
         ServiceCredential(service="google_ads", enabled=True, values={"client_id": "c", "client_secret": "s", "refresh_token": "r", "customer_id": "1"}, **ok),
-        ServiceCredential(service="ads_budget", enabled=True, values={"google_weekly_brl": weekly, "google_daily_cap_brl": daily,
+        ServiceCredential(service="ads_budget", enabled=True, values={"mp_shopee_weekly_brl": "9000", "mp_shopee_daily_cap_brl": "1000", "google_weekly_brl": weekly, "google_daily_cap_brl": daily,
                                                                        "google_max_products": products, "weekly_brl": "500", "daily_cap_brl": "100"}, **ok),
         ServiceCredential(service="storefront", enabled=True, values={"base_url": "https://x.com", "admin_token": "t",
                                                                        "public_url": "https://mural.felixsystems.com.br"}, **ok),

@@ -74,6 +74,38 @@ def load(session: Session, platform: str = "meta") -> AdsBudget | None:
         return None
 
 
+# Teto por marketplace de ORIGEM do produto (vale para Meta e Google somados). Marketplace sem teto definido não recebe anúncio pago.
+MARKETPLACES = ("shopee", "aliexpress", "mercado_livre")
+MP_NAMES = {"shopee": "Shopee", "aliexpress": "AliExpress", "mercado_livre": "Mercado Livre"}
+
+
+def mp_keys(marketplace: str) -> tuple[str, str]:
+    return f"mp_{marketplace}_weekly_brl", f"mp_{marketplace}_daily_cap_brl"
+
+
+def parse_marketplace(values: dict, marketplace: str) -> tuple[float, float] | None:
+    """(valor por semana, teto por dia) do marketplace, ou `None` se não foi definido."""
+    weekly_key, daily_key = mp_keys(marketplace)
+    if not str(values.get(weekly_key) or "").strip() and not str(values.get(daily_key) or "").strip():
+        return None
+    who = MP_NAMES[marketplace]
+    weekly = _num(values.get(weekly_key), f"{who}: valor por semana")
+    daily = _num(values.get(daily_key), f"{who}: teto por dia")
+    if daily > weekly:
+        raise BudgetError(f"{who}: o teto por dia não pode passar do valor da semana")
+    return weekly, daily
+
+
+def load_marketplace(session: Session, marketplace: str) -> tuple[float, float] | None:
+    row = session.scalar(select(ServiceCredential).where(ServiceCredential.service == SERVICE))
+    if row is None or not row.enabled or marketplace not in MARKETPLACES:
+        return None
+    try:
+        return parse_marketplace(row.values or {}, marketplace)
+    except BudgetError:
+        return None
+
+
 def check(values: dict) -> str:
     parts = []
     b = parse(values, "meta")
@@ -85,4 +117,14 @@ def check(values: dict) -> str:
         parts.append(f"Google: R$ {g.weekly_brl:,.2f} por semana (teto R$ {g.daily_cap_brl:,.2f}/dia), {g.max_products} produto(s).")
     else:
         parts.append("Google: sem orçamento definido (o agente não cria campanha no Google até você preencher).")
+    caps = {m: parse_marketplace(values, m) for m in MARKETPLACES}
+    defined = {m: c for m, c in caps.items() if c}
+    if defined:
+        parts.append("Por marketplace (Meta e Google somados): " + "; ".join(f"{MP_NAMES[m]} R$ {w:,.2f}/semana (até R$ {d:,.2f}/dia)" for m, (w, d) in defined.items()) + ".")
+        total = sum(w for w, _ in defined.values())
+        platforms = parse(values, "meta").weekly_brl + (parse(values, "google").weekly_brl if str(values.get("google_weekly_brl") or "").strip() else 0)
+        if total > platforms + 1e-9:
+            parts.append(f"Atenção: os tetos por marketplace somam R$ {total:,.2f}, mais que as plataformas (R$ {platforms:,.2f}); vale o menor dos dois limites.")
+    else:
+        parts.append("Marketplaces: sem teto definido (o agente não cria anúncio pago de produto de marketplace sem teto).")
     return " ".join(parts) + " Campanha nova sempre pausada até você aprovar. Os orçamentos são separados: o gasto de uma plataforma não consome o da outra."

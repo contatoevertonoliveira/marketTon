@@ -81,3 +81,15 @@ def test_cards_hide_secrets_and_the_budget_card_tests_numbers(session, graph):
     assert ads_budget.load(session).weekly_brl == 140.0
     services.update_service("ads_budget", services.ServiceUpdate(values={"weekly_brl": "10", "daily_cap_brl": "50"}), session)
     assert services.test_service("ads_budget", session).last_check_status == "error" and ads_budget.load(session) is None
+
+
+def test_marketplace_cap_parse_and_check():
+    assert ads_budget.parse_marketplace({"mp_shopee_weekly_brl": "75", "mp_shopee_daily_cap_brl": "21"}, "shopee") == (75.0, 21.0)
+    assert ads_budget.parse_marketplace({}, "aliexpress") is None
+    with pytest.raises(ads_budget.BudgetError, match="não pode passar"):
+        ads_budget.parse_marketplace({"mp_shopee_weekly_brl": "10", "mp_shopee_daily_cap_brl": "20"}, "shopee")
+    msg = ads_budget.check({"weekly_brl": "100", "daily_cap_brl": "30", "google_weekly_brl": "50", "google_daily_cap_brl": "12",
+                            "mp_shopee_weekly_brl": "75", "mp_shopee_daily_cap_brl": "21", "mp_aliexpress_weekly_brl": "40", "mp_aliexpress_daily_cap_brl": "11"})
+    assert "Shopee R$ 75.00/semana" in msg and "AliExpress R$ 40.00/semana" in msg and "Atenção" not in msg
+    over = ads_budget.check({"weekly_brl": "100", "daily_cap_brl": "30", "mp_shopee_weekly_brl": "200", "mp_shopee_daily_cap_brl": "30"})
+    assert "Atenção" in over

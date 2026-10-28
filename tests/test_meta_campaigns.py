@@ -71,7 +71,7 @@ def _cards(session, weekly="140", daily="20", products="2", creatives="2"):
     ok = {"last_check_status": "ok"}
     session.add_all([
         ServiceCredential(service="meta_ads", enabled=True, values={"access_token": "tok", "ad_account_id": "123", "page_id": "999"}, **ok),
-        ServiceCredential(service="ads_budget", enabled=True, values={"weekly_brl": weekly, "daily_cap_brl": daily, "max_products": products,
+        ServiceCredential(service="ads_budget", enabled=True, values={"mp_shopee_weekly_brl": "9000", "mp_shopee_daily_cap_brl": "1000", "weekly_brl": weekly, "daily_cap_brl": daily, "max_products": products,
                                                                        "creatives_per_product": creatives}, **ok),
         ServiceCredential(service="storefront", enabled=True, values={"base_url": "https://felixsystems.com.br", "admin_token": "t",
                                                                        "public_url": "https://mural.felixsystems.com.br"}, **ok),
@@ -272,3 +272,22 @@ def test_a_post_without_the_product_link_or_not_published_is_refused(session, me
     with pytest.raises(mc.AdsError, match="não está publicado"):
         mc.create_ad(session, creative.id, daily_brl=10, days=3, dry_run=False, now=NOW, post_id="555")
     assert not meta.posts and session.query(AdCampaign).count() == 0  # nada foi criado na Meta nem guardado
+
+
+def test_marketplace_cap_is_enforced_across_platforms_and_no_cap_means_no_paid_ads(session, monkeypatch):
+    _cards(session)
+    row = session.query(ServiceCredential).filter_by(service="ads_budget").one()
+    c = _creative(session)  # produto da Shopee
+    row.values = {**row.values, "mp_shopee_weekly_brl": "60", "mp_shopee_daily_cap_brl": "20"}
+    session.flush()
+    st = mc.marketplace_status(session, "shopee")
+    assert (st["configured"], st["weekly_brl"], st["daily_cap_brl"]) == (True, 60.0, 20.0)
+    mc._guard_marketplace(session, c.product_id, 20, 3)  # R$ 60 na semana: cabe
+    with pytest.raises(mc.AdsError, match="teto por dia de Shopee"):
+        mc._guard_marketplace(session, c.product_id, 25, 1)
+    with pytest.raises(mc.AdsError, match="passaria do teto do marketplace"):
+        mc._guard_marketplace(session, c.product_id, 20, 4)
+    row.values = {k: v for k, v in row.values.items() if not k.startswith("mp_")}
+    session.flush()
+    with pytest.raises(mc.AdsError, match="não há teto de anúncios definido para Shopee"):
+        mc._guard_marketplace(session, c.product_id, 5, 1)

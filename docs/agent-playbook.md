@@ -131,6 +131,7 @@ O operador exige o mesmo filtro para TODO produto, de qualquer marketplace, ante
 5. Cadência (o operador exige): **semanal** (`vetting_due` refaz quem não foi visto há 7 dias; roda sozinho antes das rodadas), **quinzenal** e **mensal** com `vetting_review(period=...)`.
    No balanço, olhe `ads_without_backing`: anúncio rodando com parecer diferente de `aprovado_pago`. Registre com `report_add` e SUGIRA pausar (só o operador pausa/liga).
 6. Ao propor produto novo para a vitrine, rode a triagem antes e diga o parecer na proposta.
+7. **Teto por marketplace:** além do orçamento de cada plataforma (Meta, Google), cada marketplace de origem do produto (Shopee, AliExpress, Mercado Livre) tem o seu teto por semana e por dia, somando Meta e Google (`ads_budget_status` mostra em `marketplaces`). O sistema recusa anúncio que passe do teto do marketplace ou de marketplace sem teto. Planeje a semana dentro dos DOIS limites e diga ao operador quanto resta em cada um.
 
 ## 3.07 Criativos e anúncios (AI Studio e Meta)
 

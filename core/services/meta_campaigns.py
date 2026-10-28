@@ -96,6 +96,38 @@ def budget_status(session: Session, now: datetime | None = None, platform: str =
             "week_spent_brl": round(sum(a.spent_brl or 0 for a in this_week), 2)}
 
 
+def marketplace_status(session: Session, marketplace: str, now: datetime | None = None) -> dict:
+    """Verba já comprometida em anúncios de produtos deste marketplace, somando Meta e Google."""
+    cap = ads_budget.load_marketplace(session, marketplace)
+    name = ads_budget.MP_NAMES.get(marketplace, marketplace)
+    if cap is None:
+        return {"configured": False, "marketplace": marketplace, "name": name}
+    start, end = week_window(now)
+    rows = [(a, p) for a, p in session.execute(select(AdCampaign, storefront.Product).join(storefront.Product, storefront.Product.id == AdCampaign.product_id))
+            if p.marketplace.value == marketplace]
+    open_ads = [a for a, _ in rows if a.status in OPEN_STATUSES]
+    this_week = [a for a, _ in rows if (c := a.created_at) is not None and start <= (c if c.tzinfo else c.replace(tzinfo=UTC)) < end]
+    committed = sum((a.daily_budget_brl or 0) * (a.duration_days or 1) for a in this_week if a.status not in ("failed", "removed"))
+    return {"configured": True, "marketplace": marketplace, "name": name, "weekly_brl": cap[0], "daily_cap_brl": cap[1],
+            "daily_committed_brl": round(sum(a.daily_budget_brl or 0 for a in open_ads), 2), "week_committed_brl": round(committed, 2),
+            "week_spent_brl": round(sum(a.spent_brl or 0 for a in this_week), 2)}
+
+
+def _guard_marketplace(session: Session, product_id: int | None, daily_brl: float, days: int, now: datetime | None = None) -> None:
+    product = session.get(storefront.Product, product_id) if product_id else None
+    if product is None:
+        return
+    mp = product.marketplace.value
+    st = marketplace_status(session, mp, now)
+    if not st["configured"]:
+        raise AdsError(f"não há teto de anúncios definido para {st['name']} (Integrações > Orçamento de anúncios): defina o teto do marketplace antes de anunciar produtos dele.")
+    if daily_brl > st["daily_cap_brl"] + 1e-9 or st["daily_committed_brl"] + daily_brl > st["daily_cap_brl"] + 1e-9:
+        raise AdsError(f"o teto por dia de {st['name']} é R$ {st['daily_cap_brl']:g} e já há R$ {st['daily_committed_brl']:g}/dia comprometidos: mais R$ {daily_brl:g} passaria.")
+    if st["week_committed_brl"] + daily_brl * days > st["weekly_brl"] + 1e-9:
+        raise AdsError(f"o compromisso da semana em {st['name']} (R$ {st['week_committed_brl']:g}) mais R$ {daily_brl * days:g} passaria do teto do marketplace "
+                       f"(R$ {st['weekly_brl']:g} por semana).")
+
+
 def _guard(session: Session, product_id: int | None, daily_brl: float, days: int, now: datetime | None = None, *, per_product: bool = True,
            platform: str = "meta") -> None:
     st = budget_status(session, now, platform)
@@ -116,6 +148,7 @@ def _guard(session: Session, product_id: int | None, daily_brl: float, days: int
                                                     AdCampaign.platform == platform).count()
     if per_product and same_product >= st["creatives_per_product"]:
         raise AdsError(f"este produto já tem {same_product} anúncio(s) aberto(s); o máximo é {st['creatives_per_product']} criativo(s) por produto.")
+    _guard_marketplace(session, product_id, daily_brl, days, now)
     this_week_products = st["week_products"]
     already = session.query(AdCampaign).filter(AdCampaign.product_id == product_id, AdCampaign.platform == platform).count() > 0
     if not already and this_week_products >= st["max_products"]:

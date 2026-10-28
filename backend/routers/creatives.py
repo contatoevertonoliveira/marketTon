@@ -12,7 +12,7 @@ from backend.deps import get_session
 from backend.security import Principal, record_action, require
 from core.db.ads import AdCampaign
 from core.db.creatives import CreativeCampaign
-from core.services import ads_manager, aistudio, creative_history, google_campaigns, meta_campaigns
+from core.services import ads_budget, ads_manager, aistudio, creative_history, google_campaigns, meta_campaigns
 from core.services.aistudio import AIStudioError
 
 router = APIRouter(tags=["criativos (AI Studio)"])
@@ -158,7 +158,8 @@ def page_posts(limit: int = 10, principal: Principal = Depends(require("portfoli
 
 @router.get("/ads/budget", summary="Orçamento de anúncios por plataforma: teto, verba comprometida e gasto da semana")
 def ads_budget_status(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
-    return {"meta": meta_campaigns.budget_status(session, platform="meta"), "google": meta_campaigns.budget_status(session, platform="google")}
+    return {"meta": meta_campaigns.budget_status(session, platform="meta"), "google": meta_campaigns.budget_status(session, platform="google"),
+            "marketplaces": {m: meta_campaigns.marketplace_status(session, m) for m in ads_budget.MARKETPLACES}}
 
 
 @router.post("/ads", summary="Criar o anúncio na Meta a partir de um criativo (sempre PAUSADO; dry_run por padrão)", status_code=201)

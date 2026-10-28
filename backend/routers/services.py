@@ -93,6 +93,12 @@ SERVICES: dict[str, dict] = {
             {"name": "google_weekly_brl", "label": "GOOGLE: valor por semana em R$ (ex.: 50)", "secret": False},
             {"name": "google_daily_cap_brl", "label": "GOOGLE: teto por dia em R$ (ex.: 12)", "secret": False},
             {"name": "google_max_products", "label": "GOOGLE: produtos testados por semana (padrão 3)", "secret": False},
+            {"name": "mp_shopee_weekly_brl", "label": "SHOPEE: teto por semana em R$, Meta + Google somados (ex.: 75)", "secret": False},
+            {"name": "mp_shopee_daily_cap_brl", "label": "SHOPEE: teto por dia em R$ (ex.: 21)", "secret": False},
+            {"name": "mp_aliexpress_weekly_brl", "label": "ALIEXPRESS: teto por semana em R$, Meta + Google somados (ex.: 40)", "secret": False},
+            {"name": "mp_aliexpress_daily_cap_brl", "label": "ALIEXPRESS: teto por dia em R$ (ex.: 11)", "secret": False},
+            {"name": "mp_mercado_livre_weekly_brl", "label": "MERCADO LIVRE: teto por semana em R$, Meta + Google somados (ex.: 35)", "secret": False},
+            {"name": "mp_mercado_livre_daily_cap_brl", "label": "MERCADO LIVRE: teto por dia em R$ (ex.: 10)", "secret": False},
         ],
     },
     "storefront": {
