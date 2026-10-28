@@ -289,5 +289,18 @@ def test_marketplace_cap_is_enforced_across_platforms_and_no_cap_means_no_paid_a
         mc._guard_marketplace(session, c.product_id, 20, 4)
     row.values = {k: v for k, v in row.values.items() if not k.startswith("mp_")}
     session.flush()
-    with pytest.raises(mc.AdsError, match="não há teto de anúncios definido para Shopee"):
+    with pytest.raises(mc.AdsError, match="fora da lista de marketplaces"):
+        mc._guard_marketplace(session, c.product_id, 5, 1)
+
+
+def test_a_marketplace_in_the_list_without_its_own_cap_only_follows_the_platform_limits(session):
+    _cards(session)
+    row = session.query(ServiceCredential).filter_by(service="ads_budget").one()
+    c = _creative(session)
+    row.values = {**{k: v for k, v in row.values.items() if not k.startswith("mp_")}, "mp_enabled": "shopee"}
+    session.flush()
+    mc._guard_marketplace(session, c.product_id, 5, 1)  # na lista e sem teto próprio: passa
+    row.values = {**row.values, "mp_enabled": "aliexpress"}  # Shopee fora da lista: só orgânico
+    session.flush()
+    with pytest.raises(mc.AdsError, match="fora da lista de marketplaces"):
         mc._guard_marketplace(session, c.product_id, 5, 1)

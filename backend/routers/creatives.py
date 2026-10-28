@@ -12,7 +12,7 @@ from backend.deps import get_session
 from backend.security import Principal, record_action, require
 from core.db.ads import AdCampaign
 from core.db.creatives import CreativeCampaign
-from core.services import ads_budget, ads_manager, aistudio, creative_history, google_campaigns, meta_campaigns
+from core.services import ads_budget, ads_manager, ads_plan, aistudio, creative_history, google_campaigns, meta_campaigns
 from core.services.aistudio import AIStudioError
 
 router = APIRouter(tags=["criativos (AI Studio)"])
@@ -160,6 +160,46 @@ def page_posts(limit: int = 10, principal: Principal = Depends(require("portfoli
 def ads_budget_status(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
     return {"meta": meta_campaigns.budget_status(session, platform="meta"), "google": meta_campaigns.budget_status(session, platform="google"),
             "marketplaces": {m: meta_campaigns.marketplace_status(session, m) for m in ads_budget.MARKETPLACES}}
+
+
+class MarketplacePlanIn(BaseModel):
+    slug: str
+    enabled: bool = False
+    weekly_brl: str | float | None = None
+    daily_cap_brl: str | float | None = None
+    own_ads_weekly_brl: str | float | None = None
+
+
+class AdsPlanIn(BaseModel):
+    total_weekly_brl: str | float
+    meta_pct: str | float = 0
+    google_pct: str | float = 0
+    marketplace_pct: str | float = 0
+    marketplaces: list[MarketplacePlanIn] = Field(default_factory=list)
+
+
+def _plan_view(session: Session) -> dict:
+    plan = ads_plan.read(session)
+    for m in plan["marketplaces"]:
+        st = meta_campaigns.marketplace_status(session, m["slug"])
+        m["week_committed_brl"], m["week_spent_brl"], m["daily_committed_brl"] = st.get("week_committed_brl"), st.get("week_spent_brl"), st.get("daily_committed_brl")
+    plan["platforms"] = {"meta": meta_campaigns.budget_status(session, platform="meta"), "google": meta_campaigns.budget_status(session, platform="google")}
+    return plan
+
+
+@router.get("/ads/plan", summary="Verba e campanhas: total por semana, divisão e marketplaces com campanha")
+def get_ads_plan(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
+    return _plan_view(session)
+
+
+@router.put("/ads/plan", summary="Salvar o plano de verba e a lista de marketplaces com campanha (só o operador)")
+def put_ads_plan(payload: AdsPlanIn, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        ads_plan.save(session, payload.model_dump())
+    except ads_plan.PlanError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return _plan_view(session)
 
 
 @router.post("/ads", summary="Criar o anúncio na Meta a partir de um criativo (sempre PAUSADO; dry_run por padrão)", status_code=201)

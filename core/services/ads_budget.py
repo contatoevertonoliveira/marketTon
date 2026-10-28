@@ -75,8 +75,27 @@ def load(session: Session, platform: str = "meta") -> AdsBudget | None:
 
 
 # Teto por marketplace de ORIGEM do produto (vale para Meta e Google somados). Marketplace sem teto definido não recebe anúncio pago.
-MARKETPLACES = ("shopee", "aliexpress", "mercado_livre")
-MP_NAMES = {"shopee": "Shopee", "aliexpress": "AliExpress", "mercado_livre": "Mercado Livre"}
+MP_NAMES = {"shopee": "Shopee", "aliexpress": "AliExpress", "mercado_livre": "Mercado Livre", "amazon": "Amazon", "tiktok_shop": "TikTok Shop",
+            "hotmart": "Hotmart", "monetizze": "Monetizze", "eduzz": "Eduzz"}
+MARKETPLACES = tuple(MP_NAMES)  # novo marketplace do sistema: acrescente aqui e ele aparece na tela de Verba e campanhas
+
+
+def enabled_marketplaces(values: dict) -> set[str] | None:
+    """Marketplaces que podem receber campanha paga (a lista da tela Verba e campanhas). `None` = lista nunca definida (vale quem tem teto)."""
+    if "mp_enabled" not in values:
+        return None
+    return {s.strip() for s in str(values.get("mp_enabled") or "").split(",") if s.strip()}
+
+
+def marketplace_allowed(session: Session, marketplace: str) -> bool:
+    row = session.scalar(select(ServiceCredential).where(ServiceCredential.service == SERVICE))
+    if row is None or not row.enabled:
+        return False
+    values = row.values or {}
+    enabled = enabled_marketplaces(values)
+    if enabled is not None:
+        return marketplace in enabled
+    return load_marketplace(session, marketplace) is not None
 
 
 def mp_keys(marketplace: str) -> tuple[str, str]:

@@ -100,15 +100,15 @@ def marketplace_status(session: Session, marketplace: str, now: datetime | None 
     """Verba já comprometida em anúncios de produtos deste marketplace, somando Meta e Google."""
     cap = ads_budget.load_marketplace(session, marketplace)
     name = ads_budget.MP_NAMES.get(marketplace, marketplace)
-    if cap is None:
-        return {"configured": False, "marketplace": marketplace, "name": name}
+    allowed = ads_budget.marketplace_allowed(session, marketplace)
     start, end = week_window(now)
     rows = [(a, p) for a, p in session.execute(select(AdCampaign, storefront.Product).join(storefront.Product, storefront.Product.id == AdCampaign.product_id))
             if p.marketplace.value == marketplace]
     open_ads = [a for a, _ in rows if a.status in OPEN_STATUSES]
     this_week = [a for a, _ in rows if (c := a.created_at) is not None and start <= (c if c.tzinfo else c.replace(tzinfo=UTC)) < end]
     committed = sum((a.daily_budget_brl or 0) * (a.duration_days or 1) for a in this_week if a.status not in ("failed", "removed"))
-    return {"configured": True, "marketplace": marketplace, "name": name, "weekly_brl": cap[0], "daily_cap_brl": cap[1],
+    return {"configured": cap is not None, "allowed": allowed, "marketplace": marketplace, "name": name,
+            "weekly_brl": cap[0] if cap else None, "daily_cap_brl": cap[1] if cap else None,
             "daily_committed_brl": round(sum(a.daily_budget_brl or 0 for a in open_ads), 2), "week_committed_brl": round(committed, 2),
             "week_spent_brl": round(sum(a.spent_brl or 0 for a in this_week), 2)}
 
@@ -119,8 +119,10 @@ def _guard_marketplace(session: Session, product_id: int | None, daily_brl: floa
         return
     mp = product.marketplace.value
     st = marketplace_status(session, mp, now)
+    if not st["allowed"]:
+        raise AdsError(f"{st['name']} está fora da lista de marketplaces com campanha (Verba e campanhas): só divulgação orgânica. Peça ao operador para incluí-lo na lista.")
     if not st["configured"]:
-        raise AdsError(f"não há teto de anúncios definido para {st['name']} (Integrações > Orçamento de anúncios): defina o teto do marketplace antes de anunciar produtos dele.")
+        return  # na lista e sem teto próprio: valem só os limites de Meta e Google
     if daily_brl > st["daily_cap_brl"] + 1e-9 or st["daily_committed_brl"] + daily_brl > st["daily_cap_brl"] + 1e-9:
         raise AdsError(f"o teto por dia de {st['name']} é R$ {st['daily_cap_brl']:g} e já há R$ {st['daily_committed_brl']:g}/dia comprometidos: mais R$ {daily_brl:g} passaria.")
     if st["week_committed_brl"] + daily_brl * days > st["weekly_brl"] + 1e-9:
