@@ -175,8 +175,8 @@ class Product(Base, TimestampMixin):
     coupons: Mapped[list | None] = mapped_column(JSON)
 
     # --- URLs / mídia ---------------------------------------------------------
-    product_url: Mapped[str | None] = mapped_column(String(1024))
-    affiliate_url: Mapped[str | None] = mapped_column(String(1024))
+    product_url: Mapped[str | None] = mapped_column(String(4096))
+    affiliate_url: Mapped[str | None] = mapped_column(String(4096))
     images: Mapped[list | None] = mapped_column(JSON)
 
     # --- Atributos livres do marketplace -------------------------------------

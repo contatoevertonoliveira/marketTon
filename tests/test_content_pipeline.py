@@ -166,7 +166,7 @@ def test_a_newer_rejection_or_an_old_review_blocks(session, fake_publish):
     with pytest.raises(cp.ContentError, match="parecer APROVADO"):
         cp.auto_publish(session, c.id, "image", caption=GOOD, actor="agente", now=at(9))
     cp.submit_review(session, c.id, "image", "approved", "refeito", "agente")
-    session.query(CreativeReview).update({"created_at": datetime.now(UTC) - timedelta(hours=60)})
+    session.query(CreativeReview).update({"created_at": datetime.now(UTC) - timedelta(days=30)})
     with pytest.raises(cp.ContentError, match="48 h"):
         cp.auto_publish(session, c.id, "image", caption=GOOD, actor="agente", now=at(9))
 

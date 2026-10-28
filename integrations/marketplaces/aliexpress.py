@@ -248,7 +248,7 @@ class AliExpressAdapter(MarketplaceAdapter):
             # evaluate_rate é a avaliação positiva em % (ex.: "96.2%"); a nota 0–5 equivalente é o que o resto do sistema usa.
             rating=round(_pct(node.get("evaluate_rate")) / 20, 2) if _pct(node.get("evaluate_rate")) is not None else None,
             affiliate_url=node.get("promotion_link"),
-            product_url=node.get("product_detail_url"),
+            product_url=(node.get("product_detail_url") or "").split("?")[0] or None,  # sem os parâmetros de rastreio da busca
             images=images or None,
             attributes={"commission_api_pct": commission, "hot_commission_pct": hot, "shop_url": node.get("shop_url")},
         )
