@@ -39,19 +39,21 @@
   }
 
   function banner() {
+    // Faixa no fluxo da página, no topo (não flutua): não cobre a foto, o preço nem o botão da oferta, e não disputa o canto de baixo da tela
+    // com o selo que a Netlify coloca ali. Rola junto com a página.
     var box = document.createElement("div");
-    box.setAttribute("role", "dialog");
+    box.setAttribute("role", "region");
     box.setAttribute("aria-label", "Medição dos anúncios");
-    box.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;max-width:560px;margin:0 auto;background:#fff;color:#171923;" +
-      "border:1px solid #e3e6ee;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.18);padding:14px 16px;font:14px/1.45 Inter,system-ui,sans-serif";
-    box.innerHTML = '<p style="margin:0 0 10px">Usamos o Pixel da Meta, <strong>só se você aceitar</strong>, para medir quais anúncios trazem visitas. ' +
-      'Sem ele, o site funciona igual. <a href="https://felixsystems.com.br/privacidade.html" style="color:#A71920">Saiba mais</a>.</p>' +
-      '<div style="display:flex;gap:8px;justify-content:flex-end"></div>';
+    box.style.cssText = "display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;background:#f4f5f9;color:#171923;" +
+      "border-bottom:1px solid #e3e6ee;padding:8px 16px;font:13px/1.35 Inter,system-ui,sans-serif";
+    box.innerHTML = '<p style="margin:0;flex:1 1 240px">Medimos os anúncios com o Pixel da Meta, <strong>só se você aceitar</strong>. ' +
+      '<a href="https://felixsystems.com.br/privacidade.html" style="color:#A71920">Saiba mais</a></p>' +
+      '<div style="display:flex;gap:8px"></div>';
     var row = box.lastChild;
     function btn(label, bg, fg, border, value) {
       var b = document.createElement("button");
       b.type = "button"; b.textContent = label;
-      b.style.cssText = "cursor:pointer;border-radius:999px;padding:8px 18px;font:600 13px Inter,system-ui,sans-serif;background:" + bg + ";color:" + fg + ";border:1px solid " + border;
+      b.style.cssText = "cursor:pointer;border-radius:999px;padding:6px 16px;font:600 13px Inter,system-ui,sans-serif;background:" + bg + ";color:" + fg + ";border:1px solid " + border;
       b.addEventListener("click", function () {
         save(value);
         box.remove();
@@ -61,7 +63,7 @@
     }
     row.appendChild(btn("Recusar", "#fff", "#171923", "#c9ced9", "no"));
     row.appendChild(btn("Aceitar", "#A71920", "#fff", "#A71920", "yes"));
-    document.body.appendChild(box);
+    document.body.insertBefore(box, document.body.firstChild);
   }
 
   function start() {
