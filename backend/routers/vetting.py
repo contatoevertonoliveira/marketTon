@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.deps import get_session
-from backend.security import Principal, require
+from backend.security import Principal, record_action, require
 from core.db.vetting import ProductVetting
 from core.services import product_vetting as pv
 
@@ -46,6 +46,17 @@ def run_due(limit: int = 10, principal: Principal = Depends(require("portfolio.m
     rows = pv.vet_due(session, limit=max(1, min(limit, 25)), actor=principal.username if hasattr(principal, "username") else "agente")
     session.commit()
     return {"vetted": [pv.out(v) for v in rows]}
+
+
+@router.post("/{product_id}/authorize-test", summary="Liberar teste pago de um produto por 14 dias (só o operador)", status_code=201)
+def authorize_test(product_id: int, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    try:
+        row = pv.authorize_test(session, product_id, actor=getattr(principal, "username", "operador"))
+    except pv.VettingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    record_action(session, principal, action="vetting.paid_test_authorized", resource_type="product", resource_id=str(product_id), detail=f"{pv.TEST_DAYS} dias")
+    session.commit()
+    return pv.out(row)
 
 
 @router.post("/{product_id}", summary="Tria um produto (procura no Google, demanda, prazo e conta do anúncio)", status_code=201)

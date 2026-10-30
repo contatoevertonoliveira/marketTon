@@ -35,6 +35,8 @@ MIN_VOLUME_FOR_PAID = 300
 MIN_SOLD_FOR_PAID = 500
 MAX_BREAKEVEN_CONVERSION = 0.04  # anúncio só empata com até 4% dos cliques virando venda (realista é 1 a 3%)
 PAID_VERDICT = "aprovado_pago"
+TEST_VERDICT = "teste_operador"  # exceção do OPERADOR: libera anúncio pago de um produto sem parecer favorável, por prazo curto
+TEST_DAYS = 14
 
 _STOP = {"de", "da", "do", "das", "dos", "para", "com", "sem", "em", "e", "ou", "a", "o", "as", "os", "um", "uma", "kit", "peças", "pecas",
          "pçs", "pcs", "unidade", "unidades", "novo", "nova", "alta", "qualidade", "premium", "original", "multifuncional", "portátil", "portatil"}
@@ -179,9 +181,46 @@ def _aware(dt: datetime | None) -> datetime | None:
     return dt if dt is None or dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
+def active_test_authorization(session: Session, product_id: int | None, *, now: datetime | None = None) -> ProductVetting | None:
+    """A autorização de teste pago do operador ainda válida (14 dias), se houver. Uma triagem nova não a revoga: só o prazo."""
+    if product_id is None:
+        return None
+    since = (now or datetime.now(UTC)) - timedelta(days=TEST_DAYS)
+    for v in session.scalars(select(ProductVetting).where(ProductVetting.product_id == product_id, ProductVetting.verdict == TEST_VERDICT)
+                             .order_by(ProductVetting.id.desc())):
+        if _aware(v.created_at) >= since:
+            return v
+    return None
+
+
+def authorize_test(session: Session, product_id: int, *, actor: str, now: datetime | None = None) -> ProductVetting:
+    """Só o operador (a rota exige `connectors.manage`; o agente não tem esta ferramenta): libera anúncio pago do produto por 14 dias para um teste
+    de campanha mesmo sem parecer `aprovado_pago`. Guarda os números da última triagem e o motivo, para o balanço mostrar o que foi aposta."""
+    product = session.get(Product, product_id)
+    if product is None:
+        raise VettingError(f"produto {product_id} não encontrado")
+    base = latest(session, product_id)
+    if base is not None and base.verdict == "reprovado":
+        raise VettingError(f"produto {product_id} foi reprovado na triagem ({'; '.join((base.reasons or [])[:2])}): não dá para liberar teste pago.")
+    b = base
+    reasons = [f"teste pago autorizado pelo operador {actor} por {TEST_DAYS} dias (sem parecer favorável na triagem)", *((b.reasons or []) if b else [])]
+    row = ProductVetting(product_id=product_id, keyword=(b.keyword if b else derive_keyword(storefront.clean_title(product.title, 90))),
+                         verdict=TEST_VERDICT, score=(b.score if b else 0.0), monthly_volume=b.monthly_volume if b else None,
+                         cpc_brl=b.cpc_brl if b else None, trend_direction=b.trend_direction if b else None,
+                         growth_pct_30d=b.growth_pct_30d if b else None, platform_sold=b.platform_sold if b else None,
+                         rating=b.rating if b else None, commission_per_sale_brl=b.commission_per_sale_brl if b else None,
+                         breakeven_conversion=b.breakeven_conversion if b else None, delivery_days=b.delivery_days if b else None,
+                         ship_from=b.ship_from if b else None, reasons=reasons, created_by=actor[:64])
+    session.add(row)
+    session.flush()
+    return row
+
+
 def require_paid_ok(session: Session, product_id: int | None, *, now: datetime | None = None) -> None:
-    """Trava: anúncio que gasta dinheiro só nasce de produto com parecer `aprovado_pago` recente."""
+    """Trava: anúncio que gasta dinheiro só nasce de produto com parecer `aprovado_pago` recente (ou teste autorizado pelo operador, por 14 dias)."""
     if not GATE_ENABLED or product_id is None:
+        return
+    if active_test_authorization(session, product_id, now=now) is not None:
         return
     v = latest(session, product_id)
     if v is None:
@@ -244,8 +283,11 @@ def review(session: Session, period: str = "weekly", *, now: datetime | None = N
     unbacked = []
     for ad in session.scalars(select(AdCampaign).where(AdCampaign.status.in_(("active", "paused")))):
         v = latest(session, ad.product_id) if ad.product_id else None
-        if v is None or v.verdict != PAID_VERDICT:
+        if (v is None or v.verdict != PAID_VERDICT) and active_test_authorization(session, ad.product_id, now=now) is None:
             unbacked.append({"ad_id": ad.id, "product_id": ad.product_id, "platform": ad.platform, "status": ad.status, "spent_brl": ad.spent_brl,
                              "verdict": v.verdict if v else "sem triagem"})
+    tests = [{"product_id": v.product_id, "at": v.created_at.isoformat() if v.created_at else None} for v in session.scalars(
+        select(ProductVetting).where(ProductVetting.verdict == TEST_VERDICT).order_by(ProductVetting.id.desc())) if _aware(v.created_at) >= now - timedelta(days=TEST_DAYS)]
     return {"period": period, "days": days, "vetted": len(last), "by_verdict": counts, "changed": changed, "ads_without_backing": unbacked,
+            "paid_tests_authorized": tests,
             "paid_ok": [out(v) for v in last.values() if v.verdict == PAID_VERDICT][:15]}

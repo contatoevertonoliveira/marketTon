@@ -13,7 +13,7 @@ class ProductVetting(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     keyword: Mapped[str] = mapped_column(String(120), nullable=False)
-    # aprovado_pago | so_organico | reprovado
+    # aprovado_pago | so_organico | reprovado | teste_operador (exceção do operador, 14 dias)
     verdict: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     score: Mapped[float] = mapped_column(Float, nullable=False)
     monthly_volume: Mapped[int | None] = mapped_column(Integer)

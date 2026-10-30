@@ -123,3 +123,29 @@ def test_review_lists_ads_running_without_backing(session):
 
 def test_keyword_is_derived_from_the_useful_words_of_the_title():
     assert pv.derive_keyword("Afiador de Faca Magnético 3 Peças (kit novo)") == "afiador faca magnético"
+
+
+def test_operator_test_authorization_releases_paid_ads_for_14_days_and_survives_a_new_vetting(session, monkeypatch):
+    monkeypatch.setattr(pv, "GATE_ENABLED", True)
+    p = _product(session, price=15.0)
+    pv.vet(session, p.id, keyword="x", metrics=M())  # so_organico
+    with pytest.raises(pv.VettingError, match="só divulgação orgânica"):
+        pv.require_paid_ok(session, p.id)
+    row = pv.authorize_test(session, p.id, actor="operador")
+    assert row.verdict == pv.TEST_VERDICT and any("autorizado pelo operador" in r for r in row.reasons)
+    pv.require_paid_ok(session, p.id)
+    pv.vet(session, p.id, keyword="x", metrics=M())  # triagem nova não revoga
+    pv.require_paid_ok(session, p.id)
+    with pytest.raises(pv.VettingError):
+        pv.require_paid_ok(session, p.id, now=NOW + timedelta(days=15))  # venceu
+    session.add(AdCampaign(product_id=p.id, platform="meta", status="active", spent_brl=1.0))
+    session.flush()
+    r = pv.review(session, "weekly")
+    assert r["ads_without_backing"] == [] and r["paid_tests_authorized"][0]["product_id"] == p.id
+
+
+def test_authorization_is_refused_for_rejected_products(session):
+    p = _product(session, sold=20)
+    pv.vet(session, p.id, keyword="x", metrics=M(volume=10))
+    with pytest.raises(pv.VettingError, match="reprovado"):
+        pv.authorize_test(session, p.id, actor="operador")
