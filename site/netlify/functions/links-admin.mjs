@@ -81,10 +81,10 @@ export default async (req) => {
     outer: for (const day of days(since, until)) {
       for await (const page of clicks.list({ prefix: `${day}/`, paginate: true })) {
         for (const { key } of page.blobs) {
-          const [head, device, country, referrer] = key.split("|");
+          const [head, device, country, referrer, campaign] = key.split("|");
           const [, code, stamp] = head.split("/");
           const t = Number(stamp.split("-")[0]);
-          events.push({ id: key, code, t: new Date(t).toISOString(), device, country, referrer });
+          events.push({ id: key, code, t: new Date(t).toISOString(), device, country, referrer, ...(campaign ? { campaign } : {}) });
           if (events.length >= 5000) {
             truncated = true;
             break outer;

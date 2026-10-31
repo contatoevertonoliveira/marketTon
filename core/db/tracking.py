@@ -113,6 +113,8 @@ class ClickEvent(Base, TimestampMixin):
     referrer: Mapped[str | None] = mapped_column(String(1024))
     country: Mapped[str | None] = mapped_column(String(8))
     device: Mapped[str | None] = mapped_column(String(32))
+    # Campanha do anúncio de onde veio o clique (utm_campaign da página do produto), quando houver.
+    campaign: Mapped[str | None] = mapped_column(String(64), index=True)
 
     # Custo do clique quando veio de tráfego pago (ROAS/CPA).
     cost: Mapped[float | None] = mapped_column(MONEY)

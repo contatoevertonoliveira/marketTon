@@ -22,6 +22,9 @@ function refHost(referrer) {
   }
 }
 
+// Campanha do anúncio (vem do utm_campaign da página, repassada pelo attrib.js): só letras minúsculas, números, ponto, hífen e sublinhado.
+const tagOf = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9._-]/g, "").slice(0, 48);
+
 const notFound = () =>
   new Response("Link não encontrado.", {
     status: 404,
@@ -44,7 +47,8 @@ export default async (req, context) => {
     const cc = (context.geo?.country?.code || "xx").toLowerCase().replace(/[^a-z]/g, "").slice(0, 2) || "xx";
     const rand = Math.random().toString(36).slice(2, 6);
     // Os dados do clique vão na própria chave: listar as chaves já devolve tudo, sem uma leitura por clique.
-    const key = `${day}/${code}/${now.getTime()}-${rand}|${deviceOf(ua)}|${cc}|${refHost(req.headers.get("referer") || "")}`;
+    const campaign = tagOf(new URL(req.url).searchParams.get("c"));
+    const key = `${day}/${code}/${now.getTime()}-${rand}|${deviceOf(ua)}|${cc}|${refHost(req.headers.get("referer") || "")}${campaign ? `|${campaign}` : ""}`;
     try {
       await clicks.set(key, "1");
     } catch {

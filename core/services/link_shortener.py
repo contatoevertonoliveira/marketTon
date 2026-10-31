@@ -170,7 +170,7 @@ def sync_clicks(session: Session) -> dict:
             affiliate_link_id=link.id, portfolio_item_id=link.portfolio_item_id,
             occurred_at=datetime.fromisoformat(event["t"].replace("Z", "+00:00")), external_click_id=event["id"],
             channel=link.channel, referrer=(event.get("referrer") or None), country=(event.get("country") or None),
-            device=(event.get("device") or None)))
+            device=(event.get("device") or None), campaign=(event.get("campaign") or None)))
         link.clicks_total = (link.clicks_total or 0) + 1
         new += 1
     session.flush()

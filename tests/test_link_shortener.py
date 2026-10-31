@@ -234,3 +234,14 @@ def test_the_integration_card_saves_the_token_hidden_and_tests_the_connection(se
     net.routes[("GET", "/api/links/ping")] = _Resp(401, {"error": "não autorizado"})
     bad = services.test_service("link_shortener", session)
     assert bad.last_check_status == "error" and "recusou o token" in bad.last_check_message
+
+
+def test_sync_keeps_the_ad_campaign_of_an_offer_click(session, net, configured):
+    product = _product(session)
+    _register_ok(net)
+    link = ls.create_tracked_link(session, product_id=product.id, channel="vitrine")
+    body = _events((f"2026-10-22/{link.short_code}/1-aaaa|mobile|br|direto|mural-p97-il1", link.short_code, "mobile", "direto"))
+    body["events"][0]["campaign"] = "mural-p97-il1"
+    net.routes[("GET", "/api/links/clicks")] = _Resp(200, body)
+    assert ls.sync_clicks(session)["new_clicks"] == 1
+    assert session.scalars(select(ClickEvent)).one().campaign == "mural-p97-il1"

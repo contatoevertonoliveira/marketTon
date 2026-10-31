@@ -328,6 +328,25 @@ dialog::backdrop { background: rgba(23, 25, 35, 0.66); }
   .rv { opacity: 1; transform: none; }
 }
 
+/* ---------------- página própria do produto (/p/...) ---------------- */
+.pdp-main { padding-block: 32px 64px; }
+.pdp-card { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px; background: var(--white); border-radius: 16px; overflow: hidden; }
+.pdp-card .sheet-info { padding: 24px 28px 28px; }
+.pdp-card h1 { font-size: var(--s-head); }
+/* celular: quem chega do anúncio vê foto baixa, título, preço e o botão de compra na primeira tela */
+@media (max-width: 760px) {
+  .pdp-main { padding-block: 12px 40px; }
+  .pdp-card { display: flex; flex-direction: column; gap: 0; border-radius: 12px; }
+  .pdp-card .sheet-art { flex: none; min-height: 0; height: 26svh; max-height: 230px; }
+  .pdp-card .sheet-art img { object-fit: contain; background: #fff; }
+  .pdp-card .sheet-info { padding: 10px 16px 18px; gap: 6px; }
+  .pdp-card h1 { font-size: 1.15rem; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .pdp-card .price b { font-size: var(--s-lead); }
+  .pdp-card .sheet-actions { margin-top: 2px; gap: 8px; }
+  .pdp-card .sheet-actions .btn-red { flex-basis: 100%; min-height: 50px; }
+  .pdp-card .sheet-actions .btn-soft { flex-basis: 100%; min-height: 44px; }
+}
+
 /* ---------------- carrossel de fotos do produto ---------------- */
 .car { position: absolute; inset: 0; }
 .car-track { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }

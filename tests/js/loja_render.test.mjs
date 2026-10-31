@@ -52,3 +52,12 @@ test("a página do produto vira carrossel só quando há mais de uma foto", () =
   assert.ok(many.includes("car-track") && many.includes('src="/loja/carousel.js"') && many.includes("foto 2 de 3"));
   assert.ok(many.includes('"image":["https://cf.shopee.com.br/file/a","https://x/2.jpg","https://x/3.jpg"]'), "os dados estruturados levam todas as fotos");
 });
+
+test("página do produto: o botão de compra vem logo depois do preço (primeira tela do celular) e a campanha do anúncio segue o clique", () => {
+  const html = renderProductPage(item({ blurb: "Na Shopee: nota 4,9" }), snap([item()]).store, "https://mural.felixsystems.com.br");
+  const body = html.slice(html.indexOf("<body>"));
+  const at = (s) => body.indexOf(s);
+  assert.ok(at('class="price"') > 0 && at('class="price"') < at("Quero esse na") && at("Quero esse na") < at("O preço pode mudar") && at("Quero esse na") < at("Na Shopee: nota 4,9"));
+  assert.ok(html.includes('src="/loja/attrib.js"'));
+  assert.ok(!html.includes("min-height:320px"), "o tamanho da foto vem do CSS (menor no celular)");
+});

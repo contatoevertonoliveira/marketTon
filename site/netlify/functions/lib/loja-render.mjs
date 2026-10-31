@@ -51,23 +51,24 @@ ${it.price ? `<meta property="product:price:amount" content="${esc(Number(it.pri
 <link rel="stylesheet" href="/loja/loja.css">
 <script src="/loja/pixel.js" defer></script>
 <script src="/loja/carousel.js" defer></script>
+<script src="/loja/attrib.js" defer></script>
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>
 </head>
 <body>
 <header class="top"><div class="top-in"><a class="brand" href="/" aria-label="${esc(name)}"><img src="/loja/img/logo-96.png" width="56" height="56" alt="${esc(name)}"></a>
 <a class="btn btn-soft btn-small" href="/#achados" style="margin-left:auto">Ver todos os achados</a></div></header>
-<main class="wrap" style="padding-block:32px 64px">
-<article class="sheet-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:28px;background:var(--white);border-radius:16px;overflow:hidden">
+<main class="wrap pdp-main">
+<article class="sheet-body pdp-card">
 ${galleryHtml(it)}
-<div class="sheet-info" style="padding:24px 28px 28px">
+<div class="sheet-info">
 <span class="tag">${esc(it.category)} · ${esc(MARKETPLACE_TEXT(it))}</span>
 <h1 style="font-size:var(--s-head)">${esc(it.title)}</h1>
-${it.blurb ? `<p>${esc(it.blurb)}</p>` : ""}
 <div class="price">${price ? `<b>${esc(price)}</b>` : "<b>Preço na página do marketplace</b>"}${was ? `<s>${esc(was)}</s>` : ""}</div>
-<p class="small">${esc([it.rating ? `Nota ${String(it.rating).replace(".", ",")}` : null, it.sold ? `${it.sold} vendidos` : null, it.price_date ? `preço visto em ${ISO_DAY(it.price_date)}` : null].filter(Boolean).join(" · "))}</p>
-<p class="small">O preço pode mudar: confira na página do marketplace antes de finalizar. Se você comprar pelo botão abaixo, o Mural recebe uma comissão, sem custo extra para você.</p>
 <div class="sheet-actions"><a class="btn btn-red" href="${esc(it.url)}" target="_blank" rel="sponsored noopener">Quero esse na ${esc(MARKETPLACE_TEXT(it))}</a>
 <a class="btn btn-soft" href="/#${esc(it.id)}">Ver na loja</a></div>
+${it.blurb ? `<p>${esc(it.blurb)}</p>` : ""}
+<p class="small">${esc([it.rating ? `Nota ${String(it.rating).replace(".", ",")}` : null, it.sold ? `${it.sold} vendidos` : null, it.price_date ? `preço visto em ${ISO_DAY(it.price_date)}` : null].filter(Boolean).join(" · "))}</p>
+<p class="small">O preço pode mudar: confira na página do marketplace antes de finalizar. Se você comprar pelo botão acima, o Mural recebe uma comissão, sem custo extra para você.</p>
 </div></article>
 <p class="notice" style="margin-top:20px">${esc(store?.disclosure || "Participamos de programas de afiliados e podemos receber comissão pelas compras feitas pelos links desta página, sem custo extra para você.")}</p>
 </main>
@@ -79,10 +80,10 @@ ${it.blurb ? `<p>${esc(it.blurb)}</p>` : ""}
 export function galleryHtml(it) {
   const list = Array.isArray(it.images) && it.images.length > 1 ? it.images : null;
   if (!list) {
-    return `<div class="sheet-art" style="min-height:320px;position:relative"><img src="${esc(it.image)}" alt="${esc(it.title)}" referrerpolicy="no-referrer" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></div>`;
+    return `<div class="sheet-art"><img src="${esc(it.image)}" alt="${esc(it.title)}" referrerpolicy="no-referrer"></div>`;
   }
   const slides = list.map((src, i) => `<img src="${esc(src)}" alt="${esc(it.title)} (foto ${i + 1} de ${list.length})" referrerpolicy="no-referrer"${i === 0 ? "" : ' loading="lazy"'}>`).join("");
-  return `<div class="sheet-art" style="min-height:320px;position:relative"><div class="car" aria-roledescription="carrossel" aria-label="Fotos de ${esc(it.title)}"><div class="car-track">${slides}</div></div></div>`;
+  return `<div class="sheet-art"><div class="car" aria-roledescription="carrossel" aria-label="Fotos de ${esc(it.title)}"><div class="car-track">${slides}</div></div></div>`;
 }
 
 export function renderNotFound() {
