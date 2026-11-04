@@ -27,6 +27,8 @@ class CreativeIn(BaseModel):
     budget_usd: float | None = Field(None, gt=0)
     formats: str = "video"  # "images" = só imagens e texto (sem vídeo)
     presenter: str = "none"  # "virtual" = apresentadora virtual com narração curta (só em vídeo)
+    direct: bool = False  # arte para anúncio que vai direto à página de compra: chamada "Compre na <marketplace>", sem o endereço do Mural
+    video_style: str = ""  # vídeo curto de anúncio (8 s): presenter_f | presenter_m | hands_f | hands_m (apresentador(a) ou só mãos, com voz feminina/masculina)
     notes: str | None = Field(None, max_length=600)  # o que corrigir ao refazer (ex.: "título menor, sem cobrir o produto")
 
 
@@ -127,6 +129,7 @@ class AdCreate(BaseModel):
     dry_run: bool = True  # padrão: só mostra o que seria enviado à Meta, sem enviar nada
     variant: str | None = None
     post_id: str | None = Field(None, max_length=80)  # anunciar um post já publicado na Página (em vez de criar o post pelo app)
+    destination: str = Field("page", pattern="^(page|direct)$")  # page = página do produto no Mural; direct = direto à página de compra (link rastreado nosso)
 
 
 class GoogleAdCreate(BaseModel):
@@ -206,7 +209,7 @@ def put_ads_plan(payload: AdsPlanIn, principal: Principal = Depends(require("con
 def create_meta_ad(payload: AdCreate, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
     try:
         result = meta_campaigns.create_ad(session, payload.creative_id, daily_brl=payload.daily_brl, days=payload.days, dry_run=payload.dry_run,
-                                          actor=principal.username, variant=payload.variant, post_id=payload.post_id)
+                                          actor=principal.username, variant=payload.variant, post_id=payload.post_id, destination=payload.destination)
     except meta_campaigns.AdsError as exc:
         session.commit()  # guarda a tentativa que falhou
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -364,7 +367,7 @@ def sync_ads(principal: Principal = Depends(require("portfolio.manage")), sessio
 def estimate(payload: CreativeIn, principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
     try:
         return aistudio.estimate(session, payload.product_id, quality=payload.quality, angle=payload.angle, hook_variants=payload.hook_variants,
-                               formats=payload.formats, presenter=payload.presenter)
+                               formats=payload.formats, presenter=payload.presenter, video_style=payload.video_style, direct=payload.direct)
     except AIStudioError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -379,7 +382,7 @@ def create_creative(payload: CreativeIn, principal: Principal = Depends(require(
     try:
         record = aistudio.create(session, payload.product_id, mode=payload.mode, quality=payload.quality, angle=payload.angle,
                                  hook_variants=payload.hook_variants, budget_usd=payload.budget_usd, actor=principal.username,
-                                 formats=payload.formats, extra_notes=payload.notes, presenter=payload.presenter)
+                                 formats=payload.formats, extra_notes=payload.notes, presenter=payload.presenter, video_style=payload.video_style, direct=payload.direct)
     except AIStudioError as exc:
         session.commit()  # guarda a tentativa (external_ref) mesmo quando falha
         raise HTTPException(status_code=422, detail=str(exc)) from exc

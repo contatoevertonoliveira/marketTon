@@ -18,6 +18,7 @@ import base64
 import json
 import logging
 import re
+import time
 from datetime import UTC, datetime, timedelta
 
 import requests
@@ -27,7 +28,7 @@ from sqlalchemy.orm import Session
 from core.db.ads import AdCampaign
 from core.db.creatives import CreativeCampaign
 from core.db.service_credentials import ServiceCredential
-from core.services import aistudio, ads_budget, meta_ads, product_vetting, storefront
+from core.services import aistudio, ads_budget, link_shortener, meta_ads, product_vetting, storefront
 
 logger = logging.getLogger(__name__)
 TIMEOUT = 40
@@ -68,6 +69,37 @@ def _post(path: str, token: str, **data) -> dict:
 
 def _cents(brl: float) -> int:
     return int(round(brl * 100))
+
+
+VIDEO_UPLOAD_TIMEOUT = 300
+VIDEO_READY_WAIT_S = 150
+
+
+def _upload_video(token: str, account: str, data: bytes, name: str) -> str:
+    """Envia o vídeo à conta de anúncios (a Meta não alcança o AI Studio) e espera o processamento. Devolve o id do vídeo."""
+    try:
+        response = requests.post(f"{meta_ads.GRAPH}/{account}/advideos", data={"access_token": token, "name": name[:100]},
+                                 files={"source": ("anuncio.mp4", data, "video/mp4")}, timeout=VIDEO_UPLOAD_TIMEOUT)
+        body = response.json() if response.content else {}
+    except (requests.RequestException, ValueError) as exc:
+        raise AdsError(f"não consegui enviar o vídeo à Meta: {exc}") from exc
+    if not response.ok or not body.get("id"):
+        err = (body.get("error") or {}) if isinstance(body, dict) else {}
+        raise AdsError(f"Meta recusou o vídeo ({err.get('code', response.status_code)}): {str(err.get('error_user_msg') or err.get('message') or 'erro desconhecido')[:240]}")
+    video_id = str(body["id"])
+    deadline = time.monotonic() + VIDEO_READY_WAIT_S
+    while True:
+        try:
+            status = (meta_ads._get(video_id, token, fields="status").get("status") or {}).get("video_status")
+        except meta_ads.MetaError as exc:
+            raise AdsError(f"não consegui conferir o processamento do vídeo: {exc}") from exc
+        if status == "ready":
+            return video_id
+        if status == "error":
+            raise AdsError("a Meta não conseguiu processar o vídeo (formato ou conteúdo recusado).")
+        if time.monotonic() > deadline:
+            raise AdsError("a Meta ainda está processando o vídeo; tente criar o anúncio de novo em alguns minutos.")
+        time.sleep(4)
 
 
 # ----------------------------------------------------------------------------- travas ------------
@@ -179,6 +211,13 @@ def _fit(text: str, limit: int) -> str:
     return " ".join(words).rstrip(" -–:,;.")
 
 
+def _creative_piece(creative: CreativeCampaign, kind: str) -> dict | None:
+    for d in aistudio.deliverables(creative):
+        if d.get("kind") == kind and d.get("download"):
+            return d
+    return None
+
+
 def _creative_copy(creative: CreativeCampaign) -> dict:
     for d in aistudio.deliverables(creative):
         if d.get("kind") == "copy" and isinstance(d.get("content"), dict):
@@ -187,11 +226,19 @@ def _creative_copy(creative: CreativeCampaign) -> dict:
 
 
 def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float, days: int, now: datetime | None = None,
-               check_budget: bool = True) -> dict:
-    """O que seria enviado à Meta (sem enviar). Valida tudo, inclusive as travas."""
+               check_budget: bool = True, destination: str = "page") -> dict:
+    """O que seria enviado à Meta (sem enviar). Valida tudo, inclusive as travas.
+
+    `destination="page"` leva à página do produto no Mural (com UTM); `"direct"` leva direto à página de compra do marketplace, passando pelo
+    link rastreado nosso (`/r/<código>`, que conta o clique e redireciona na hora). Criativo com vídeo vira anúncio de vídeo."""
     if creative.status not in ("completed", "partial"):
         raise AdsError(f"o criativo está “{creative.status}”: só dá para anunciar criativo pronto.")
-    piece = _creative_image(creative)
+    if destination not in ("page", "direct"):
+        raise AdsError("destino deve ser page (página do Mural) ou direct (página de compra do marketplace)")
+    video = _creative_piece(creative, "video") or _creative_piece(creative, "slideshow")  # o slideshow (fotos + trilha) também é um vídeo curto
+    piece = (_creative_piece(creative, "thumbnail") or _creative_image(creative)) if video else _creative_image(creative)
+    if video and not piece:
+        raise AdsError("o criativo tem vídeo, mas não tem a miniatura (peça `thumbnail` ou `image` com endereço de download).")
     if not piece:
         raise AdsError("o criativo não tem imagem pronta (peça `image` com endereço de download).")
     copy = _creative_copy(creative)
@@ -206,10 +253,19 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
     if check_budget:
         _guard(session, creative.product_id, daily_brl, days, now)
     tag = f"mural-{creative.external_ref}"[:80]
-    url = f"{cfg.public_url}/p/p{product.id}?utm_source=meta&utm_medium=paid&utm_campaign={tag}"
+    plan_extra = {}
+    if destination == "direct":
+        if not (product.affiliate_url or "").startswith("https://"):
+            raise AdsError("este produto não tem link de afiliado https: sem ele o anúncio direto não gera comissão.")
+        caption = re.sub(r"\s*Ver na loja:?\s*https?://\S+", "", caption, flags=re.I).strip()
+        url = "(link rastreado a criar: felixsystems.com.br/r/<código>)"
+        plan_extra["final_destination"] = product.affiliate_url
+    else:
+        url = f"{cfg.public_url}/p/p{product.id}?utm_source=meta&utm_medium=paid&utm_campaign={tag}"
     return {"name": tag, "objective": "OUTCOME_TRAFFIC", "daily_budget_brl": daily_brl, "days": days, "headline": headline, "message": caption,
-            "image": piece["download"], "image_id": piece["id"], "link": url, "targeting": {"geo_locations": {"countries": ["BR"]}, "age_min": 18, "age_max": 65,
-                                                           "publisher_platforms": ["facebook", "instagram"]}}
+            "image": piece["download"], "image_id": piece["id"], "link": url, "destination": destination, "format": "video" if video else "image",
+            **({"video_id": video["id"]} if video else {}), **plan_extra,
+            "targeting": {"geo_locations": {"countries": ["BR"]}, "age_min": 18, "age_max": 65, "publisher_platforms": ["facebook", "instagram"]}}
 
 
 def _page_token(session: Session) -> str:
@@ -274,11 +330,11 @@ def _check_post(session: Session, post_id: str, plan: dict) -> str:
 
 
 def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int = 3, dry_run: bool = True, actor: str = "agent",
-              variant: str | None = None, now: datetime | None = None, post_id: str | None = None) -> dict:
+              variant: str | None = None, now: datetime | None = None, post_id: str | None = None, destination: str = "page") -> dict:
     creative = session.get(CreativeCampaign, creative_id)
     if creative is None:
         raise AdsError(f"criativo {creative_id} não encontrado")
-    plan = build_plan(session, creative, daily_brl=daily_brl, days=days, now=now)
+    plan = build_plan(session, creative, daily_brl=daily_brl, days=days, now=now, destination=destination)
     if post_id:
         plan["post_id"] = post_id
         plan["origin"] = "post já publicado na Página (não usa a imagem do criativo: a Meta usa o post)"
@@ -291,6 +347,12 @@ def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int
     values = _meta_values(session)
     token, account, page = values["access_token"], meta_ads.normalize_account(values["ad_account_id"]), values["page_id"]
     story_id = _check_post(session, str(post_id).strip(), plan) if post_id else None
+    if destination == "direct" and not post_id:  # o link rastreado só nasce na criação de verdade (registra o código na loja)
+        try:
+            tracked = link_shortener.create_tracked_link(session, product_id=creative.product_id, channel="facebook", campaign=plan["name"][:128])
+        except link_shortener.ShortenerError as exc:
+            raise AdsError(f"não consegui criar o link rastreado do anúncio: {exc}") from exc
+        plan["link"] = tracked.affiliate_url
     ad = AdCampaign(creative_campaign_id=creative.id, product_id=creative.product_id, platform="meta", status="draft", variant=variant,
                     daily_budget_brl=daily_brl, duration_days=days, destination_url=plan["link"], created_by=actor[:64])
     session.add(ad)
@@ -315,8 +377,17 @@ def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int
             image_hash = next(iter((uploaded.get("images") or {}).values()), {}).get("hash")
             if not image_hash:
                 raise AdsError("a Meta não devolveu o código da imagem enviada")
-            story = {"page_id": page, "link_data": {"link": plan["link"], "message": plan["message"], "name": plan["headline"], "image_hash": image_hash,
-                                                    "call_to_action": {"type": "LEARN_MORE", "value": {"link": plan["link"]}}}}
+            if plan["format"] == "video":
+                try:
+                    video_bytes, _ = aistudio.fetch_file(session, creative, plan["video_id"])
+                except aistudio.AIStudioError as exc:
+                    raise AdsError(f"não foi possível baixar o vídeo do criativo: {exc}") from exc
+                video_id = _upload_video(token, account, video_bytes, plan["name"])
+                story = {"page_id": page, "video_data": {"video_id": video_id, "image_hash": image_hash, "message": plan["message"], "title": plan["headline"],
+                                                         "call_to_action": {"type": "SHOP_NOW", "value": {"link": plan["link"]}}}}
+            else:
+                story = {"page_id": page, "link_data": {"link": plan["link"], "message": plan["message"], "name": plan["headline"], "image_hash": image_hash,
+                                                        "call_to_action": {"type": "LEARN_MORE" if destination == "page" else "SHOP_NOW", "value": {"link": plan["link"]}}}}
             adcreative = _post(f"{account}/adcreatives", token, name=plan["name"], object_story_spec=json.dumps(story))
         made = _post(f"{account}/ads", token, name=plan["name"], adset_id=adset["id"], creative=json.dumps({"creative_id": adcreative["id"]}), status="PAUSED")
         ad.external_ad_id, ad.status, ad.meta_status = made["id"], "paused", "PAUSED"

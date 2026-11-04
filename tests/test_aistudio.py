@@ -230,3 +230,30 @@ def test_virtual_presenter_asks_for_one_narrated_vertical_video_and_no_children(
     assert body["creative"]["presenter"] == {"type": "virtual"}
     assert [(d["kind"], d.get("aspect_ratio")) for d in body["deliverables"]] == [("video", "9:16"), ("copy", None)]
     assert "Sem crianças em cena" in body["creative"]["notes"]
+
+
+def test_short_video_styles_ask_for_8s_with_thumbnail_the_right_voice_and_the_closing_line(session):
+    _config(session)
+    product = _product(session)
+
+    def build(style):
+        return ai.build_payload(session, product, external_ref="r", mode="live", quality="economy", budget_usd=0.5, angle="problem_solution", hook_variants=1,
+                                      callback_url="", logo_asset=None, store_url="https://loja.exemplo/p/1", video_style=style)
+
+    for style, pres, voice, who in (("presenter_f", "virtual", "warm_female", "apresentadora"), ("presenter_m", "virtual", "warm_male", "apresentador virtual masculino"),
+                                    ("hands_f", "none", "warm_female", "mãos"), ("hands_m", "none", "warm_male", "mãos")):
+        p = build(style)
+        assert p["creative"]["presenter"] == {"type": pres} and p["creative"]["voice"]["style"] == voice
+        assert who in p["creative"]["notes"] and "Confira no link" in p["creative"]["notes"]
+        assert p["creative"]["cta"] == {"text": "Confira no link"} and "url" not in p["product"]
+        kinds = [d["kind"] for d in p["deliverables"]]
+        assert kinds == ["video", "thumbnail", "copy"] and p["deliverables"][0]["duration_s"] == 8 and p["deliverables"][0]["variants"] == 1
+    assert build("")["creative"]["cta"]["text"] == "Ver na loja"  # sem estilo: nada muda
+
+
+def test_direct_art_calls_to_buy_on_the_marketplace_and_never_prints_the_mural_address(session):
+    _config(session)
+    product = _product(session)
+    body = ai.build_payload(session, product, external_ref="r", mode="live", quality="economy", budget_usd=0.5, angle="problem_solution", hook_variants=1,
+                            callback_url="", logo_asset=None, store_url="https://loja.exemplo/p/1", formats="images", direct=True)
+    assert body["creative"]["cta"]["text"].startswith("Compre na ") and "url" not in body["creative"]["cta"] and "url" not in body["product"]

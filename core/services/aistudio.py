@@ -35,6 +35,15 @@ from core.services import storefront
 logger = logging.getLogger(__name__)
 
 PRESENTER_S = 8  # vídeo curto de feed com apresentadora (o contrato aceita de 6 a 60 s)
+# Vídeo curto de anúncio (8 s) que vai direto para a página de compra: apresentador(a) virtual ou só as mãos mostrando o produto, com voz
+# feminina ou masculina. Sufixo _f/_m = gênero da apresentadora ou da voz (o público do produto decide o contrário: produto masculino, voz feminina).
+VIDEO_STYLES = ("presenter_f", "presenter_m", "hands_f", "hands_m")
+_PRESENTER_NOTES = ("{who} apresenta o produto da foto de referência segurando-o, em português do Brasil, SÓ com as características que constam na descrição "
+                    "e nos benefícios. Mostrar o produto idêntico à foto. Sem crianças em cena, sem prometer resultado, sem preço falado. Anúncio de feed em vídeo curto de "
+                    "8 segundos: ritmo rápido, direto ao ponto. A fala TERMINA, no finalzinho, com a frase \"Confira no link\".")
+_HANDS_NOTES = ("Sem rosto e sem pessoa inteira: só as mãos de uma pessoa segurando, girando e usando o produto da foto de referência (produto idêntico à foto). "
+                "Narração curta e natural em português do Brasil, em voz {voz}, citando SÓ características da descrição e dos benefícios. Sem preço falado e sem prometer "
+                "resultado. Vídeo curto de 8 segundos, ritmo rápido. A narração TERMINA, no finalzinho, com a frase \"Confira no link\".")
 SLIDESHOW_S = 12  # segundos do slideshow com trilha (o contrato aceita 10 a 15)
 
 SERVICE = "aistudio"
@@ -146,7 +155,7 @@ def ensure_logo_asset(session: Session, cfg: AIStudioConfig) -> str | None:
 
 def build_payload(session: Session, product: Product, *, external_ref: str, mode: str, quality: str, budget_usd: float,
                   angle: str, hook_variants: int, callback_url: str, logo_asset: str | None, store_url: str | None,
-                  formats: str = "video", extra_notes: str | None = None, presenter: str = "none") -> dict:
+                  formats: str = "video", extra_notes: str | None = None, presenter: str = "none", video_style: str = "", direct: bool = False) -> dict:
     row = None
     for p, r, _ in storefront._candidates(session):
         if p.id == product.id:
@@ -173,8 +182,14 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
         benefits.append(f"Preço abaixo do anterior ({round((1 - product.price / product.original_price) * 100)}% menos)")
     images_only = formats == "images"
     notes = "Mostrar só o produto da foto de referência. Sem pessoas reais identificáveis e sem promessas de resultado."
+    short = video_style in VIDEO_STYLES and not images_only
+    male = video_style.endswith("_m")
+    if short:
+        presenter = "virtual" if video_style.startswith("presenter") else "none"
+        notes = (_PRESENTER_NOTES.format(who="Um apresentador virtual masculino, adulto, simpático e confiante" if male else "Uma apresentadora virtual adulta, simpática e segura")
+                 if presenter == "virtual" else _HANDS_NOTES.format(voz="masculina" if male else "feminina"))
     with_presenter = presenter == "virtual" and not images_only
-    if with_presenter:
+    if with_presenter and not short:
         notes = ("Uma apresentadora virtual adulta, simpática, segura o produto da foto de referência e apresenta rapidamente, em português do Brasil, "
                  "com uma narração curta e natural, SÓ as características que constam na descrição e nos benefícios. Mostrar o produto idêntico à foto. "
                  "Sem crianças em cena, sem prometer resultado nem tempo de conservação de temperatura, sem preço falado. Anúncio de feed: ritmo rápido, "
@@ -190,6 +205,9 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
                         {"kind": "image", "channel": "instagram", "aspect_ratio": "9:16"}, copy_piece,
                         # Slideshow 9:16 de 10 a 15 s com trilha, montado pelo estúdio (ffmpeg local, sem IA; trilha < US$ 0,01).
                         {"kind": "slideshow", "duration_s": SLIDESHOW_S, "include_product_photos": True}]
+    elif short:
+        deliverables = [{"kind": "video", "channel": "instagram_reels", "aspect_ratio": "9:16", "duration_s": PRESENTER_S, "variants": 1},
+                        {"kind": "thumbnail", "aspect_ratio": "9:16"}, {"kind": "copy", "channel": "facebook", "fields": ["caption", "hashtags", "headline"]}]
     elif with_presenter:
         deliverables = [{"kind": "video", "channel": "instagram_reels", "aspect_ratio": "9:16", "duration_s": PRESENTER_S, "variants": 1}, copy_piece]
     else:
@@ -201,14 +219,15 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
         "approval": {"mode": "none"},
         "product": {"id": str(product.id), "name": title, **({"benefits": benefits} if benefits else {}), "category": CATEGORY_MAP.get(storefront.guess_category(product.title, product.marketplace.value), "outros"),
                     "description": description, "images": [{"url": storefront._first_image(product), "role": "main"}],
-                    "forbidden_claims": FORBIDDEN_CLAIMS, **({"price": price} if price else {}), **({"url": store_url} if store_url else {})},
+                    "forbidden_claims": FORBIDDEN_CLAIMS, **({"price": price} if price else {}), **({"url": store_url} if store_url and not short and not direct else {})},
         "brand": {"name": storefront.get_meta(session)["name"], "colors": {"primary": "#A71920", "secondary": "#171923", "text": "#FFFFFF"},
                   "voice_tone": ["direto", "amigável"], "banned_words": BANNED_WORDS,
                   **({"logo": {"asset_id": logo_asset, "placement": LOGO_PLACEMENT}} if logo_asset else {})},
         "audience": {"locale": "BR", "age_range": [20, 50]},
         "creative": {"objective": "consideration", "angle": angle, "hook_variants": hook_variants, "presenter": {"type": "virtual" if with_presenter else "none"},
-                     "voice": {"style": "warm_male"}, "music": {"mood": "upbeat_modern", "enabled": not images_only},
-                     "cta": {"text": "Ver na loja", **({"url": store_url} if store_url else {})}, "notes": notes,
+                     "voice": {"style": ("warm_male" if male else "warm_female") if short else "warm_male"}, "music": {"mood": "upbeat_modern", "enabled": not images_only},
+                     "cta": ({"text": "Confira no link"} if short else {"text": f"Compre na {market}"} if direct else {"text": "Ver na loja", **({"url": store_url} if store_url else {})}),
+                     "notes": notes,
                      **({"offer": {"headline": f"De R$ {product.original_price:.2f} por R$ {product.price:.2f}".replace(".", ",")}} if discounted else {})},
         "deliverables": deliverables,
         "compliance": {"platforms": ["meta"], "ai_disclosure": True, "sensitive_category": None},
@@ -237,20 +256,21 @@ def _store_url(session: Session, product_id: int) -> str | None:
 
 
 def estimate(session: Session, product_id: int, *, quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2,
-             formats: str = "video", presenter: str = "none") -> dict:
+             formats: str = "video", presenter: str = "none", video_style: str = "", direct: bool = False) -> dict:
     cfg = _require(session)
     product = _product_for(session, product_id)
     payload = build_payload(session, product, external_ref=f"estimate-{product_id}", mode="sandbox", quality=quality, budget_usd=cfg.max_usd,
                             angle=angle, hook_variants=hook_variants, callback_url="", logo_asset=None, store_url=_store_url(session, product_id),
-                            formats=formats, presenter=presenter)
+                            formats=formats, presenter=presenter, video_style=video_style, direct=direct)
     return _call(cfg, "POST", "/campaigns/estimate", json=payload)
 
 
 def create(session: Session, product_id: int, *, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution",
            hook_variants: int = 2, budget_usd: float | None = None, actor: str = "agent", formats: str = "video",
-           extra_notes: str | None = None, presenter: str = "none") -> CreativeCampaign:
+           extra_notes: str | None = None, presenter: str = "none", video_style: str = "", direct: bool = False) -> CreativeCampaign:
     cfg = _require(session)
-    if mode not in ("sandbox", "live") or quality not in QUALITIES or angle not in ANGLES or formats not in FORMATS or presenter not in ("none", "virtual"):
+    if (mode not in ("sandbox", "live") or quality not in QUALITIES or angle not in ANGLES or formats not in FORMATS or presenter not in ("none", "virtual")
+            or video_style not in ("", *VIDEO_STYLES)):
         raise AIStudioError(f"parâmetros inválidos (modo sandbox|live; qualidade {', '.join(QUALITIES)}; ângulo {', '.join(ANGLES)})")
     if mode == "live" and not cfg.allow_live:
         raise AIStudioError("geração ao vivo gasta créditos e está desligada: o operador precisa ligar \"Permitir geração ao vivo\" no cartão do AI Studio. "
@@ -268,7 +288,7 @@ def create(session: Session, product_id: int, *, mode: str = "sandbox", quality:
     payload = build_payload(session, product, external_ref=ref, mode=mode, quality=quality, budget_usd=budget, angle=angle,
                             hook_variants=hook_variants, callback_url=cfg.callback_url, logo_asset=ensure_logo_asset(session, cfg),
                             store_url=_store_url(session, product_id), formats=formats, extra_notes=extra_notes,
-                            presenter=presenter)
+                            presenter=presenter, video_style=video_style, direct=direct)
     record.request = payload
     try:
         body = _call(cfg, "POST", "/campaigns", idempotency_key=ref[:80], json=payload)

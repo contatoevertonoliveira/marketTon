@@ -10,6 +10,7 @@ A Meta é simulada. O que os testes travam:
 """
 from __future__ import annotations
 
+import json
 from datetime import timedelta, UTC, datetime
 
 import pytest
@@ -304,3 +305,57 @@ def test_a_marketplace_in_the_list_without_its_own_cap_only_follows_the_platform
     session.flush()
     with pytest.raises(mc.AdsError, match="fora da lista de marketplaces"):
         mc._guard_marketplace(session, c.product_id, 5, 1)
+
+
+def _video_creative(session, n=7):
+    creative = _creative(session, n=n)
+    session.get(Product, creative.product_id).affiliate_url = "https://s.shopee.com.br/abc"
+    creative.manifest = {"deliverables": [
+        {"id": "v1", "kind": "video", "status": "ready", "aspect_ratio": "9:16", "url_signed": {"href": "https://studio.exemplo.com/d/v1?sig=x"}},
+        {"id": "t1", "kind": "thumbnail", "status": "ready", "aspect_ratio": "9:16", "url_signed": {"href": "https://studio.exemplo.com/d/t1?sig=x"}},
+        {"id": "c1", "kind": "copy", "status": "ready", "content": {"headline": "Parafusadeira 21V", "caption": "Confira a parafusadeira.\n\nVer na loja: https://mural.felixsystems.com.br/#p1"}},
+    ]}
+    session.flush()
+    return creative
+
+
+def test_direct_destination_dry_run_shows_the_final_page_and_creates_nothing(session, meta):
+    _cards(session)
+    creative = _video_creative(session)
+    out = mc.create_ad(session, creative.id, daily_brl=12, days=2, destination="direct", now=NOW)
+    plan = out["plan"]
+    assert out["dry_run"] is True and not meta.posts
+    assert plan["destination"] == "direct" and plan["format"] == "video" and plan["final_destination"] == "https://s.shopee.com.br/abc"
+    assert "Ver na loja" not in plan["message"] and plan["video_id"] == "v1" and plan["image_id"] == "t1"
+    with pytest.raises(mc.AdsError, match="destino"):
+        mc.create_ad(session, creative.id, daily_brl=12, days=2, destination="outro", now=NOW)
+
+
+def test_video_ad_goes_direct_through_our_tracked_link_and_is_born_paused(session, meta, monkeypatch):
+    from types import SimpleNamespace
+    _cards(session)
+    creative = _video_creative(session)
+    asked = {}
+    monkeypatch.setattr(mc.link_shortener, "create_tracked_link",
+                        lambda s, **kw: asked.update(kw) or SimpleNamespace(affiliate_url="https://felixsystems.com.br/r/Ab12Cd3"))
+    uploads = []
+    monkeypatch.setattr(mc, "_upload_video", lambda token, account, data, name: uploads.append((account, data, name)) or "vid_77")
+    out = mc.create_ad(session, creative.id, daily_brl=12, days=2, dry_run=False, destination="direct", now=NOW)
+    assert out["status"] == "paused" and asked["channel"] == "facebook" and asked["product_id"] == creative.product_id
+    assert uploads and uploads[0][1] == b"PNGDATA"
+    story = next(json.loads(d["object_story_spec"]) for p, d in meta.posts if p.endswith("/adcreatives"))
+    vd = story["video_data"]
+    assert vd["video_id"] == "vid_77" and vd["image_hash"] == "hash_abc" and vd["call_to_action"] == {"type": "SHOP_NOW", "value": {"link": "https://felixsystems.com.br/r/Ab12Cd3"}}
+    assert "Ver na loja" not in vd["message"] and "link_data" not in story
+    ad = session.query(AdCampaign).filter_by(creative_campaign_id=creative.id).one()
+    assert ad.destination_url == "https://felixsystems.com.br/r/Ab12Cd3" and ad.status == "paused"
+
+
+def test_a_slideshow_creative_becomes_a_video_ad_with_the_image_as_thumbnail(session, meta):
+    _cards(session)
+    creative = _creative(session, n=8)
+    session.get(Product, creative.product_id).affiliate_url = "https://s.shopee.com.br/abc"
+    creative.manifest["deliverables"].append({"id": "s1", "kind": "slideshow", "status": "ready", "aspect_ratio": "9:16", "url_signed": {"href": "https://studio.exemplo.com/d/s1?sig=x"}})
+    session.flush()
+    plan = mc.create_ad(session, creative.id, daily_brl=12, days=2, destination="direct", now=NOW)["plan"]
+    assert plan["format"] == "video" and plan["video_id"] == "s1" and plan["image_id"] == "d1"
