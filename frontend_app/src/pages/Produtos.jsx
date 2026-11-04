@@ -4,6 +4,7 @@ import ProductCard from "./ProductCard";
 import ProductCardModal from "./ProductCardModal";
 import ProdutosDesempenho from "./ProdutosDesempenho";
 import ProdutosSugeridos from "./ProdutosSugeridos";
+import LinksAfiliadoManual from "./LinksAfiliadoManual";
 
 const MARKETPLACES = [
   { id: "mercado_livre", name: "Mercado Livre", icon: "🛒" },
@@ -112,6 +113,8 @@ export default function Produtos() {
           );
         })}
       </div>
+
+      {active === "mercado_livre" && <LinksAfiliadoManual />}
 
       <div style={{ display: "inline-flex", borderRadius: 999, background: "#fff", padding: 3, marginBottom: 18, boxShadow: "0 0 1.5rem 0 rgba(136,152,170,.12)" }}>
         {[["sugeridos", "Sugeridos pelo sistema"], ["vinculados", `Vinculados à conta (${counts[active] || 0})`], ["desempenho", "Desempenho"]].map(([id, label]) => (

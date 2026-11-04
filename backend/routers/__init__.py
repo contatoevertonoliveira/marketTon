@@ -6,6 +6,7 @@ registrar todos de uma vez.
 from __future__ import annotations
 
 from backend.routers import (
+    affiliate_links,
     agent,
     agent_reports,
     auth,
@@ -47,6 +48,7 @@ API_ROUTERS = [
     finance.router,
     social.router,
     vetting.router,
+    affiliate_links.router,
 ]
 
 __all__ = [
@@ -70,4 +72,5 @@ __all__ = [
     "storefront",
     "trends",
     "vetting",
+    "affiliate_links",
 ]
