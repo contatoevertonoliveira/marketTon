@@ -90,7 +90,7 @@ def _new_code() -> str:
 
 def create_tracked_link(
     session: Session, *, portfolio_item_id: int | None = None, product_id: int | None = None,
-    channel: str = "outro", campaign: str | None = None,
+    channel: str = "outro", campaign: str | None = None, destination_url: str | None = None,
 ) -> AffiliateLink:
     """Cria (ou reaproveita) o link curto de um produto para um canal. Devolve o `AffiliateLink`.
 
@@ -108,7 +108,8 @@ def create_tracked_link(
     if channel not in CHANNELS:
         raise ShortenerError(f"canal inválido: {channel}. Use um de {', '.join(CHANNELS)}")
     campaign = (campaign or "").strip()[:128] or None
-    if not (product.affiliate_url or "").startswith("https://"):
+    target = (destination_url or product.affiliate_url or "")
+    if not target.startswith("https://"):
         raise ShortenerError(
             "este produto não tem link de afiliado https: encurtar o link comum geraria clique sem comissão. "
             "Atualize o catálogo ou gere o link de afiliado no marketplace.")
@@ -125,14 +126,14 @@ def create_tracked_link(
         if session.scalar(select(AffiliateLink.id).where(AffiliateLink.short_code == code)):
             continue
         try:
-            _call(cfg, "POST", "/api/links", json={"code": code, "url": product.affiliate_url})
+            _call(cfg, "POST", "/api/links", json={"code": code, "url": target})
         except ShortenerError as exc:
             if "já existe" in str(exc):
                 continue  # colisão no lado público: sorteia outro
             raise
         link = AffiliateLink(
             product_id=product.id, portfolio_item_id=item.id if item else None, marketplace=product.marketplace,
-            channel=channel, destination_url=product.affiliate_url, affiliate_url=f"{cfg.base_url}/r/{code}",
+            channel=channel, destination_url=target, affiliate_url=f"{cfg.base_url}/r/{code}",
             short_code=code, campaign=campaign)
         session.add(link)
         session.flush()

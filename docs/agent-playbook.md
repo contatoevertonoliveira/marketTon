@@ -228,6 +228,14 @@ para pesquisar (`WebSearch`/`WebFetch` na rodada de pesquisa), mas **o que se l�
 - Tráfego pago de afiliado sem página própria de venda é difícil de fechar a conta: o clique é barato, a venda não é atribuível ao anúncio, e a taxa de clique na oferta
   depois da visita decide se compensa. Sem fonte confiável de benchmark para afiliado de marketplace: use a conta do nosso funil.
 
+**Aprendido no teste pago de 30/10 a 02/11/2026 (ver a memória do projeto):** tráfego frio da Meta passando pela página do Mural deu clique de oferta em só ~2% das
+visitas (R$ 6 a 9 por clique de oferta) e a conta não fechou. A comissão REAL da Shopee foi de 6% (base) a 13%, bem abaixo da que o catálogo mostra (a do catálogo
+inclui a comissão extra do vendedor, que não vale em toda compra): **faça a conta de anúncio com 6%**. A Shopee credita qualquer item comprado depois do clique, não só
+o produto anunciado. Próximo teste: **anúncio direto** para a página de compra (`destination="direct"` em `/ads`: o clique passa pelo nosso link rastreado e o link da
+Shopee leva o rótulo `ad<id>`, que volta em `Sale.channel` no relatório de conversões, então dá para atribuir a venda ao anúncio), com produto de comissão absoluta maior
+e vídeo curto de 8 s (`video_style`: apresentador(a) ou só mãos, voz do gênero oposto ao público do produto) fechando com "Confira no link". Mercado Livre ainda não tem
+link de afiliado no sistema: só Shopee entra em anúncio direto. O teste pago do operador (`/vetting/{id}/authorize-test`, 14 dias) é decisão dele: você não ativa.
+
 **Escada de medida (olhe de baixo para cima antes de pedir mais verba):** clique no link do anúncio → visita à página → clique em "Quero esse" (nosso rastreio) →
 venda confirmada no marketplace. A etapa que mais perde gente é a que se corrige primeiro. A Meta e o Pixel contam mais cliques do que chegam à oferta: o
 rastreio próprio é a medida principal.

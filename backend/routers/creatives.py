@@ -122,6 +122,16 @@ def put_ad(ad_id: int, payload: AdUpdate, principal: Principal = Depends(require
     return creative_history.ad_out(ad)
 
 
+def _labeled_link(product, sub_ids):
+    """Link de afiliado do marketplace com rótulo do anúncio (só a Shopee tem esse recurso por enquanto)."""
+    from backend.deps import get_adapters
+
+    adapter = get_adapters().get(product.marketplace.value)
+    if adapter is None or not hasattr(adapter, "short_link") or not product.product_url:
+        return None
+    return adapter.short_link(product.product_url, sub_ids)
+
+
 class AdCreate(BaseModel):
     creative_id: int
     daily_brl: float = Field(gt=0)
@@ -209,7 +219,8 @@ def put_ads_plan(payload: AdsPlanIn, principal: Principal = Depends(require("con
 def create_meta_ad(payload: AdCreate, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
     try:
         result = meta_campaigns.create_ad(session, payload.creative_id, daily_brl=payload.daily_brl, days=payload.days, dry_run=payload.dry_run,
-                                          actor=principal.username, variant=payload.variant, post_id=payload.post_id, destination=payload.destination)
+                                          actor=principal.username, variant=payload.variant, post_id=payload.post_id, destination=payload.destination,
+                                          labeled_link=_labeled_link)
     except meta_campaigns.AdsError as exc:
         session.commit()  # guarda a tentativa que falhou
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -330,7 +330,10 @@ def _check_post(session: Session, post_id: str, plan: dict) -> str:
 
 
 def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int = 3, dry_run: bool = True, actor: str = "agent",
-              variant: str | None = None, now: datetime | None = None, post_id: str | None = None, destination: str = "page") -> dict:
+              variant: str | None = None, now: datetime | None = None, post_id: str | None = None, destination: str = "page",
+              labeled_link=None) -> dict:
+    """`labeled_link(product, sub_ids) -> url|None` (opcional): gera o link de afiliado do marketplace com rótulo do anúncio (sub-ID), para a venda voltar
+    atribuída a ele no relatório do marketplace. Sem ele, ou se falhar, o anúncio direto usa o link de afiliado genérico do produto."""
     creative = session.get(CreativeCampaign, creative_id)
     if creative is None:
         raise AdsError(f"criativo {creative_id} não encontrado")
@@ -347,16 +350,27 @@ def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int
     values = _meta_values(session)
     token, account, page = values["access_token"], meta_ads.normalize_account(values["ad_account_id"]), values["page_id"]
     story_id = _check_post(session, str(post_id).strip(), plan) if post_id else None
-    if destination == "direct" and not post_id:  # o link rastreado só nasce na criação de verdade (registra o código na loja)
-        try:
-            tracked = link_shortener.create_tracked_link(session, product_id=creative.product_id, channel="facebook", campaign=plan["name"][:128])
-        except link_shortener.ShortenerError as exc:
-            raise AdsError(f"não consegui criar o link rastreado do anúncio: {exc}") from exc
-        plan["link"] = tracked.affiliate_url
     ad = AdCampaign(creative_campaign_id=creative.id, product_id=creative.product_id, platform="meta", status="draft", variant=variant,
                     daily_budget_brl=daily_brl, duration_days=days, destination_url=plan["link"], created_by=actor[:64])
     session.add(ad)
     session.flush()
+    if destination == "direct" and not post_id:  # o link rastreado só nasce na criação de verdade (registra o código na loja)
+        final = None
+        if labeled_link is not None:
+            try:
+                final = labeled_link(session.get(storefront.Product, creative.product_id), [f"ad{ad.id}"])
+            except Exception as exc:  # noqa: BLE001 - sem rótulo o anúncio ainda funciona: usa o link genérico do produto
+                logger.warning("link com rótulo do anúncio %s indisponível: %s", ad.id, exc)
+        try:
+            tracked = link_shortener.create_tracked_link(session, product_id=creative.product_id, channel="facebook", campaign=plan["name"][:128],
+                                                         destination_url=final)
+        except link_shortener.ShortenerError as exc:
+            ad.status, ad.notes = "failed", f"falhou ao criar o link rastreado: {exc}"[:500]
+            session.flush()
+            raise AdsError(f"não consegui criar o link rastreado do anúncio: {exc}") from exc
+        plan["link"] = tracked.affiliate_url
+        ad.destination_url = plan["link"]
+        ad.notes = (f"direto; vendas voltam com o rótulo ad{ad.id}" if final else "direto; link genérico (sem rótulo de venda)")[:500]
     try:
         campaign = _post(f"{account}/campaigns", token, name=plan["name"], objective=plan["objective"], status="PAUSED", special_ad_categories="[]",
                          is_adset_budget_sharing_enabled="false")  # orçamento por conjunto, sem compartilhar (a Meta passou a exigir o campo)

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -102,6 +103,7 @@ query {{
       conversionId
       purchaseTime
       conversionStatus
+      utmContent
       orders {{
         orderId
         orderStatus
@@ -406,6 +408,8 @@ class ShopeeAdapter(MarketplaceAdapter):
     @staticmethod
     def _sales_from_conversion(node: dict[str, Any]) -> list[SalesRecord]:
         status = node.get("conversionStatus")
+        # `utmContent` traz os sub-IDs do link separados por "-" (ex.: "ad16----"): o primeiro é o rótulo do anúncio (vazio = link sem rótulo).
+        label = str(node.get("utmContent") or "").split("-")[0].strip() or None
         purchase_time = _to_int(node.get("purchaseTime"))
         occurred_at = datetime.fromtimestamp(purchase_time, tz=UTC) if purchase_time else datetime.now(UTC)
 
@@ -428,12 +432,28 @@ class ShopeeAdapter(MarketplaceAdapter):
                         gross_amount=_to_float(item.get("actualAmount")) or _to_float(item.get("itemPrice")),
                         product_external_id=str(item_id),
                         product_title=item.get("itemName"),
+                        channel=label,
                         status=status,
                         commission_estimated=commission if status == "PENDING" else None,
                         commission_confirmed=commission if status == "COMPLETED" else None,
                     )
                 )
         return records
+
+    def short_link(self, origin_url: str, sub_ids: list[str] | None = None) -> str:
+        """Link curto de afiliado da Shopee para uma página de produto, com sub-IDs (rótulo que volta no relatório de conversões).
+
+        Os sub-IDs não podem ter hífen (a Shopee os junta com "-" no relatório) nem passar de 5. Usa a conta de afiliado configurada.
+        """
+        if not origin_url.startswith("https://"):
+            raise ShopeeError("o endereço do produto precisa ser https")
+        subs = [re.sub(r"[^A-Za-z0-9_]", "", str(s))[:40] for s in (sub_ids or [])][:5]
+        sub_arg = f', subIds: [{", ".join(json.dumps(s) for s in subs if s)}]' if any(subs) else ""
+        data = self._graphql(f'mutation {{ generateShortLink(input: {{originUrl: {json.dumps(origin_url)}{sub_arg}}}) {{ shortLink }} }}', {})
+        link = ((data.get("generateShortLink") or {}).get("shortLink") or "").strip()
+        if not link.startswith("https://"):
+            raise ShopeeError("a Shopee não devolveu o link curto")
+        return link
 
     def search_competitor(self, query: str, *, limit: int = 10) -> list[dict[str, Any]]:
         """Busca de concorrentes reaproveitando `productOfferV2`."""

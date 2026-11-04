@@ -359,3 +359,26 @@ def test_a_slideshow_creative_becomes_a_video_ad_with_the_image_as_thumbnail(ses
     session.flush()
     plan = mc.create_ad(session, creative.id, daily_brl=12, days=2, destination="direct", now=NOW)["plan"]
     assert plan["format"] == "video" and plan["video_id"] == "s1" and plan["image_id"] == "d1"
+
+
+def test_direct_ad_uses_the_labeled_link_and_falls_back_to_the_generic_one(session, meta, monkeypatch):
+    from types import SimpleNamespace
+    _cards(session, weekly="200", daily="30", products="3", creatives="1")
+    creative = _video_creative(session, n=9)
+    registered = []
+    monkeypatch.setattr(mc.link_shortener, "create_tracked_link",
+                        lambda s, **kw: registered.append(kw) or SimpleNamespace(affiliate_url="https://felixsystems.com.br/r/Zz1"))
+    monkeypatch.setattr(mc, "_upload_video", lambda token, account, data, name: "vid_1")
+    asked = []
+    out = mc.create_ad(session, creative.id, daily_brl=12, days=2, dry_run=False, destination="direct", now=NOW,
+                       labeled_link=lambda product, subs: asked.append(subs) or "https://s.shopee.com.br/ROTULO")
+    ad = session.get(AdCampaign, out["ad_id"])
+    assert asked == [[f"ad{ad.id}"]] and registered[0]["destination_url"] == "https://s.shopee.com.br/ROTULO" and f"ad{ad.id}" in ad.notes
+
+    creative2 = _video_creative(session, n=10)
+
+    def broken(product, subs):
+        raise RuntimeError("Shopee fora do ar")
+
+    out2 = mc.create_ad(session, creative2.id, daily_brl=12, days=2, dry_run=False, destination="direct", now=NOW, labeled_link=broken)
+    assert registered[1]["destination_url"] is None and "genérico" in session.get(AdCampaign, out2["ad_id"]).notes
