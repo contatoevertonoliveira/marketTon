@@ -38,6 +38,9 @@ PRESENTER_S = 8  # vídeo curto de feed com apresentadora (o contrato aceita de 
 # Vídeo curto de anúncio (8 s) que vai direto para a página de compra: apresentador(a) virtual ou só as mãos mostrando o produto, com voz
 # feminina ou masculina. Sufixo _f/_m = gênero da apresentadora ou da voz (o público do produto decide o contrário: produto masculino, voz feminina).
 VIDEO_STYLES = ("presenter_f", "presenter_m", "hands_f", "hands_m")
+# Apresentador(a) = personagem cadastrado no PC do estúdio (`characters/<id>`; id errado vira apresentadora genérica, sem aviso). O vídeo com personagem roda no
+# PC (`providers.engine = "colab"`, a fila do MiniMax); sem isso a campanha cairia nas APIs pagas do servidor. `colab_fallback: auto` mantém a reserva.
+CHARACTERS = {"f": "amanda-suarez", "m": "lucas-ferrer"}
 _PRESENTER_NOTES = ("{who} apresenta o produto da foto de referência segurando-o, em português do Brasil, SÓ com as características que constam na descrição "
                     "e nos benefícios. Mostrar o produto idêntico à foto. Sem crianças em cena, sem prometer resultado, sem preço falado. Anúncio de feed em vídeo curto de "
                     "8 segundos: ritmo rápido, direto ao ponto. A fala TERMINA, no finalzinho, com a frase \"Confira no link\".")
@@ -224,7 +227,9 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
                   "voice_tone": ["direto", "amigável"], "banned_words": BANNED_WORDS,
                   **({"logo": {"asset_id": logo_asset, "placement": LOGO_PLACEMENT}} if logo_asset else {})},
         "audience": {"locale": "BR", "age_range": [20, 50]},
-        "creative": {"objective": "consideration", "angle": angle, "hook_variants": hook_variants, "presenter": {"type": "virtual" if with_presenter else "none"},
+        "creative": {"objective": "consideration", "angle": angle, "hook_variants": hook_variants,
+                     "presenter": ({"type": "character", "id": CHARACTERS["m" if male else "f"], "voice_sample": False} if short and presenter == "virtual"
+                                   else {"type": "virtual" if with_presenter else "none"}),
                      "voice": {"style": ("warm_male" if male else "warm_female") if short else "warm_male"}, "music": {"mood": "upbeat_modern", "enabled": not images_only},
                      "cta": ({"text": "Confira no link"} if short else {"text": f"Compre na {market}"} if direct else {"text": "Ver na loja", **({"url": store_url} if store_url else {})}),
                      "notes": notes,
@@ -232,6 +237,8 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
         "deliverables": deliverables,
         "compliance": {"platforms": ["meta"], "ai_disclosure": True, "sensitive_category": None},
     }
+    if short and presenter == "virtual":
+        payload["providers"] = {"engine": "colab", "colab_fallback": "auto"}
     if callback_url:
         payload["callback"] = {"url": callback_url}
     return payload

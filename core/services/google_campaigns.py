@@ -165,6 +165,10 @@ def create_campaign(session: Session, product_id: int, *, daily_brl: float, days
         return {"dry_run": True, "plan": plan, "triagem": product_vetting.out(product_vetting.latest(session, product_id)),
                 "note": "Nada foi enviado ao Google. Use dry_run=false para criar a campanha PAUSADA. Anúncio pago exige triagem `aprovado_pago` (product_vet)."}
     product_vetting.require_paid_ok(session, product_id)
+    try:
+        storefront.ensure_listed(session, product_id, actor=actor)
+    except storefront.StorefrontError as exc:
+        raise AdsError(str(exc)) from exc
     client = _client(session)
     ad = AdCampaign(creative_campaign_id=None, product_id=product_id, platform="google", status="draft", daily_budget_brl=daily_brl,
                     duration_days=days, destination_url=plan["link"], created_by=actor[:64],

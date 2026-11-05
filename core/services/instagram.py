@@ -143,6 +143,15 @@ def _post(path: str, token: str, **data) -> dict:
     return body
 
 
+def _list_first(session: Session, creative_id: int, actor: str) -> None:
+    """Todo post precisa de um produto na vitrine (a página que o post abre): põe o produto lá antes de publicar."""
+    creative = session.get(CreativeCampaign, creative_id)
+    try:
+        storefront.ensure_listed(session, creative.product_id if creative else None, actor=actor)
+    except storefront.StorefrontError as exc:
+        raise InstagramError(str(exc)) from exc
+
+
 def publish_image(session: Session, creative_id: int, *, caption: str, deliverable_id: str | None = None, actor: str,
                   wait_s: float = 45.0, sleep=time.sleep) -> SocialPost:
     creative = session.get(CreativeCampaign, creative_id)
@@ -153,6 +162,7 @@ def publish_image(session: Session, creative_id: int, *, caption: str, deliverab
     caption = (caption or "").strip()
     if not caption or len(caption) > CAPTION_MAX:
         raise InstagramError(f"o texto precisa ter de 1 a {CAPTION_MAX} caracteres.")
+    _list_first(session, creative_id, actor)
     d = deliverable_id or default_caption(session, creative_id)["deliverable_id"]
     if not d or not any(x["id"] == d and x.get("kind") == "image" for x in aistudio.deliverables(creative)):
         raise InstagramError("esse criativo não tem a imagem escolhida.")
@@ -199,6 +209,7 @@ def publish_reel(session: Session, creative_id: int, *, caption: str, actor: str
         raise InstagramError(f"o texto precisa ter de 1 a {CAPTION_MAX} caracteres.")
     if not reels.reel_path(creative_id).exists():
         raise InstagramError("gere o slideshow antes de publicar o Reel.")
+    _list_first(session, creative_id, actor)
     ig, token = _ig_user(session)
     post = SocialPost(platform="instagram", kind="reel", creative_campaign_id=creative.id, product_id=creative.product_id, caption=caption,
                       status="failed", created_by=actor[:64])

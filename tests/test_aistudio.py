@@ -240,10 +240,13 @@ def test_short_video_styles_ask_for_8s_with_thumbnail_the_right_voice_and_the_cl
         return ai.build_payload(session, product, external_ref="r", mode="live", quality="economy", budget_usd=0.5, angle="problem_solution", hook_variants=1,
                                       callback_url="", logo_asset=None, store_url="https://loja.exemplo/p/1", video_style=style)
 
-    for style, pres, voice, who in (("presenter_f", "virtual", "warm_female", "apresentadora"), ("presenter_m", "virtual", "warm_male", "apresentador virtual masculino"),
-                                    ("hands_f", "none", "warm_female", "mãos"), ("hands_m", "none", "warm_male", "mãos")):
+    for style, pres, voice, who in (("presenter_f", {"type": "character", "id": "amanda-suarez", "voice_sample": False}, "warm_female", "apresentadora"),
+                                    ("presenter_m", {"type": "character", "id": "lucas-ferrer", "voice_sample": False}, "warm_male", "apresentador virtual masculino"),
+                                    ("hands_f", {"type": "none"}, "warm_female", "mãos"), ("hands_m", {"type": "none"}, "warm_male", "mãos")):
         p = build(style)
-        assert p["creative"]["presenter"] == {"type": pres} and p["creative"]["voice"]["style"] == voice
+        assert p["creative"]["presenter"] == pres and p["creative"]["voice"]["style"] == voice
+        # vídeo com personagem roda no PC do estúdio; sem personagem, nada de `providers` (usa as APIs)
+        assert (p.get("providers") == {"engine": "colab", "colab_fallback": "auto"}) == (pres["type"] == "character")
         assert who in p["creative"]["notes"] and "Confira no link" in p["creative"]["notes"]
         assert p["creative"]["cta"] == {"text": "Confira no link"} and "url" not in p["product"]
         kinds = [d["kind"] for d in p["deliverables"]]

@@ -85,7 +85,7 @@ def _creative(session, n=1, mode="live", status="completed", with_pieces=True):
                           external_id=f"p{n}", collected_at=NOW)
     session.add(source)
     session.flush()
-    product = Product(marketplace=Marketplace.SHOPEE, external_id=f"p{n}", title=f"Garrafa {n}", price=50.0, source_record_id=source.id,
+    product = Product(marketplace=Marketplace.SHOPEE, external_id=f"p{n}", title=f"Garrafa {n}", price=50.0, affiliate_url="https://s.shopee.com.br/x", images=["https://cf.shopee.com.br/file/x"], source_record_id=source.id,
                       first_seen_at=NOW, last_seen_at=NOW)
     session.add(product)
     session.flush()
@@ -382,3 +382,16 @@ def test_direct_ad_uses_the_labeled_link_and_falls_back_to_the_generic_one(sessi
 
     out2 = mc.create_ad(session, creative2.id, daily_brl=12, days=2, dry_run=False, destination="direct", now=NOW, labeled_link=broken)
     assert registered[1]["destination_url"] is None and "genérico" in session.get(AdCampaign, out2["ad_id"]).notes
+
+
+def test_creating_an_ad_puts_the_product_on_the_vitrine_and_a_hidden_product_is_refused(session, meta):
+    from core.db.portfolio import PortfolioItem
+    from core.services import storefront as sf
+    _cards(session)
+    creative = _creative(session, n=11)
+    mc.create_ad(session, creative.id, daily_brl=10, days=2, dry_run=False, now=NOW)
+    assert session.query(PortfolioItem).filter_by(product_id=creative.product_id).count() == 1  # entrou na vitrine/portfólio com a campanha
+    hidden = _creative(session, n=12)
+    sf.upsert_item(session, hidden.product_id, hidden=True)
+    with pytest.raises(mc.AdsError, match="oculto"):
+        mc.create_ad(session, hidden.id, daily_brl=10, days=2, dry_run=False, now=NOW)

@@ -345,6 +345,10 @@ def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int
         return {"dry_run": True, "plan": plan, "triagem": product_vetting.out(product_vetting.latest(session, creative.product_id)) if creative.product_id else None,
                 "note": "Nada foi enviado à Meta. Use dry_run=false para criar o anúncio PAUSADO. Anúncio pago exige triagem `aprovado_pago` (product_vet)."}
     product_vetting.require_paid_ok(session, creative.product_id)
+    try:
+        storefront.ensure_listed(session, creative.product_id, actor=actor)
+    except storefront.StorefrontError as exc:
+        raise AdsError(str(exc)) from exc
     if creative.mode != "live":
         raise AdsError("criativo de teste (sandbox) tem peças de exemplo e não pode virar anúncio de verdade. Gere o criativo em modo ao vivo.")
     values = _meta_values(session)

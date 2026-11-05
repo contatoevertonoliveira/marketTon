@@ -80,7 +80,7 @@ def _product(session, n=1, title="Garrafa Térmica Infantil Canudo 500ml Quente 
                           external_id=f"p{n}", collected_at=NOW)
     session.add(source)
     session.flush()
-    p = Product(marketplace=Marketplace.SHOPEE, external_id=f"p{n}", title=title, price=39.9, affiliate_url=affiliate, source_record_id=source.id,
+    p = Product(marketplace=Marketplace.SHOPEE, external_id=f"p{n}", title=title, price=39.9, affiliate_url=affiliate, images=["https://cf.shopee.com.br/file/x"], source_record_id=source.id,
                 first_seen_at=NOW, last_seen_at=NOW)
     session.add(p)
     session.flush()

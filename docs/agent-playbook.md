@@ -106,6 +106,11 @@ não estiver configurado, peça a configuração (`request_resource`) em vez de 
 
 A loja pública mostra os produtos do portfólio para quem vem das redes. Você a mantém.
 
+**Regra do operador: tudo que vira campanha (Meta, Google) ou publicação orgânica nas redes TEM que estar na vitrine.** O post e o anúncio levam a uma página do produto
+na loja; produto fora dela cai em "esse achado saiu da vitrine". O sistema faz isso sozinho: criar anúncio, campanha ou post põe o produto na vitrine (e no portfólio) e
+republica a vitrine quando falta produto. Se o produto não pode estar lá (oculto, sem link de afiliado, sem foto, conteúdo sensível), o anúncio ou o post é RECUSADO com o
+motivo: não contorne; peça ao operador para mostrar o produto ou resolver o impedimento.
+
 **Prazo de entrega (regra do operador):** dê preferência a produtos **enviados do Brasil** e com entrega curta. Produto com prazo acima de **10 dias** não entra na vitrine nem vira criativo/anúncio. Quando o prazo não for conhecido (a API padrão do AliExpress não informa), não afirme que é rápido: trate como "prazo desconhecido" e prefira os que têm prazo confirmado.
 
 1. `storefront_status` — o que está na loja e o que ficou de fora (e o motivo).

@@ -99,7 +99,7 @@ def _creative(session):
                           external_id="p1", collected_at=NOW)
     session.add(source)
     session.flush()
-    product = Product(marketplace=Marketplace.SHOPEE, external_id="p1", title="Garrafa", price=50.0, source_record_id=source.id,
+    product = Product(marketplace=Marketplace.SHOPEE, external_id="p1", title="Garrafa", price=50.0, affiliate_url="https://s.shopee.com.br/x", images=["https://cf.shopee.com.br/file/x"], source_record_id=source.id,
                       first_seen_at=NOW, last_seen_at=NOW)
     session.add(product)
     session.flush()

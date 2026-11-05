@@ -74,6 +74,10 @@ def _upload(endpoint: str, token: str, file_url: str) -> dict:
 
 
 def _record(session: Session, kind: str, creative: CreativeCampaign, text: str, deliverable_id: str | None, actor: str) -> SocialPost:
+    try:  # todo post precisa de um produto na vitrine
+        storefront.ensure_listed(session, creative.product_id, actor=actor)
+    except storefront.StorefrontError as exc:
+        raise FacebookError(str(exc)) from exc
     post = SocialPost(platform="facebook", kind=kind, creative_campaign_id=creative.id, product_id=creative.product_id, deliverable_id=deliverable_id,
                       caption=text, status="failed", created_by=actor[:64])
     session.add(post)

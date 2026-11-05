@@ -1,6 +1,8 @@
 """Criativos de anúncio feitos pelo AI Studio: pedir, acompanhar e receber o resultado (webhook)."""
 from __future__ import annotations
 
+import logging
+
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -12,7 +14,7 @@ from backend.deps import get_session
 from backend.security import Principal, record_action, require
 from core.db.ads import AdCampaign
 from core.db.creatives import CreativeCampaign
-from core.services import ads_budget, ads_manager, ads_plan, aistudio, creative_history, google_campaigns, meta_campaigns
+from core.services import ads_budget, ads_manager, ads_plan, aistudio, creative_history, google_campaigns, meta_campaigns, storefront
 from core.services.aistudio import AIStudioError
 
 router = APIRouter(tags=["criativos (AI Studio)"])
@@ -122,6 +124,16 @@ def put_ad(ad_id: int, payload: AdUpdate, principal: Principal = Depends(require
     return creative_history.ad_out(ad)
 
 
+def _publish_store(session: Session, actor: str) -> None:
+    """Campanha criada: se o produto acabou de entrar na vitrine, republica (a página dele precisa existir quando o anúncio for ligado). Não bloqueia a campanha."""
+    try:
+        storefront.publish_if_needed(session, actor=actor)
+        session.commit()
+    except Exception as exc:  # noqa: BLE001 - a vitrine pode ser republicada depois
+        session.rollback()
+        logging.getLogger(__name__).warning("não consegui republicar a vitrine após criar a campanha: %s", exc)
+
+
 def _labeled_link(product, sub_ids):
     """Link de afiliado do marketplace com rótulo do anúncio (só a Shopee tem esse recurso por enquanto)."""
     from backend.deps import get_adapters
@@ -228,6 +240,8 @@ def create_meta_ad(payload: AdCreate, principal: Principal = Depends(require("po
         record_action(session, principal, action="ads.created_paused", resource_type="creative", resource_id=str(payload.creative_id),
                       detail=f"R$ {payload.daily_brl:g}/dia por {payload.days} dia(s)")
     session.commit()
+    if not payload.dry_run:
+        _publish_store(session, principal.username)
     return result
 
 
@@ -245,6 +259,8 @@ def create_google_ad(payload: GoogleAdCreate, principal: Principal = Depends(req
         record_action(session, principal, action="ads.google_created_paused", resource_type="product", resource_id=str(payload.product_id),
                       detail=f"R$ {payload.daily_brl:g}/dia por {payload.days} dia(s)")
     session.commit()
+    if not payload.dry_run:
+        _publish_store(session, principal.username)
     return result
 
 

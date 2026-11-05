@@ -300,3 +300,47 @@ def test_the_snapshot_carries_only_distinct_https_photos(session):
     sf.upsert_item(session, p.id, category="Casa")
     item = [i for i in sf.build_snapshot(session)["items"] if i["id"] == f"p{p.id}"][0]
     assert item["image"] == "https://x/1.jpg" and item["images"] == ["https://x/1.jpg", "https://x/2.jpg", "https://x/4.jpg"]
+
+
+# ----------------------------------------------- tudo que vira campanha ou post está na vitrine --------------------
+
+
+def test_ensure_listed_puts_the_product_on_the_shelf_and_in_the_portfolio(session):
+    product = _product(session, 1)
+    assert sf.ensure_listed(session, product.id, actor="teste") is True
+    assert session.query(PortfolioItem).filter_by(product_id=product.id).count() == 1
+    assert sf.ensure_listed(session, product.id, actor="teste") is False  # já está: nada muda
+    assert [r["product_id"] for r in sf.list_admin(session)["items"] if r["eligible"]] == [product.id]
+
+
+def test_ensure_listed_refuses_a_product_that_cannot_be_on_the_shelf(session):
+    hidden = _product(session, 1)
+    sf.upsert_item(session, hidden.id, hidden=True)
+    with pytest.raises(sf.StorefrontError, match="oculto"):
+        sf.ensure_listed(session, hidden.id, actor="teste")
+    no_link = _product(session, 2, affiliate=None)
+    with pytest.raises(sf.StorefrontError, match="sem link de afiliado"):
+        sf.ensure_listed(session, no_link.id, actor="teste")
+    no_photo = _product(session, 3, image=None)
+    with pytest.raises(sf.StorefrontError, match="sem foto"):
+        sf.ensure_listed(session, no_photo.id, actor="teste")
+    assert sf.ensure_listed(session, None, actor="teste") is False
+
+
+def test_publish_if_needed_publishes_only_when_a_ready_product_is_missing_from_the_last_send(session, net, configured, shortener):
+    net.routes[("POST", "/api/loja/publicar")] = _Resp(200, {"ok": True})
+    first = _product(session, 1)
+    sf.ensure_listed(session, first.id, actor="t")
+    assert sf.publish_if_needed(session, actor="t") is not None  # nunca publicou: publica
+    assert sf.publish_if_needed(session, actor="t") is None  # nada novo: não publica de novo
+    calls = len([c for c in net.calls if c[1].endswith("/api/loja/publicar")])
+    second = _product(session, 2)
+    sf.ensure_listed(session, second.id, actor="t")
+    out = sf.publish_if_needed(session, actor="t")
+    assert out is not None and out["ids"] == sorted([f"p{first.id}", f"p{second.id}"], key=lambda x: x) or set(out["ids"]) == {f"p{first.id}", f"p{second.id}"}
+    assert len([c for c in net.calls if c[1].endswith("/api/loja/publicar")]) == calls + 1
+
+
+def test_publish_if_needed_without_a_configured_store_does_nothing(session):
+    _product(session, 1)
+    assert sf.publish_if_needed(session, actor="t") is None

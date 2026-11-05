@@ -293,6 +293,41 @@ def backfill_portfolio(session: Session, *, actor: str = "sistema") -> int:
     return created
 
 
+def ensure_listed(session: Session, product_id: int | None, *, actor: str) -> bool:
+    """Regra do operador: todo produto que vira campanha (Meta, Google) ou publicação nas redes TEM que estar na vitrine.
+
+    Põe o produto na vitrine (e no portfólio) se ainda não estiver. Recusa quando ele não pode estar lá (oculto, sem link de afiliado, sem foto, conteúdo
+    sensível...): a campanha ou o post levaria a uma página que diz "esse achado saiu da vitrine". Devolve `True` se o produto acabou de entrar.
+    """
+    if product_id is None:
+        return False
+    product = session.get(Product, product_id)
+    if product is None:
+        raise StorefrontError(f"produto {product_id} não encontrado")
+    row = session.scalar(select(StorefrontItem).where(StorefrontItem.product_id == product_id))
+    item = session.scalar(select(PortfolioItem).where(PortfolioItem.product_id == product_id))
+    new = row is None and item is None
+    if row is None:
+        row = upsert_item(session, product_id)
+        item = session.scalar(select(PortfolioItem).where(PortfolioItem.product_id == product_id))
+    reason = _eligibility(product, row, item.state if item else None)
+    if reason:
+        raise StorefrontError(f"este produto não pode ficar na vitrine ({reason}), e toda campanha ou publicação precisa de uma página dele na vitrine.")
+    return new
+
+
+def publish_if_needed(session: Session, *, actor: str) -> dict | None:
+    """Republica a vitrine se algum produto pronto ainda não está no último envio (ou se ele nunca foi registrado). Sem vitrine configurada, não faz nada."""
+    if load_config(session) is None:
+        return None
+    last = session.scalar(select(AppSetting).where(AppSetting.key == LAST_PUBLISH_KEY))
+    published = set((last.value or {}).get("ids") or []) if last else set()
+    ready = {i["id"] for i in build_snapshot(session, create_links=False)["items"]}
+    if ready and ready <= published:
+        return None
+    return publish(session, actor=actor)
+
+
 def upsert_item(session: Session, product_id: int, **fields) -> StorefrontItem:
     """Cria ou atualiza o ajuste de um produto. Campos ausentes (`None`) não mudam; texto vazio limpa o campo."""
     product = session.get(Product, product_id)
@@ -394,7 +429,7 @@ def publish(session: Session, *, actor: str) -> dict:
     skipped = snapshot.pop("skipped")
     _call(cfg, "POST", "/api/loja/publicar", json=snapshot)
     result = {"at": datetime.now(UTC).isoformat(), "count": len(snapshot["items"]), "by": actor,
-              "untracked": sum(1 for i in snapshot["items"] if not i["tracked"])}
+              "untracked": sum(1 for i in snapshot["items"] if not i["tracked"]), "ids": [i["id"] for i in snapshot["items"]]}
     row = session.scalar(select(AppSetting).where(AppSetting.key == LAST_PUBLISH_KEY))
     if row is None:
         row = AppSetting(key=LAST_PUBLISH_KEY, value={})

@@ -9,10 +9,24 @@ from sqlalchemy.orm import Session
 from backend.deps import get_session
 from backend.security import Principal, record_action, require
 from core.db.creatives import CreativeCampaign
-from core.services import aistudio, content_pipeline, instagram, reels
+from core.services import aistudio, content_pipeline, instagram, reels, storefront
 from core.services.aistudio import AIStudioError
 
 router = APIRouter(tags=["redes sociais"])
+
+
+def _list_and_publish(session: Session, creative_id: int, actor: str) -> None:
+    """Todo post precisa de uma página na vitrine: põe o produto lá e republica a vitrine ANTES de postar (o post aponta para essa página)."""
+    creative = session.get(CreativeCampaign, creative_id)
+    if creative is None:
+        return
+    try:
+        storefront.ensure_listed(session, creative.product_id, actor=actor)
+        storefront.publish_if_needed(session, actor=actor)
+    except storefront.StorefrontError as exc:
+        session.commit()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
 
 
 class PublishIn(BaseModel):
@@ -68,6 +82,7 @@ def reel_video(creative_id: int, principal: Principal = Depends(require("portfol
 
 @router.post("/social/instagram/publish-reel", summary="PUBLICAR o slideshow como Reel (só o operador)", status_code=201)
 def publish_reel(payload: PublishIn, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    _list_and_publish(session, payload.creative_id, principal.username)
     try:
         post = instagram.publish_reel(session, payload.creative_id, caption=payload.caption, actor=principal.username)
     except instagram.InstagramError as exc:
@@ -89,6 +104,7 @@ def caption(creative_id: int, principal: Principal = Depends(require("portfolio.
 
 @router.post("/social/instagram/publish", summary="PUBLICAR no Instagram agora (só o operador; o agente não publica)", status_code=201)
 def publish(payload: PublishIn, principal: Principal = Depends(require("connectors.manage")), session: Session = Depends(get_session)) -> dict:
+    _list_and_publish(session, payload.creative_id, principal.username)
     try:
         post = instagram.publish_image(session, payload.creative_id, caption=payload.caption, deliverable_id=payload.deliverable_id,
                                        actor=principal.username)
@@ -163,6 +179,7 @@ def submit_review(payload: ReviewIn, principal: Principal = Depends(require("por
 
 @router.post("/social/auto/publish", summary="Publicar automaticamente (só com a chave ligada, parecer aprovado e dentro do teto do dia)", status_code=201)
 def auto_publish(payload: AutoPublishIn, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
+    _list_and_publish(session, payload.creative_id, principal.username)
     try:
         result = content_pipeline.auto_publish(session, payload.creative_id, payload.kind, caption=payload.caption, actor=principal.username)
     except content_pipeline.ContentError as exc:
