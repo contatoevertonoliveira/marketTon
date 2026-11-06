@@ -331,6 +331,15 @@ def test_direct_destination_dry_run_shows_the_final_page_and_creates_nothing(ses
         mc.create_ad(session, creative.id, daily_brl=12, days=2, destination="outro", now=NOW)
 
 
+def test_audience_limits_the_ad_to_men_or_women(session, meta):
+    _cards(session)
+    creative = _video_creative(session)
+    t = lambda a: mc.create_ad(session, creative.id, daily_brl=12, days=2, destination="direct", audience=a, now=NOW)["plan"]["targeting"]  # noqa: E731
+    assert t("men")["genders"] == [1] and t("women")["genders"] == [2] and "genders" not in t("all")
+    with pytest.raises(mc.AdsError, match="público"):
+        t("outro")
+
+
 def test_video_ad_goes_direct_through_our_tracked_link_and_is_born_paused(session, meta, monkeypatch):
     from types import SimpleNamespace
     _cards(session)

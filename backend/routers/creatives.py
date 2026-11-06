@@ -152,6 +152,7 @@ class AdCreate(BaseModel):
     variant: str | None = None
     post_id: str | None = Field(None, max_length=80)  # anunciar um post já publicado na Página (em vez de criar o post pelo app)
     destination: str = Field("page", pattern="^(page|direct)$")  # page = página do produto no Mural; direct = direto à página de compra (link rastreado nosso)
+    audience: str = Field("all", pattern="^(all|men|women)$")  # público do anúncio: todos, só homens ou só mulheres
 
 
 class GoogleAdCreate(BaseModel):
@@ -231,7 +232,7 @@ def put_ads_plan(payload: AdsPlanIn, principal: Principal = Depends(require("con
 def create_meta_ad(payload: AdCreate, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
     try:
         result = meta_campaigns.create_ad(session, payload.creative_id, daily_brl=payload.daily_brl, days=payload.days, dry_run=payload.dry_run,
-                                          actor=principal.username, variant=payload.variant, post_id=payload.post_id, destination=payload.destination,
+                                          actor=principal.username, variant=payload.variant, post_id=payload.post_id, destination=payload.destination, audience=payload.audience,
                                           labeled_link=_labeled_link)
     except meta_campaigns.AdsError as exc:
         session.commit()  # guarda a tentativa que falhou

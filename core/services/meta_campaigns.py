@@ -225,8 +225,11 @@ def _creative_copy(creative: CreativeCampaign) -> dict:
     return {}
 
 
+AUDIENCES = {"all": None, "men": [1], "women": [2]}  # `genders` da Meta: 1 = homens, 2 = mulheres
+
+
 def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float, days: int, now: datetime | None = None,
-               check_budget: bool = True, destination: str = "page") -> dict:
+               check_budget: bool = True, destination: str = "page", audience: str = "all") -> dict:
     """O que seria enviado à Meta (sem enviar). Valida tudo, inclusive as travas.
 
     `destination="page"` leva à página do produto no Mural (com UTM); `"direct"` leva direto à página de compra do marketplace, passando pelo
@@ -235,6 +238,8 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
         raise AdsError(f"o criativo está “{creative.status}”: só dá para anunciar criativo pronto.")
     if destination not in ("page", "direct"):
         raise AdsError("destino deve ser page (página do Mural) ou direct (página de compra do marketplace)")
+    if audience not in AUDIENCES:
+        raise AdsError("público deve ser all (todos), men (homens) ou women (mulheres)")
     video = _creative_piece(creative, "video") or _creative_piece(creative, "slideshow")  # o slideshow (fotos + trilha) também é um vídeo curto
     piece = (_creative_piece(creative, "thumbnail") or _creative_image(creative)) if video else _creative_image(creative)
     if video and not piece:
@@ -265,7 +270,9 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
     return {"name": tag, "objective": "OUTCOME_TRAFFIC", "daily_budget_brl": daily_brl, "days": days, "headline": headline, "message": caption,
             "image": piece["download"], "image_id": piece["id"], "link": url, "destination": destination, "format": "video" if video else "image",
             **({"video_id": video["id"]} if video else {}), **plan_extra,
-            "targeting": {"geo_locations": {"countries": ["BR"]}, "age_min": 18, "age_max": 65, "publisher_platforms": ["facebook", "instagram"]}}
+            "audience": audience,
+            "targeting": {"geo_locations": {"countries": ["BR"]}, "age_min": 18, "age_max": 65, "publisher_platforms": ["facebook", "instagram"],
+                          **({"genders": AUDIENCES[audience]} if AUDIENCES[audience] else {})}}
 
 
 def _page_token(session: Session) -> str:
@@ -331,13 +338,13 @@ def _check_post(session: Session, post_id: str, plan: dict) -> str:
 
 def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int = 3, dry_run: bool = True, actor: str = "agent",
               variant: str | None = None, now: datetime | None = None, post_id: str | None = None, destination: str = "page",
-              labeled_link=None) -> dict:
+              labeled_link=None, audience: str = "all") -> dict:
     """`labeled_link(product, sub_ids) -> url|None` (opcional): gera o link de afiliado do marketplace com rótulo do anúncio (sub-ID), para a venda voltar
     atribuída a ele no relatório do marketplace. Sem ele, ou se falhar, o anúncio direto usa o link de afiliado genérico do produto."""
     creative = session.get(CreativeCampaign, creative_id)
     if creative is None:
         raise AdsError(f"criativo {creative_id} não encontrado")
-    plan = build_plan(session, creative, daily_brl=daily_brl, days=days, now=now, destination=destination)
+    plan = build_plan(session, creative, daily_brl=daily_brl, days=days, now=now, destination=destination, audience=audience)
     if post_id:
         plan["post_id"] = post_id
         plan["origin"] = "post já publicado na Página (não usa a imagem do criativo: a Meta usa o post)"
