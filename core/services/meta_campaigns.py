@@ -229,7 +229,7 @@ AUDIENCES = {"all": None, "men": [1], "women": [2]}  # `genders` da Meta: 1 = ho
 
 
 def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float, days: int, now: datetime | None = None,
-               check_budget: bool = True, destination: str = "page", audience: str = "all") -> dict:
+               check_budget: bool = True, destination: str = "page", audience: str = "all", thumbnail_from: int | None = None) -> dict:
     """O que seria enviado à Meta (sem enviar). Valida tudo, inclusive as travas.
 
     `destination="page"` leva à página do produto no Mural (com UTM); `"direct"` leva direto à página de compra do marketplace, passando pelo
@@ -242,6 +242,11 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
         raise AdsError("público deve ser all (todos), men (homens) ou women (mulheres)")
     video = _creative_piece(creative, "video") or _creative_piece(creative, "slideshow")  # o slideshow (fotos + trilha) também é um vídeo curto
     piece = (_creative_piece(creative, "thumbnail") or _creative_image(creative)) if video else _creative_image(creative)
+    if video and thumbnail_from:  # miniatura de outro criativo do mesmo produto (quando a do próprio vídeo saiu com defeito)
+        other = session.get(CreativeCampaign, thumbnail_from)
+        if other is None or other.product_id != creative.product_id:
+            raise AdsError("a miniatura precisa ser de um criativo do mesmo produto.")
+        piece = _creative_piece(other, "thumbnail") or _creative_image(other) or piece
     if video and not piece:
         raise AdsError("o criativo tem vídeo, mas não tem a miniatura (peça `thumbnail` ou `image` com endereço de download).")
     if not piece:
@@ -339,13 +344,13 @@ def _check_post(session: Session, post_id: str, plan: dict) -> str:
 
 def create_ad(session: Session, creative_id: int, *, daily_brl: float, days: int = 3, dry_run: bool = True, actor: str = "agent",
               variant: str | None = None, now: datetime | None = None, post_id: str | None = None, destination: str = "page",
-              labeled_link=None, audience: str = "all") -> dict:
+              labeled_link=None, audience: str = "all", thumbnail_from: int | None = None) -> dict:
     """`labeled_link(product, sub_ids) -> url|None` (opcional): gera o link de afiliado do marketplace com rótulo do anúncio (sub-ID), para a venda voltar
     atribuída a ele no relatório do marketplace. Sem ele, ou se falhar, o anúncio direto usa o link de afiliado genérico do produto."""
     creative = session.get(CreativeCampaign, creative_id)
     if creative is None:
         raise AdsError(f"criativo {creative_id} não encontrado")
-    plan = build_plan(session, creative, daily_brl=daily_brl, days=days, now=now, destination=destination, audience=audience)
+    plan = build_plan(session, creative, daily_brl=daily_brl, days=days, now=now, destination=destination, audience=audience, thumbnail_from=thumbnail_from)
     if post_id:
         plan["post_id"] = post_id
         plan["origin"] = "post já publicado na Página (não usa a imagem do criativo: a Meta usa o post)"

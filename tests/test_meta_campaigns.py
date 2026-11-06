@@ -340,6 +340,15 @@ def test_audience_limits_the_ad_to_men_or_women(session, meta):
         t("outro")
 
 
+def test_thumbnail_can_come_from_another_creative_of_the_same_product(session, meta):
+    _cards(session)
+    creative = _video_creative(session)
+    with pytest.raises(mc.AdsError, match="miniatura"):
+        mc.create_ad(session, creative.id, daily_brl=12, days=2, destination="direct", thumbnail_from=999999, now=NOW)
+    plan = mc.create_ad(session, creative.id, daily_brl=12, days=2, destination="direct", thumbnail_from=creative.id, now=NOW)["plan"]
+    assert plan["video_id"] == "v1" and plan["image_id"] == "t1"
+
+
 def test_video_ad_goes_direct_through_our_tracked_link_and_is_born_paused(session, meta, monkeypatch):
     from types import SimpleNamespace
     _cards(session)
