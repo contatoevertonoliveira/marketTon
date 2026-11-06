@@ -272,6 +272,7 @@ def build_plan(session: Session, creative: CreativeCampaign, *, daily_brl: float
             **({"video_id": video["id"]} if video else {}), **plan_extra,
             "audience": audience,
             "targeting": {"geo_locations": {"countries": ["BR"]}, "age_min": 18, "age_max": 65, "publisher_platforms": ["facebook", "instagram"],
+                          "targeting_automation": {"advantage_audience": 0},  # a Meta exige dizer se o público Advantage fica ligado; desligado = respeita o gênero escolhido
                           **({"genders": AUDIENCES[audience]} if AUDIENCES[audience] else {})}}
 
 
