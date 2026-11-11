@@ -74,6 +74,8 @@ services:
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN:?defina DOMAIN no .env.production}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # o Caddy alcança o outro sistema que roda no próprio servidor (porta 18120)
     ports:
       - "80:80"
       - "443:443"

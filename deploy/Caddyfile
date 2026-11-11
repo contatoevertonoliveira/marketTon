@@ -21,3 +21,18 @@
 		file_server
 	}
 }
+
+# Outro sistema que roda neste servidor (Podman, usuário "outro"), na porta 18120. O Caddy está num container e alcança o servidor por
+# host.docker.internal (a ponte do Docker, 172.18.0.1): o outro sistema precisa escutar ali, não só em 127.0.0.1, e o ufw precisa liberar
+# 172.18.0.0/16 -> 18120. O DNS de app.felixgestor.com.br precisa apontar para este servidor antes do deploy (senão o HTTPS falha).
+app.felixgestor.com.br {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	reverse_proxy host.docker.internal:18120
+}
