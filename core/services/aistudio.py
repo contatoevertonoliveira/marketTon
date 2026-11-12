@@ -41,6 +41,9 @@ VIDEO_STYLES = ("presenter_f", "presenter_m", "hands_f", "hands_m")
 # Apresentador(a) = personagem cadastrado no PC do estúdio (`characters/<id>`; id errado vira apresentadora genérica, sem aviso). O vídeo com personagem roda no
 # PC (`providers.engine = "colab"`, a fila do MiniMax); sem isso a campanha cairia nas APIs pagas do servidor. `colab_fallback: auto` mantém a reserva.
 CHARACTERS = {"f": "amanda-suarez", "m": "lucas-ferrer"}
+_PIN_NOTES = ("Imagem de PIN para o Pinterest: a melhor versão possível do produto da foto de referência, com a máxima nitidez e riqueza de detalhes, "
+              "limpa e sem poluição, em um ambiente que REALCE o produto (cenário coerente com o uso, luz natural suave, profundidade de campo, composição de revista), "
+              "produto grande, inteiro e centralizado, cores fiéis à foto. Formato vertical. Sem texto, sem preço, sem logotipo, sem selo, sem mãos e sem pessoas.")
 _PRESENTER_NOTES = ("{who} apresenta o produto da foto de referência segurando-o, em português do Brasil, SÓ com as características que constam na descrição "
                     "e nos benefícios. Mostrar o produto idêntico à foto. Sem crianças em cena, sem prometer resultado, sem preço falado. Anúncio de feed em vídeo curto de "
                     "8 segundos: ritmo rápido, direto ao ponto. A fala TERMINA, no finalzinho, com a frase \"Confira no link\".")
@@ -62,7 +65,7 @@ QUALITIES = ("economy", "standard", "premium")
 CATEGORY_MAP = {"Eletrônicos": "eletronicos", "Casa": "casa_cozinha", "Moda": "moda", "Beleza": "beleza", "Pet": "pet", "Games": "outros",
                 "Cursos": "servicos", "Achados diversos": "outros"}
 ANGLES = ("problem_solution", "demo", "comparison", "offer", "unboxing", "ugc_style")
-FORMATS = ("images", "video")  # images = só imagens e texto (sem vídeo, bem mais barato)
+FORMATS = ("video", "images", "pin")  # pin = uma imagem vertical limpa e nítida para o Pinterest
 
 
 class AIStudioError(RuntimeError):
@@ -183,7 +186,8 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
         benefits.append(f"{product.sold_quantity} vendidos")
     if discounted:
         benefits.append(f"Preço abaixo do anterior ({round((1 - product.price / product.original_price) * 100)}% menos)")
-    images_only = formats == "images"
+    pin = formats == "pin"
+    images_only = formats in ("images", "pin")
     notes = "Mostrar só o produto da foto de referência. Sem pessoas reais identificáveis e sem promessas de resultado."
     short = video_style in VIDEO_STYLES and not images_only
     male = video_style.endswith("_m")
@@ -200,10 +204,14 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
     if images_only:
         notes += (" Peça de propaganda profissional (merchandising): produto em destaque, cenário limpo e coerente com o uso do produto, "
                   "composição de anúncio de marca, espaço para título e preço. Não desenhar texto na imagem: título, preço e selo entram na montagem.")
+    if pin:
+        notes = (_PIN_NOTES)
     if extra_notes:
         notes += " Ajuste pedido ao refazer: " + extra_notes.strip()[:600]
     copy_piece = {"kind": "copy", "channel": "instagram", "fields": ["caption", "hashtags", "headline"]}
-    if images_only:
+    if pin:
+        deliverables = [{"kind": "image", "channel": "default", "aspect_ratio": "9:16"}]  # só a imagem: sem texto de anúncio, sem selo de preço
+    elif images_only:
         deliverables = [{"kind": "image", "channel": "feed", "aspect_ratio": "4:5"}, {"kind": "image", "channel": "feed", "aspect_ratio": "1:1"},
                         {"kind": "image", "channel": "instagram", "aspect_ratio": "9:16"}, copy_piece,
                         # Slideshow 9:16 de 10 a 15 s com trilha, montado pelo estúdio (ffmpeg local, sem IA; trilha < US$ 0,01).
@@ -222,7 +230,7 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
         "approval": {"mode": "none"},
         "product": {"id": str(product.id), "name": title, **({"benefits": benefits} if benefits else {}), "category": CATEGORY_MAP.get(storefront.guess_category(product.title, product.marketplace.value), "outros"),
                     "description": description, "images": [{"url": storefront._first_image(product), "role": "main"}],
-                    "forbidden_claims": FORBIDDEN_CLAIMS, **({"price": price} if price else {}), **({"url": store_url} if store_url and not short and not direct else {})},
+                    "forbidden_claims": FORBIDDEN_CLAIMS, **({"price": price} if price and not pin else {}), **({"url": store_url} if store_url and not short and not direct else {})},
         "brand": {"name": storefront.get_meta(session)["name"], "colors": {"primary": "#A71920", "secondary": "#171923", "text": "#FFFFFF"},
                   "voice_tone": ["direto", "amigável"], "banned_words": BANNED_WORDS,
                   **({"logo": {"asset_id": logo_asset, "placement": LOGO_PLACEMENT}} if logo_asset else {})},
@@ -231,9 +239,9 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
                      "presenter": ({"type": "character", "id": CHARACTERS["m" if male else "f"], "voice_sample": False} if short and presenter == "virtual"
                                    else {"type": "virtual" if with_presenter else "none"}),
                      "voice": {"style": ("warm_male" if male else "warm_female") if short else "warm_male"}, "music": {"mood": "upbeat_modern", "enabled": not images_only},
-                     "cta": ({"text": "Confira no link"} if short else {"text": f"Compre na {market}"} if direct else {"text": "Ver na loja", **({"url": store_url} if store_url else {})}),
+                     **({} if pin else {"cta": ({"text": "Confira no link"} if short else {"text": f"Compre na {market}"} if direct else {"text": "Ver na loja", **({"url": store_url} if store_url else {})})}),
                      "notes": notes,
-                     **({"offer": {"headline": f"De R$ {product.original_price:.2f} por R$ {product.price:.2f}".replace(".", ",")}} if discounted else {})},
+                     **({"offer": {"headline": f"De R$ {product.original_price:.2f} por R$ {product.price:.2f}".replace(".", ",")}} if discounted and not pin else {})},
         "deliverables": deliverables,
         "compliance": {"platforms": ["meta"], "ai_disclosure": True, "sensitive_category": None},
     }
@@ -287,13 +295,13 @@ def create(session: Session, product_id: int, *, mode: str = "sandbox", quality:
         raise AIStudioError(f"o orçamento da campanha (US$ {budget:g}) passa do teto do operador (US$ {cfg.max_usd:g})")
     product = _product_for(session, product_id)
     n = session.query(CreativeCampaign).filter(CreativeCampaign.product_id == product_id).count() + 1
-    ref = f"mural-p{product_id}-{'i' if formats == 'images' else 'v'}{mode[0]}{n}-{datetime.now(UTC):%y%m%d%H%M}"
+    ref = f"mural-p{product_id}-{'p' if formats == 'pin' else 'i' if formats == 'images' else 'v'}{mode[0]}{n}-{datetime.now(UTC):%y%m%d%H%M}"
     record = CreativeCampaign(product_id=product_id, external_ref=ref, mode=mode, status="requested", quality=quality, angle=angle,
                               budget_usd=budget, created_by=actor[:64])
     session.add(record)
     session.flush()  # o external_ref fica guardado ANTES da chamada: retentar nunca duplica
     payload = build_payload(session, product, external_ref=ref, mode=mode, quality=quality, budget_usd=budget, angle=angle,
-                            hook_variants=hook_variants, callback_url=cfg.callback_url, logo_asset=ensure_logo_asset(session, cfg),
+                            hook_variants=hook_variants, callback_url=cfg.callback_url, logo_asset=None if formats == "pin" else ensure_logo_asset(session, cfg),
                             store_url=_store_url(session, product_id), formats=formats, extra_notes=extra_notes,
                             presenter=presenter, video_style=video_style, direct=direct)
     record.request = payload

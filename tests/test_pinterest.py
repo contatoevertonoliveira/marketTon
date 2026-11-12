@@ -68,7 +68,7 @@ def _product(session, n=1, title="[Frete Grátis] Espelho de Corpo Inteiro 2026 
 
 def _creative(session, product, aspect="2:3"):
     manifest = {"deliverables": [{"id": "d9", "kind": "image", "status": "ready", "aspect_ratio": aspect, "url_signed": {"href": "https://studio.exemplo.com/d/9?sig=x"}}]}
-    c = CreativeCampaign(product_id=product.id, external_ref=f"mural-p{product.id}-il1", campaign_id="cmp_1", mode="live", status="completed", quality="economy", budget_usd=1.0, manifest=manifest)
+    c = CreativeCampaign(product_id=product.id, external_ref=f"mural-p{product.id}-pl1-2611120000", campaign_id="cmp_1", mode="live", status="completed", quality="economy", budget_usd=1.0, manifest=manifest)
     session.add(c)
     session.flush()
     return c
@@ -124,16 +124,50 @@ def test_draft_prefers_the_creative_image_and_links_to_the_mural_page(session):
     assert pin_svc.candidates(session) == []  # produto com pin ativo não volta para a fila de candidatos
 
 
-def test_draft_without_creative_uses_the_product_photo(session):
+def test_draft_without_a_pin_image_asks_the_studio_for_a_new_one_and_waits(session, monkeypatch, api):
     _cards(session)
     prod = _product(session)
+    asked = []
+
+    class Cfg:
+        max_usd = 1.0
+
+    def fake_create(sess, product_id, **kw):
+        asked.append(kw)
+        c = CreativeCampaign(product_id=product_id, external_ref=f"mural-p{product_id}-pl1-2611120001", campaign_id="cmp_7", mode="live", status="queued", quality=kw["quality"],
+                             budget_usd=kw["budget_usd"], manifest={})
+        sess.add(c)
+        sess.flush()
+        return c
+
+    monkeypatch.setattr(pin_svc.aistudio, "_require", lambda s: Cfg())
+    monkeypatch.setattr(pin_svc.aistudio, "create", fake_create)
+    monkeypatch.setattr(pin_svc.aistudio, "refresh", lambda sess, c: c)  # o estúdio ainda está gerando
     pin = pin_svc.create_draft(session, prod.id, actor="op")
-    assert pin.image_ref == "product:https://cf.shopee.com.br/file/x" and pin.creative_campaign_id is None
+    assert asked == [{"mode": "live", "quality": "premium", "budget_usd": 0.5, "actor": "op", "formats": "pin"}]  # imagem nova, a mais nítida (2K), só imagem
+    assert pin.image_ref.startswith("product:") and pin.creative_campaign_id and pin_svc.out(pin)["image_ready"] is False
+    with pytest.raises(pin_svc.PinterestError, match="imagem nova"):  # a foto crua do marketplace nunca vai para o Pinterest
+        pin_svc.publish(session, pin.id, actor="op")
+    pin_svc.approve(session, pin.id)
+    assert pin_svc.publish_due(session, now=NOW) == []
+    c = session.get(CreativeCampaign, pin.creative_campaign_id)  # o estúdio entrega
+    c.status, c.manifest = "completed", {"deliverables": [{"id": "dlv_1", "kind": "image", "status": "ready", "aspect_ratio": "9:16", "url_signed": {"href": "https://studio/x"}}]}
+    assert pin_svc.refresh_images(session) == 1 and pin.image_ref == f"creative:{c.id}:dlv_1" and pin_svc.out(pin)["image_ready"]
+    assert pin_svc.publish_due(session, now=NOW) == [pin.id]
+
+
+def test_ad_images_with_price_and_badge_are_not_used_for_pins(session):
+    _cards(session)
+    prod = _product(session)
+    ad = _creative(session, prod)
+    ad.external_ref = f"mural-p{prod.id}-il1-2611120000"  # arte de anúncio (tem preço e selo): não serve para o pin
+    assert pin_svc.pick_image(session, prod)[0].startswith("product:")
 
 
 def test_publish_creates_the_board_sends_base64_and_keeps_the_link(session, api):
     _cards(session)
     prod = _product(session)
+    _creative(session, prod)
     pin = pin_svc.create_draft(session, prod.id, actor="op", board="Espelhos")
     pin_svc.approve(session, pin.id)
     done = pin_svc.publish(session, pin.id, actor="op", now=NOW)
@@ -146,6 +180,7 @@ def test_publish_creates_the_board_sends_base64_and_keeps_the_link(session, api)
 def test_failure_is_saved_on_the_pin_and_can_be_retried(session, monkeypatch, api):
     _cards(session)
     prod = _product(session)
+    _creative(session, prod)
     pin = pin_svc.create_draft(session, prod.id, actor="op")
     monkeypatch.setattr(pin_svc.requests, "request", lambda *a, **k: _Resp(403, {"message": "sem permissão"}))
     with pytest.raises(pin_svc.PinterestError, match="pins:write"):
@@ -159,6 +194,7 @@ def test_only_approved_pins_go_out_within_the_daily_cap_and_gap(session, api):
     pins = []
     for n in range(1, 5):
         prod = _product(session, n)
+        _creative(session, prod)
         pins.append(pin_svc.create_draft(session, prod.id, actor="op"))
     assert pin_svc.publish_due(session, now=NOW) == []  # rascunho não sai sozinho
     for p in pins[:3]:
@@ -173,6 +209,7 @@ def test_only_approved_pins_go_out_within_the_daily_cap_and_gap(session, api):
 def test_scheduled_pin_waits_for_its_time(session, api):
     _cards(session)
     prod = _product(session)
+    _creative(session, prod)
     pin = pin_svc.create_draft(session, prod.id, actor="op")
     pin_svc.approve(session, pin.id, scheduled_for=NOW + timedelta(hours=2))
     assert pin_svc.publish_due(session, now=NOW) == []
@@ -194,6 +231,7 @@ def test_without_the_key_nothing_goes_out_but_the_kit_is_ready(session):
 def test_edit_rules_and_metrics(session, api):
     _cards(session)
     prod = _product(session)
+    _creative(session, prod)
     pin = pin_svc.create_draft(session, prod.id, actor="op")
     assert pin_svc.update(session, pin.id, {"title": "Espelho grande para quarto"}).title == "Espelho grande para quarto"
     with pytest.raises(pin_svc.PinterestError):

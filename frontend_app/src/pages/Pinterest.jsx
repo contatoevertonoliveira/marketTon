@@ -66,7 +66,8 @@ function PinCard({ pin, canPublish, onChanged, onError }) {
     <div style={{ ...card, display: "flex", gap: 16, flexWrap: "wrap" }}>
       <div style={{ width: 170, flex: "0 0 170px" }}>
         {src ? <img src={src} alt={pin.alt_text || pin.title} style={{ width: "100%", borderRadius: 8, background: "#f6f9fc", aspectRatio: "2/3", objectFit: "cover" }} /> : <div style={{ aspectRatio: "2/3", background: "#f6f9fc", borderRadius: 8 }} />}
-        {src ? <a href={src} download={`pin-${pin.id}.jpg`} style={{ fontSize: 12, color: "#5e72e4", display: "block", marginTop: 6 }}>baixar imagem</a> : null}
+        {!pin.image_ready && pin.status !== "published" ? <div style={{ fontSize: 11, color: "#b8720a", marginTop: 6 }}>Foto provisória do marketplace. A imagem nova (limpa e nítida) está sendo gerada e entra aqui sozinha; o pin só sai com ela.</div> : null}
+        {src && pin.image_ready ? <a href={src} download={`pin-${pin.id}.jpg`} style={{ fontSize: 12, color: "#5e72e4", display: "block", marginTop: 6 }}>baixar imagem</a> : null}
       </div>
       <div style={{ flex: "1 1 340px", minWidth: 280 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
@@ -97,6 +98,7 @@ function PinCard({ pin, canPublish, onChanged, onError }) {
             {dirty && !locked ? <button style={btn("#eef0f6", INK)} disabled={busy} onClick={() => run(saveFirst)}>Salvar edição</button> : null}
             {pin.status !== "rejected" ? <button style={btn("#fff4e5", "#b8720a")} disabled={busy} onClick={() => run(async () => { await saveFirst(); await postJSON(`/pinterest/pins/${pin.id}/approve`, { scheduled_for: f.scheduled_for ? new Date(f.scheduled_for).toISOString() : null }); })}>{pin.status === "approved" ? "Reaprovar" : "Aprovar (sai sozinho)"}</button> : null}
             {canPublish && pin.status !== "rejected" ? <button style={btn("#2dce89", "#fff")} disabled={busy} onClick={() => run(async () => { await saveFirst(); await postJSON(`/pinterest/pins/${pin.id}/publish`, {}); })}>Publicar agora</button> : null}
+            <button style={btn("#eef2ff", "#3b4fb8")} disabled={busy} title="Pede ao AI Studio outra imagem: limpa, nítida (2K) e em ambiente que realce o produto. Gasta cerca de US$ 0,12." onClick={() => run(() => postJSON(`/pinterest/pins/${pin.id}/new-image`, {}))}>{pin.image_ready ? "Gerar outra imagem" : "Gerar nova imagem"}</button>
             <button style={btn("#eef2ff", "#3b4fb8")} onClick={() => copy(kit)}>Copiar kit (texto + link)</button>
             {pin.status !== "rejected" ? <button style={btn("#fef1f4", RED)} disabled={busy} onClick={() => run(() => postJSON(`/pinterest/pins/${pin.id}/reject`, {}))}>Descartar</button> : null}
           </div>
@@ -125,6 +127,13 @@ export default function Pinterest() {
     }
   }, [filter]);
   useEffect(() => { load(); }, [load]);
+  // Enquanto o estúdio gera as imagens novas, confere de tempos em tempos.
+  const waiting = pins.some((p) => !p.image_ready && ["draft", "approved", "failed"].includes(p.status));
+  useEffect(() => {
+    if (!waiting) return undefined;
+    const id = setInterval(load, 25000);
+    return () => clearInterval(id);
+  }, [waiting, load]);
 
   const act = async (fn, ok) => {
     setBusy(true); setErr(""); setMsg("");

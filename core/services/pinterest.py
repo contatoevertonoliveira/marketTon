@@ -183,24 +183,81 @@ def suggest_copy(product: Product, department: str, blurb: str | None = None) ->
     return {"title": title, "description": desc[:DESC_MAX], "keywords": ", ".join(kws), "alt_text": _fit(f"Foto do produto: {base}", 480)}
 
 
+PIN_QUALITY = "premium"  # Nano Banana Pro em 2K: a maior definição que o estúdio oferece (≈ US$ 0,12 por imagem)
+PIN_BUDGET_USD = 0.5
+
+
+def _is_pin_creative(c: CreativeCampaign) -> bool:
+    return bool(re.search(r"-p[ls]\d+-", c.external_ref or ""))  # mural-p<produto>-p<modo><n>-<data>: criativo pedido no formato "pin"
+
+
+def pin_image_of(creative: CreativeCampaign | None) -> str | None:
+    """A imagem pronta de um criativo de pin ("creative:<id>:<peça>"), ou None enquanto não houver."""
+    if creative is None or not _is_pin_creative(creative):
+        return None
+    for d in aistudio.deliverables(creative):
+        if d.get("kind") == "image" and d.get("download"):
+            return f"creative:{creative.id}:{d['id']}"
+    return None
+
+
+def _photo(product: Product) -> str | None:
+    return next((u for u in (product.images or []) if isinstance(u, str) and u.startswith("https://")), None)
+
+
 def pick_image(session: Session, product: Product) -> tuple[str, int | None]:
-    """A melhor imagem: peça `image` pronta de um criativo do produto (2:3 > 4:5 > 9:16 > qualquer); senão a foto do produto."""
-    best, rank = None, 99
-    order = {"2:3": 0, "4:5": 1, "9:16": 2}
-    for c in session.scalars(select(CreativeCampaign).where(CreativeCampaign.product_id == product.id, CreativeCampaign.hidden.is_(False),
-                                                           CreativeCampaign.mode == "live", CreativeCampaign.status.in_(("completed", "partial")))
-                             .order_by(CreativeCampaign.id.desc())):
-        for d in aistudio.deliverables(c):
-            if d.get("kind") == "image" and d.get("download"):
-                r = order.get(d.get("aspect_ratio"), 5)
-                if r < rank:
-                    best, rank = (c.id, d["id"]), r
-    if best:
-        return f"creative:{best[0]}:{best[1]}", best[0]
-    photo = next((u for u in (product.images or []) if isinstance(u, str) and u.startswith("https://")), None)
+    """A imagem do pin: a de um criativo de PIN (imagem nova, limpa e de alta definição) ainda não usada; senão a foto do produto, só como espera."""
+    used = {i for (i,) in session.execute(select(PinterestPin.creative_campaign_id).where(PinterestPin.creative_campaign_id.is_not(None), PinterestPin.status != "rejected"))}
+    for c in session.scalars(select(CreativeCampaign).where(CreativeCampaign.product_id == product.id, CreativeCampaign.hidden.is_(False), CreativeCampaign.mode == "live",
+                                                           CreativeCampaign.status.in_(("completed", "partial"))).order_by(CreativeCampaign.id.desc())):
+        ref = pin_image_of(c)
+        if ref and c.id not in used:
+            return ref, c.id
+    photo = _photo(product)
     if not photo:
         raise PinterestError("o produto não tem foto nem imagem de criativo para o pin.")
     return f"product:{photo}", None
+
+
+def request_image(session: Session, pin: PinterestPin, *, actor: str) -> PinterestPin:
+    """Pede ao AI Studio uma imagem NOVA para o pin: versão limpa e nítida do produto, num ambiente que o realce (vertical 9:16, 2K).
+    A imagem entra no pin sozinha quando ficar pronta (`refresh_images`). Gasta crédito do estúdio (≈ US$ 0,12), dentro do teto do operador."""
+    if pin.status in ("published", "rejected"):
+        raise PinterestError("o pin já foi publicado ou descartado.")
+    try:
+        cfg = aistudio._require(session)
+        record = aistudio.create(session, pin.product_id, mode="live", quality=PIN_QUALITY, budget_usd=min(PIN_BUDGET_USD, cfg.max_usd), actor=actor, formats="pin")
+    except aistudio.AIStudioError as exc:
+        raise PinterestError(f"não consegui pedir a imagem ao AI Studio: {exc}") from exc
+    pin.creative_campaign_id = record.id
+    photo = _photo(session.get(Product, pin.product_id))
+    if pin.image_ref.startswith("creative:") and photo:  # a imagem anterior sai: o pin espera a nova
+        pin.image_ref = f"product:{photo}"
+    pin.error = None
+    session.flush()
+    return pin
+
+
+def refresh_images(session: Session) -> int:
+    """Pins que esperam a imagem nova: consulta o estúdio (os que ainda geram) e põe a imagem pronta no pin. Devolve quantos ficaram prontos."""
+    n = 0
+    for pin in session.scalars(select(PinterestPin).where(PinterestPin.status.in_(("draft", "approved", "failed")), PinterestPin.creative_campaign_id.is_not(None),
+                                                        PinterestPin.image_ref.like("product:%"))):
+        creative = session.get(CreativeCampaign, pin.creative_campaign_id)
+        if creative is not None and creative.status not in aistudio.FINAL_STATUSES:
+            try:
+                aistudio.refresh(session, creative)
+            except aistudio.AIStudioError as exc:
+                logger.info("imagem do pin %s: estúdio indisponível: %s", pin.id, exc)
+                continue
+        ref = pin_image_of(creative)
+        if ref:
+            pin.image_ref, pin.error = ref, None
+            n += 1
+        elif creative is not None and creative.status in ("failed", "canceled"):
+            pin.error = f"a imagem nova falhou no estúdio: {(creative.error or creative.status)[:300]}. Peça outra."
+    session.flush()
+    return n
 
 
 def fetch_image(session: Session, image_ref: str) -> bytes:
@@ -275,6 +332,11 @@ def create_draft(session: Session, product_id: int, *, actor: str, board: str | 
     session.flush()
     pin.link_url = _link(session, product, mode, pin.id)
     session.flush()
+    if ref.startswith("product:"):  # regra do operador: o pin leva uma imagem NOVA, limpa e de alta definição, nunca a foto crua do marketplace
+        try:
+            request_image(session, pin, actor=actor)
+        except PinterestError as exc:
+            pin.error = str(exc)[:500]
     return pin
 
 
@@ -355,6 +417,8 @@ def publish(session: Session, pin_id: int, *, actor: str, now: datetime | None =
     if pin.status in ("published", "rejected"):
         raise PinterestError(f"o pin está “{pin.status}”.")
     cfg = _require(session)
+    if not pin.image_ref.startswith("creative:"):
+        raise PinterestError("a imagem nova do pin ainda não está pronta (o estúdio está gerando, ou falhou): use “Gerar nova imagem” e espere ficar pronta.")
     try:
         storefront.ensure_listed(session, pin.product_id, actor=actor)
         image = fetch_image(session, pin.image_ref)
@@ -383,7 +447,9 @@ def publish_due(session: Session, *, now: datetime | None = None, actor: str = "
     if cfg is None:
         return []
     done = []
-    pending = list(session.scalars(select(PinterestPin).where(PinterestPin.status == "approved", (PinterestPin.scheduled_for.is_(None)) | (PinterestPin.scheduled_for <= now))
+    refresh_images(session)
+    pending = list(session.scalars(select(PinterestPin).where(PinterestPin.status == "approved", PinterestPin.image_ref.like("creative:%"),
+                                                            (PinterestPin.scheduled_for.is_(None)) | (PinterestPin.scheduled_for <= now))
                                    .order_by(PinterestPin.scheduled_for, PinterestPin.id)))
     for pin in pending:
         if published_last_24h(session, now) >= cfg.max_per_day:
@@ -434,7 +500,7 @@ def out(pin: PinterestPin, product: Product | None = None) -> dict:
             "board_name": pin.board_name, "title": pin.title, "description": pin.description, "alt_text": pin.alt_text, "keywords": pin.keywords,
             "link_url": pin.link_url, "link_mode": pin.link_mode, "status": pin.status, "scheduled_for": pin.scheduled_for.isoformat() if pin.scheduled_for else None,
             "published_at": pin.published_at.isoformat() if pin.published_at else None, "permalink": pin.permalink, "error": pin.error,
-            "image_file": f"/pinterest/pins/{pin.id}/image", "impressions": pin.impressions, "saves": pin.saves, "pin_clicks": pin.pin_clicks,
+            "image_file": f"/pinterest/pins/{pin.id}/image", "image_ready": pin.image_ref.startswith("creative:"), "impressions": pin.impressions, "saves": pin.saves, "pin_clicks": pin.pin_clicks,
             "outbound_clicks": pin.outbound_clicks, "created_by": pin.created_by}
 
 

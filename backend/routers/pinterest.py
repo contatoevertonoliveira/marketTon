@@ -34,6 +34,8 @@ def status(principal: Principal = Depends(require("portfolio.view")), session: S
 
 @router.get("/pins", summary="Pins (mais recentes primeiro); `status` filtra")
 def pins(status: str | None = None, limit: int = 60, principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
+    pinterest.refresh_images(session)  # imagens novas que o estúdio acabou de entregar
+    session.commit()
     return {"pins": pinterest.list_pins(session, status, limit)}
 
 
@@ -113,6 +115,21 @@ def publish(pin_id: int, principal: Principal = Depends(require("connectors.mana
         session.commit()  # guarda a falha no pin
         raise _fail(exc) from exc
     record_action(session, principal, action="pinterest.published", resource_type="pin", resource_id=str(pin_id), detail=pin.permalink)
+    session.commit()
+    return _view(session, pin)
+
+
+@router.post("/pins/{pin_id}/new-image", summary="Pedir ao AI Studio uma imagem NOVA para o pin (limpa, nítida, em ambiente que realce o produto)", status_code=201)
+def new_image(pin_id: int, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
+    pin = session.get(PinterestPin, pin_id)
+    if pin is None:
+        raise HTTPException(status_code=404, detail="pin não encontrado")
+    try:
+        pinterest.request_image(session, pin, actor=principal.username)
+    except pinterest.PinterestError as exc:
+        session.commit()
+        raise _fail(exc) from exc
+    record_action(session, principal, action="pinterest.new_image", resource_type="pin", resource_id=str(pin_id))
     session.commit()
     return _view(session, pin)
 
