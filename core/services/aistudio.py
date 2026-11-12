@@ -12,6 +12,8 @@ Regras (as do contrato e as do operador):
 """
 from __future__ import annotations
 
+import re
+
 import hashlib
 import hmac
 import json
@@ -161,7 +163,8 @@ def ensure_logo_asset(session: Session, cfg: AIStudioConfig) -> str | None:
 
 def build_payload(session: Session, product: Product, *, external_ref: str, mode: str, quality: str, budget_usd: float,
                   angle: str, hook_variants: int, callback_url: str, logo_asset: str | None, store_url: str | None,
-                  formats: str = "video", extra_notes: str | None = None, presenter: str = "none", video_style: str = "", direct: bool = False) -> dict:
+                  formats: str = "video", extra_notes: str | None = None, presenter: str = "none", video_style: str = "", direct: bool = False,
+                  pin_aspect: str = "9:16") -> dict:
     row = None
     for p, r, _ in storefront._candidates(session):
         if p.id == product.id:
@@ -210,7 +213,7 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
         notes += " Ajuste pedido ao refazer: " + extra_notes.strip()[:600]
     copy_piece = {"kind": "copy", "channel": "instagram", "fields": ["caption", "hashtags", "headline"]}
     if pin:
-        deliverables = [{"kind": "image", "channel": "default", "aspect_ratio": "9:16"}]  # só a imagem: sem texto de anúncio, sem selo de preço
+        deliverables = [{"kind": "image", "channel": "default", "aspect_ratio": pin_aspect}]  # só a imagem: sem texto de anúncio, sem selo de preço
     elif images_only:
         deliverables = [{"kind": "image", "channel": "feed", "aspect_ratio": "4:5"}, {"kind": "image", "channel": "feed", "aspect_ratio": "1:1"},
                         {"kind": "image", "channel": "instagram", "aspect_ratio": "9:16"}, copy_piece,
@@ -270,6 +273,32 @@ def _store_url(session: Session, product_id: int) -> str | None:
     return f"{cfg.public_url}/#p{product_id}" if cfg else None
 
 
+ASPECT_PREFERENCE = ("2:3", "9:16", "4:5", "1:1")  # para o pin: a mais próxima do 2:3 do Pinterest que o estúdio aceitar
+_RES = re.compile(r"(\d+(?:\.\d+)?)\s*[kK]")
+
+
+def capabilities(session: Session) -> dict:
+    return _call(_require(session), "GET", "/capabilities")
+
+
+def best_image_setup(session: Session) -> dict:
+    """Regra do operador: usar sempre o modelo que a API do AI Studio oferece AGORA. Lê `GET /capabilities` e escolhe o motor de imagem de maior
+    resolução (empate: o de maior custo estimado, que é o de maior qualidade) e a proporção aceita mais próxima de 2:3. Nada de modelo fixo no código."""
+    caps = capabilities(session)
+    engines = [e for e in caps.get("image_engines", []) if e.get("quality")]
+    if not engines:
+        raise AIStudioError("o AI Studio não informou nenhum motor de imagem em /capabilities.")
+
+    def rank(e: dict) -> tuple[float, float]:
+        m = _RES.search(str(e.get("resolution") or ""))
+        return float(m.group(1)) if m else 0.0, float(e.get("est_usd_per_image") or 0)
+
+    best = max(engines, key=rank)
+    ratios = caps.get("image_only_aspect_ratios") or []
+    aspect = next((a for a in ASPECT_PREFERENCE if a in ratios), ratios[0] if ratios else "9:16")
+    return {"quality": best["quality"], "aspect": aspect, "engine": best.get("engine"), "resolution": best.get("resolution"), "est_usd": float(best.get("est_usd_per_image") or 0.12)}
+
+
 def estimate(session: Session, product_id: int, *, quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2,
              formats: str = "video", presenter: str = "none", video_style: str = "", direct: bool = False) -> dict:
     cfg = _require(session)
@@ -282,9 +311,10 @@ def estimate(session: Session, product_id: int, *, quality: str = "economy", ang
 
 def create(session: Session, product_id: int, *, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution",
            hook_variants: int = 2, budget_usd: float | None = None, actor: str = "agent", formats: str = "video",
-           extra_notes: str | None = None, presenter: str = "none", video_style: str = "", direct: bool = False) -> CreativeCampaign:
+           extra_notes: str | None = None, presenter: str = "none", video_style: str = "", direct: bool = False,
+           pin_aspect: str = "9:16") -> CreativeCampaign:
     cfg = _require(session)
-    if (mode not in ("sandbox", "live") or quality not in QUALITIES or angle not in ANGLES or formats not in FORMATS or presenter not in ("none", "virtual")
+    if (mode not in ("sandbox", "live") or (quality not in QUALITIES and not (formats == "pin" and quality)) or angle not in ANGLES or formats not in FORMATS or presenter not in ("none", "virtual")
             or video_style not in ("", *VIDEO_STYLES)):
         raise AIStudioError(f"parâmetros inválidos (modo sandbox|live; qualidade {', '.join(QUALITIES)}; ângulo {', '.join(ANGLES)})")
     if mode == "live" and not cfg.allow_live:
@@ -303,7 +333,7 @@ def create(session: Session, product_id: int, *, mode: str = "sandbox", quality:
     payload = build_payload(session, product, external_ref=ref, mode=mode, quality=quality, budget_usd=budget, angle=angle,
                             hook_variants=hook_variants, callback_url=cfg.callback_url, logo_asset=None if formats == "pin" else ensure_logo_asset(session, cfg),
                             store_url=_store_url(session, product_id), formats=formats, extra_notes=extra_notes,
-                            presenter=presenter, video_style=video_style, direct=direct)
+                            presenter=presenter, video_style=video_style, direct=direct, pin_aspect=pin_aspect)
     record.request = payload
     try:
         body = _call(cfg, "POST", "/campaigns", idempotency_key=ref[:80], json=payload)

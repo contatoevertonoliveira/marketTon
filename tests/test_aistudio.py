@@ -260,3 +260,21 @@ def test_direct_art_calls_to_buy_on_the_marketplace_and_never_prints_the_mural_a
     body = ai.build_payload(session, product, external_ref="r", mode="live", quality="economy", budget_usd=0.5, angle="problem_solution", hook_variants=1,
                             callback_url="", logo_asset=None, store_url="https://loja.exemplo/p/1", formats="images", direct=True)
     assert body["creative"]["cta"]["text"].startswith("Compre na ") and "url" not in body["creative"]["cta"] and "url" not in body["product"]
+
+
+def test_pin_uses_the_best_image_model_the_api_offers_today(monkeypatch):
+    """Regra do operador: nada de modelo fixo. Maior resolução ganha; a proporção é a mais próxima de 2:3 que o estúdio aceitar."""
+    caps = {"image_engines": [{"quality": "economy", "engine": "A", "resolution": "1K", "est_usd_per_image": 0.03},
+                              {"quality": "premium", "engine": "B", "resolution": "2K", "est_usd_per_image": 0.12},
+                              {"quality": "ultra", "engine": "C", "resolution": "4K", "est_usd_per_image": 0.25}],
+            "image_only_aspect_ratios": ["4:5", "1:1", "9:16"]}
+    monkeypatch.setattr(ai, "capabilities", lambda session: caps)
+    best = ai.best_image_setup(None)
+    assert (best["quality"], best["aspect"], best["resolution"]) == ("ultra", "9:16", "4K")
+    caps["image_engines"].pop()
+    caps["image_only_aspect_ratios"].append("2:3")
+    best = ai.best_image_setup(None)
+    assert (best["quality"], best["aspect"]) == ("premium", "2:3")
+    caps["image_engines"] = []
+    with pytest.raises(ai.AIStudioError, match="nenhum motor"):
+        ai.best_image_setup(None)

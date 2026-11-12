@@ -183,8 +183,7 @@ def suggest_copy(product: Product, department: str, blurb: str | None = None) ->
     return {"title": title, "description": desc[:DESC_MAX], "keywords": ", ".join(kws), "alt_text": _fit(f"Foto do produto: {base}", 480)}
 
 
-PIN_QUALITY = "premium"  # Nano Banana Pro em 2K: a maior definição que o estúdio oferece (≈ US$ 0,12 por imagem)
-PIN_BUDGET_USD = 0.5
+PIN_MIN_BUDGET_USD = 0.5  # mínimo pedido por imagem; sobe se o modelo mais nítido custar mais (duas tentativas + conferência)
 
 
 def _is_pin_creative(c: CreativeCampaign) -> bool:
@@ -226,7 +225,9 @@ def request_image(session: Session, pin: PinterestPin, *, actor: str) -> Pintere
         raise PinterestError("o pin já foi publicado ou descartado.")
     try:
         cfg = aistudio._require(session)
-        record = aistudio.create(session, pin.product_id, mode="live", quality=PIN_QUALITY, budget_usd=min(PIN_BUDGET_USD, cfg.max_usd), actor=actor, formats="pin")
+        setup = aistudio.best_image_setup(session)  # o melhor modelo que a API do estúdio oferece agora (resolução mais alta) e a proporção mais próxima de 2:3
+        budget = min(cfg.max_usd, max(PIN_MIN_BUDGET_USD, round(setup["est_usd"] * 2 + 0.05, 2)))
+        record = aistudio.create(session, pin.product_id, mode="live", quality=setup["quality"], budget_usd=budget, actor=actor, formats="pin", pin_aspect=setup["aspect"])
     except aistudio.AIStudioError as exc:
         raise PinterestError(f"não consegui pedir a imagem ao AI Studio: {exc}") from exc
     pin.creative_campaign_id = record.id

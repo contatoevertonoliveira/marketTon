@@ -141,10 +141,12 @@ def test_draft_without_a_pin_image_asks_the_studio_for_a_new_one_and_waits(sessi
         return c
 
     monkeypatch.setattr(pin_svc.aistudio, "_require", lambda s: Cfg())
+    monkeypatch.setattr(pin_svc.aistudio, "best_image_setup", lambda s: {"quality": "ultra", "aspect": "2:3", "engine": "Novo motor", "resolution": "4K", "est_usd": 0.2})
     monkeypatch.setattr(pin_svc.aistudio, "create", fake_create)
     monkeypatch.setattr(pin_svc.aistudio, "refresh", lambda sess, c: c)  # o estúdio ainda está gerando
     pin = pin_svc.create_draft(session, prod.id, actor="op")
-    assert asked == [{"mode": "live", "quality": "premium", "budget_usd": 0.5, "actor": "op", "formats": "pin"}]  # imagem nova, a mais nítida (2K), só imagem
+    # o modelo e a proporção vêm da API do estúdio (aqui: um motor novo, 4K, 2:3); o teto cobre duas tentativas
+    assert asked == [{"mode": "live", "quality": "ultra", "budget_usd": 0.5, "actor": "op", "formats": "pin", "pin_aspect": "2:3"}]
     assert pin.image_ref.startswith("product:") and pin.creative_campaign_id and pin_svc.out(pin)["image_ready"] is False
     with pytest.raises(pin_svc.PinterestError, match="imagem nova"):  # a foto crua do marketplace nunca vai para o Pinterest
         pin_svc.publish(session, pin.id, actor="op")
