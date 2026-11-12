@@ -211,6 +211,20 @@ produto que já teve post no dia. A verificação do meio-dia **não publica**: 
 teste; se tiver dúvida sobre o produto (marca falsificada, foto de outro item), **não publique** e avise no relatório. Música: a API não deixa
 escolher; o Reel sai mudo (o operador pode baixar e repostar com música).
 
+## 3.095 Pinterest (pins de afiliado)
+
+O Pinterest é busca visual: um pin bonito, com palavra-chave no título e na descrição, rende visita por semanas (referência: pins de decoração com 5 mil impressões e 150 cliques em menos de um mês).
+O comprador que clica e compra QUALQUER item na sessão rende comissão (Shopee credita o que ele comprar depois do clique; Mercado Livre tem cookie de 24 h).
+
+* **Quem faz o quê:** você (agente) cria RASCUNHOS em `POST /pinterest/drafts` (ou pelo painel: Pinterest) e melhora o texto com `PATCH /pinterest/pins/{id}`. Quem APROVA e publica é o operador. Nada sai sem aprovação; pin aprovado sai sozinho no horário, dentro do teto por dia (padrão 3) e com 1 h de intervalo.
+* **Qual produto:** o que fica bonito em foto e vende o ano todo (decoração, casa, organização, cozinha, beleza, moda, jardim). Evite produto técnico, sensível ou sem foto boa. Só produto da vitrine, com link de afiliado e que ainda não tenha pin ativo.
+* **Texto:** título com a palavra-chave que a pessoa busca (até 100 caracteres), descrição natural (até 800) com um chamado para ação e o aviso de divulgação, 3 a 5 hashtags, texto alternativo da imagem. NUNCA invente característica, preço ou promessa que não esteja no produto.
+* **Imagem:** vertical (2:3 é o ideal), limpa, sem preço e sem texto grande. Prefira a peça `image` do AI Studio; sem ela, a foto do produto. Se aparecer pessoa gerada por IA, o operador marca "conteúdo modificado por IA" no Pinterest.
+* **Quadros:** um por departamento (o padrão), com nome que a pessoa buscaria ("Decoração de sala", "Organização da casa").
+* **Link:** padrão é a página do produto no Mural (domínio nosso, com UTM `utm_source=pinterest`); o modo `direct` usa o link rastreado (`/r/<código>`, canal `pinterest`). A mesma regra de sempre vale: tudo que vira publicação entra na vitrine.
+* **Medir:** impressões, salvamentos, cliques no pin e cliques no link (`/pinterest/sync-metrics`, também lido a cada rodada) e as vendas do canal `pinterest`. Compare por departamento e por tipo de imagem; repita o que deu clique, troque o que ficou parado depois de 2 semanas.
+* **Sem a chave da API ou em sandbox:** o painel entrega o KIT (imagem, texto, link, quadro e interesses) para o operador postar à mão.
+
 ## 3.1 Pesquisar plataformas e fontes de demanda
 
 Cruze sempre: Google Trends (momento) + Planejador (volume/CPC) + vendas/ranking do marketplace +

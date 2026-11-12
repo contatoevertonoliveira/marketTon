@@ -9,6 +9,7 @@ import Opportunities from "./pages/Opportunities";
 import Profile from "./pages/Profile";
 import Vitrine from "./pages/Vitrine";
 import Criativos from "./pages/Criativos";
+import Pinterest from "./pages/Pinterest";
 import Relatorios from "./pages/Relatorios";
 import Financeiro from "./pages/Financeiro";
 import VerbaCampanhas from "./pages/VerbaCampanhas";
@@ -27,6 +28,7 @@ const PAGES = [
   { id: "tendencias", label: "Tendências Internacionais", icon: "🌎" },
   { id: "vitrine", label: "Vitrine (loja)", icon: "🛍️" },
   { id: "criativos", label: "Criativos e anúncios", icon: "🎬" },
+  { id: "pinterest", label: "Pinterest (pins)", icon: "📌" },
   { id: "verba", label: "Verba e campanhas", icon: "🧮" },
   { id: "agente", label: "Agente (chat)", icon: "🤖" },
   { id: "relatorios", label: "Relatórios do agente", icon: "📋" },
@@ -137,6 +139,13 @@ export default function App() {
           <div>
             <h3 style={{ marginTop: 18, color: "#32325d" }}>Criativos e anúncios</h3>
             <Criativos />
+          </div>
+        );
+      case "pinterest":
+        return (
+          <div>
+            <h3 style={{ marginTop: 18, color: "#32325d" }}>Pinterest: pins de afiliado</h3>
+            <Pinterest />
           </div>
         );
       case "verba":

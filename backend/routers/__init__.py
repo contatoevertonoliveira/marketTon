@@ -19,6 +19,7 @@ from backend.routers import (
     marketplaces,
     operations,
     performance,
+    pinterest,
     portfolio,
     scoring,
     services,
@@ -49,6 +50,7 @@ API_ROUTERS = [
     social.router,
     vetting.router,
     affiliate_links.router,
+    pinterest.router,
 ]
 
 __all__ = [
@@ -66,6 +68,7 @@ __all__ = [
     "marketplaces",
     "operations",
     "performance",
+    "pinterest",
     "portfolio",
     "scoring",
     "services",

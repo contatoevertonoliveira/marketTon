@@ -344,13 +344,15 @@ def prefetch(session_factory: Callable[[], Session]) -> None:
         return
     _last_prefetch = now
     from backend.deps import get_adapters  # import tardio: a camada de serviços não depende da API
-    from core.services import ads_manager, aistudio, link_shortener, product_vetting, sales_sync, trend_radar
+    from core.services import ads_manager, aistudio, link_shortener, pinterest, product_vetting, sales_sync, trend_radar
 
     with session_factory() as session:
         for name, job in (("vendas", lambda: sales_sync.sync_sales(session, get_adapters(), since_days=30)),
                           ("cliques", lambda: link_shortener.sync_clicks(session)),
                           ("anúncios", lambda: ads_manager.sync_metrics(session)),
                           ("criativos", lambda: aistudio.reconcile(session)),
+                          ("pinterest (publica o que o operador aprovou)", lambda: pinterest.publish_due(session)),
+                          ("pinterest (métricas)", lambda: pinterest.sync_metrics(session)),
                           ("radar", lambda: trend_radar.scan(session)),
                           ("triagem de produtos", lambda: product_vetting.vet_due(session, limit=8, max_age_days=7))):
             try:

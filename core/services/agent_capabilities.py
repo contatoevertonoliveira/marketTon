@@ -109,7 +109,7 @@ def capabilities(session: Session) -> list[dict]:
              "publicar 1x de manhã e 1x à noite, com agendamento, pelas APIs oficiais",
              (([] if meta_ok else ["conectar a Meta em Integrações (token, Página e conta de anúncios) e testar"])
               + ["ferramenta de publicação construída no marketTon (a conexão com a Meta é só a primeira metade)"]),
-             "Instagram e Facebook pela Meta; YouTube e TikTok ainda não têm conexão."),
+             "Instagram e Facebook pela Meta; Pinterest pelo painel (rascunho, aprovação, publicação e métricas); YouTube e TikTok ainda não têm conexão."),
         _cap("ads_management", "Gerenciar anúncios pagos", "nao_construido",
              "criar e ajustar campanhas",
              ([] if meta_ok else ["conectar a Meta em Integrações e testar"])

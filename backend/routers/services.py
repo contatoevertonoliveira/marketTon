@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from backend.deps import get_session
 from backend.security import require
 from core.db.service_credentials import ServiceCredential
-from core.services import ads_budget, aistudio, link_shortener, meta_ads, storefront
+from core.services import ads_budget, aistudio, link_shortener, meta_ads, pinterest, storefront
 from integrations.google_ads import DEFAULT_API_VERSION, GoogleAdsClient, GoogleAdsConfig, GoogleAdsError
 
 router = APIRouter(
@@ -58,6 +58,23 @@ SERVICES: dict[str, dict] = {
             {"name": "instagram_business_id", "label": "ID da conta profissional do Instagram (opcional)", "secret": False},
             {"name": "app_id", "label": "ID do app da Meta (opcional, para conferir permissões)", "secret": False},
             {"name": "app_secret", "label": "Chave secreta do app da Meta (opcional)", "secret": True},
+        ],
+    },
+    "pinterest": {
+        "icon": "📌",
+        "required": ["access_token"],
+        "name": "Pinterest (pins de afiliado)",
+        "description": "Publica pins com a imagem do produto, texto de SEO e o link do Mural. O pin nasce como rascunho e só sai com o seu ok.",
+        "help": "Crie um app em developers.pinterest.com e gere o token com as permissões boards:read, boards:write, pins:read, pins:write e user_accounts:read. "
+                "Enquanto o app estiver em TESTE (sandbox), os pins só você enxerga: para aparecer ao público, o Pinterest precisa liberar o acesso de produção. "
+                "Sem a chave você ainda usa o KIT (imagem, título, descrição e link prontos) e posta à mão. Endereço da API: deixe vazio para produção "
+                "ou use https://api-sandbox.pinterest.com/v5 para testar. Link do pin: page (página do produto no Mural, padrão) ou direct (link rastreado direto à compra).",
+        "fields": [
+            {"name": "access_token", "label": "Token de acesso do Pinterest", "secret": True},
+            {"name": "api_base", "label": "Endereço da API (vazio = produção; sandbox: https://api-sandbox.pinterest.com/v5)", "secret": False},
+            {"name": "link_mode", "label": "Link do pin: page (padrão) ou direct", "secret": False},
+            {"name": "max_per_day", "label": "Teto de pins por dia (padrão 3)", "secret": False},
+            {"name": "default_board", "label": "Quadro padrão (vazio = pelo departamento do produto)", "secret": False},
         ],
     },
     "aistudio": {
@@ -221,6 +238,8 @@ def test_service(service: str, session: Session = Depends(get_session)) -> Servi
                                           "", "", False, 2.0)
             cfg = aistudio.load_config(session) or cfg
             message = aistudio.check(cfg)
+        elif service == "pinterest":
+            message = pinterest.check(row.values or {})
         elif service == "ads_budget":
             message = ads_budget.check(row.values or {})
         elif service == "storefront":
@@ -234,7 +253,7 @@ def test_service(service: str, session: Session = Depends(get_session)) -> Servi
                 str(values.get("base_url") or "").strip().rstrip("/"), str(values.get("admin_token") or "").strip()))
         status = "ok"
     except (GoogleAdsError, link_shortener.ShortenerError, storefront.StorefrontError, meta_ads.MetaError,
-            ads_budget.BudgetError, aistudio.AIStudioError) as exc:
+            ads_budget.BudgetError, aistudio.AIStudioError, pinterest.PinterestError) as exc:
         status, message = "error", str(exc)[:480]
     row.last_check_status = status
     row.last_check_message = message

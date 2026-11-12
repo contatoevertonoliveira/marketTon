@@ -37,6 +37,7 @@ from core.db.agent_reports import AgentReport
 from core.db.agent_runs import AgentRun
 from core.db.content_review import CreativeReview
 from core.db.finance import WalletBalance
+from core.db.pinterest import PinterestPin
 from core.db.social import SocialPost
 from core.db.vetting import ProductVetting
 from core.db.trend_radar import TrendSnapshot
@@ -117,6 +118,7 @@ __all__ = [
     "AgentReport",
     "WalletBalance",
     "CreativeReview",
+    "PinterestPin",
     "SocialPost",
     "TrendSnapshot",
     "AgentRun",
