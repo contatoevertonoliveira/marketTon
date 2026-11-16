@@ -68,7 +68,8 @@ def _product(session, n=1, title="[Frete Grátis] Espelho de Corpo Inteiro 2026 
 
 def _creative(session, product, aspect="2:3"):
     manifest = {"deliverables": [{"id": "d9", "kind": "image", "status": "ready", "aspect_ratio": aspect, "url_signed": {"href": "https://studio.exemplo.com/d/9?sig=x"}}]}
-    c = CreativeCampaign(product_id=product.id, external_ref=f"mural-p{product.id}-pl1-2611120000", campaign_id="cmp_1", mode="live", status="completed", quality="economy", budget_usd=1.0, manifest=manifest)
+    c = CreativeCampaign(product_id=product.id, external_ref=f"mural-p{product.id}-pl1-2611120000", campaign_id="cmp_1", mode="live", status="completed", quality="economy", budget_usd=1.0, manifest=manifest,
+                         request={"creative": {"brand_assembly": "none"}})
     session.add(c)
     session.flush()
     return c
@@ -141,18 +142,19 @@ def test_draft_without_a_pin_image_asks_the_studio_for_a_new_one_and_waits(sessi
         return c
 
     monkeypatch.setattr(pin_svc.aistudio, "_require", lambda s: Cfg())
-    monkeypatch.setattr(pin_svc.aistudio, "best_image_setup", lambda s: {"quality": "ultra", "aspect": "2:3", "engine": "Novo motor", "resolution": "4K", "est_usd": 0.2})
+    monkeypatch.setattr(pin_svc.aistudio, "best_image_setup", lambda s: {"quality": "ultra", "aspect": "2:3", "engine": "Novo motor", "resolution": "4K", "est_usd": 0.2, "clean": True})
     monkeypatch.setattr(pin_svc.aistudio, "create", fake_create)
     monkeypatch.setattr(pin_svc.aistudio, "refresh", lambda sess, c: c)  # o estúdio ainda está gerando
     pin = pin_svc.create_draft(session, prod.id, actor="op")
     # o modelo e a proporção vêm da API do estúdio (aqui: um motor novo, 4K, 2:3); o teto cobre duas tentativas
-    assert asked == [{"mode": "live", "quality": "ultra", "budget_usd": 0.5, "actor": "op", "formats": "pin", "pin_aspect": "2:3"}]
+    assert asked == [{"mode": "live", "quality": "ultra", "budget_usd": 0.5, "actor": "op", "formats": "pin", "pin_aspect": "2:3", "pin_clean": True}]
     assert pin.image_ref.startswith("product:") and pin.creative_campaign_id and pin_svc.out(pin)["image_ready"] is False
     with pytest.raises(pin_svc.PinterestError, match="imagem nova"):  # a foto crua do marketplace nunca vai para o Pinterest
         pin_svc.publish(session, pin.id, actor="op")
     pin_svc.approve(session, pin.id)
     assert pin_svc.publish_due(session, now=NOW) == []
     c = session.get(CreativeCampaign, pin.creative_campaign_id)  # o estúdio entrega
+    c.request = {"creative": {"brand_assembly": "none"}}
     c.status, c.manifest = "completed", {"deliverables": [{"id": "dlv_1", "kind": "image", "status": "ready", "aspect_ratio": "9:16", "url_signed": {"href": "https://studio/x"}}]}
     assert pin_svc.refresh_images(session) == 1 and pin.image_ref == f"creative:{c.id}:dlv_1" and pin_svc.out(pin)["image_ready"]
     assert pin_svc.publish_due(session, now=NOW) == [pin.id]
@@ -252,3 +254,22 @@ def test_check_reports_the_account_and_the_mode(session, api):
     assert "SANDBOX" in pin_svc.check({"access_token": "t", "api_base": "https://api-sandbox.pinterest.com/v5"})
     with pytest.raises(pin_svc.PinterestError):
         pin_svc.check({})
+
+
+def test_without_the_clean_option_no_image_is_requested_and_overlaid_images_are_not_used(session, monkeypatch):
+    """O pin leva imagem LIMPA (sem texto desenhado). Se o estúdio ainda não oferece isso, não se gasta crédito; imagem antiga com título e botão sai do pin."""
+    _cards(session)
+    prod = _product(session)
+    old = _creative(session, prod)
+    old.request = {"creative": {}}  # pedido sem a opção: o estúdio desenhou título, botão e endereço por cima
+    assert pin_svc.pick_image(session, prod)[0].startswith("product:")  # não aceita a arte com texto
+    pin = pin_svc.create_draft(session, prod.id, actor="op")
+    monkeypatch.setattr(pin_svc.aistudio, "_require", lambda s: type("C", (), {"max_usd": 1.0})())
+    monkeypatch.setattr(pin_svc.aistudio, "best_image_setup", lambda s: {"quality": "premium", "aspect": "9:16", "est_usd": 0.12, "clean": False})
+    monkeypatch.setattr(pin_svc.aistudio, "create", lambda *a, **k: (_ for _ in ()).throw(AssertionError("não podia pedir imagem")))
+    with pytest.raises(pin_svc.PinterestError, match="não entrega imagem limpa"):
+        pin_svc.request_image(session, pin, actor="op")
+    # pin que já apontava para uma imagem com texto volta a esperar
+    pin.image_ref, pin.creative_campaign_id = f"creative:{old.id}:d9", old.id
+    pin_svc.refresh_images(session)
+    assert pin.image_ref.startswith("product:") and pin.creative_campaign_id is None and "texto desenhado" in pin.error

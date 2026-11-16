@@ -190,9 +190,14 @@ def _is_pin_creative(c: CreativeCampaign) -> bool:
     return bool(re.search(r"-p[ls]\d+-", c.external_ref or ""))  # mural-p<produto>-p<modo><n>-<data>: criativo pedido no formato "pin"
 
 
+def _is_clean(creative: CreativeCampaign) -> bool:
+    """Só vale imagem pedida SEM a montagem de marca do estúdio (que desenha título, botão, endereço e selo por cima)."""
+    return ((creative.request or {}).get("creative") or {}).get("brand_assembly") == "none"
+
+
 def pin_image_of(creative: CreativeCampaign | None) -> str | None:
-    """A imagem pronta de um criativo de pin ("creative:<id>:<peça>"), ou None enquanto não houver."""
-    if creative is None or not _is_pin_creative(creative):
+    """A imagem pronta e LIMPA de um criativo de pin ("creative:<id>:<peça>"), ou None enquanto não houver."""
+    if creative is None or not _is_pin_creative(creative) or not _is_clean(creative):
         return None
     for d in aistudio.deliverables(creative):
         if d.get("kind") == "image" and d.get("download"):
@@ -226,8 +231,11 @@ def request_image(session: Session, pin: PinterestPin, *, actor: str) -> Pintere
     try:
         cfg = aistudio._require(session)
         setup = aistudio.best_image_setup(session)  # o melhor modelo que a API do estúdio oferece agora (resolução mais alta) e a proporção mais próxima de 2:3
+        if not setup["clean"]:  # sem a opção, o estúdio desenharia título, botão e endereço sobre a foto: não gasta crédito com imagem que não pode ir para o Pinterest
+            raise PinterestError("o AI Studio ainda não entrega imagem limpa (sem texto desenhado): falta a opção brand_assembly=none em /capabilities (image_brand_assembly). "
+                                 "Nenhuma imagem foi pedida, para não gastar crédito à toa.")
         budget = min(cfg.max_usd, max(PIN_MIN_BUDGET_USD, round(setup["est_usd"] * 2 + 0.05, 2)))
-        record = aistudio.create(session, pin.product_id, mode="live", quality=setup["quality"], budget_usd=budget, actor=actor, formats="pin", pin_aspect=setup["aspect"])
+        record = aistudio.create(session, pin.product_id, mode="live", quality=setup["quality"], budget_usd=budget, actor=actor, formats="pin", pin_aspect=setup["aspect"], pin_clean=True)
     except aistudio.AIStudioError as exc:
         raise PinterestError(f"não consegui pedir a imagem ao AI Studio: {exc}") from exc
     pin.creative_campaign_id = record.id
@@ -242,6 +250,13 @@ def request_image(session: Session, pin: PinterestPin, *, actor: str) -> Pintere
 def refresh_images(session: Session) -> int:
     """Pins que esperam a imagem nova: consulta o estúdio (os que ainda geram) e põe a imagem pronta no pin. Devolve quantos ficaram prontos."""
     n = 0
+    for pin in session.scalars(select(PinterestPin).where(PinterestPin.status.in_(("draft", "approved", "failed")), PinterestPin.image_ref.like("creative:%"))):
+        creative = session.get(CreativeCampaign, pin.creative_campaign_id) if pin.creative_campaign_id else None
+        if creative is None or not _is_clean(creative):  # imagem com montagem de marca (título, botão, endereço): sai do pin e ele volta a esperar uma imagem limpa
+            photo = _photo(session.get(Product, pin.product_id))
+            if photo:
+                pin.image_ref, pin.creative_campaign_id = f"product:{photo}", None
+                pin.error = "a imagem tinha texto desenhado pelo estúdio (título, botão ou endereço): não serve para o pin. Peça uma imagem limpa quando o estúdio liberar."
     for pin in session.scalars(select(PinterestPin).where(PinterestPin.status.in_(("draft", "approved", "failed")), PinterestPin.creative_campaign_id.is_not(None),
                                                         PinterestPin.image_ref.like("product:%"))):
         creative = session.get(CreativeCampaign, pin.creative_campaign_id)

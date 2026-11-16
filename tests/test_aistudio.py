@@ -278,3 +278,11 @@ def test_pin_uses_the_best_image_model_the_api_offers_today(monkeypatch):
     caps["image_engines"] = []
     with pytest.raises(ai.AIStudioError, match="nenhum motor"):
         ai.best_image_setup(None)
+
+
+def test_pin_payload_asks_for_a_clean_image_only_when_the_studio_supports_it(monkeypatch):
+    caps = {"image_engines": [{"quality": "premium", "engine": "B", "resolution": "4K", "est_usd_per_image": 0.2}], "image_only_aspect_ratios": ["2:3", "9:16"]}
+    monkeypatch.setattr(ai, "capabilities", lambda session: caps)
+    assert ai.best_image_setup(None)["clean"] is False and ai.best_image_setup(None)["aspect"] == "2:3"
+    caps["image_brand_assembly"] = ["default", "none"]
+    assert ai.best_image_setup(None)["clean"] is True

@@ -43,9 +43,11 @@ VIDEO_STYLES = ("presenter_f", "presenter_m", "hands_f", "hands_m")
 # Apresentador(a) = personagem cadastrado no PC do estúdio (`characters/<id>`; id errado vira apresentadora genérica, sem aviso). O vídeo com personagem roda no
 # PC (`providers.engine = "colab"`, a fila do MiniMax); sem isso a campanha cairia nas APIs pagas do servidor. `colab_fallback: auto` mantém a reserva.
 CHARACTERS = {"f": "amanda-suarez", "m": "lucas-ferrer"}
-_PIN_NOTES = ("Imagem de PIN para o Pinterest: a melhor versão possível do produto da foto de referência, com a máxima nitidez e riqueza de detalhes, "
-              "limpa e sem poluição, em um ambiente que REALCE o produto (cenário coerente com o uso, luz natural suave, profundidade de campo, composição de revista), "
-              "produto grande, inteiro e centralizado, cores fiéis à foto. Formato vertical. Sem texto, sem preço, sem logotipo, sem selo, sem mãos e sem pessoas.")
+_PIN_NOTES = ("Imagem de PIN para o Pinterest, a melhor versão possível do produto da foto de referência: foto de produto vistosa e de altíssima qualidade, "
+              "em máxima definição, nítida, com textura e detalhes ricos, cores vivas e FIÉIS à foto, produto inteiro, grande e centralizado, ocupando boa parte do quadro. "
+              "Ambiente de estilo de vida limpo, elegante e coerente com o uso do produto, que REALCE o produto e desperte o desejo de comprar: luz natural suave e dourada, "
+              "profundidade de campo, composição de revista, quadro cheio de ponta a ponta (sem moldura, sem fundo desfocado de preenchimento). "
+              "Imagem LIMPA: sem nenhum texto, letra, número, preço, logotipo, selo, botão, endereço ou marca d'água; sem mãos e sem pessoas.")
 _PRESENTER_NOTES = ("{who} apresenta o produto da foto de referência segurando-o, em português do Brasil, SÓ com as características que constam na descrição "
                     "e nos benefícios. Mostrar o produto idêntico à foto. Sem crianças em cena, sem prometer resultado, sem preço falado. Anúncio de feed em vídeo curto de "
                     "8 segundos: ritmo rápido, direto ao ponto. A fala TERMINA, no finalzinho, com a frase \"Confira no link\".")
@@ -164,7 +166,7 @@ def ensure_logo_asset(session: Session, cfg: AIStudioConfig) -> str | None:
 def build_payload(session: Session, product: Product, *, external_ref: str, mode: str, quality: str, budget_usd: float,
                   angle: str, hook_variants: int, callback_url: str, logo_asset: str | None, store_url: str | None,
                   formats: str = "video", extra_notes: str | None = None, presenter: str = "none", video_style: str = "", direct: bool = False,
-                  pin_aspect: str = "9:16") -> dict:
+                  pin_aspect: str = "9:16", pin_clean: bool = False) -> dict:
     row = None
     for p, r, _ in storefront._candidates(session):
         if p.id == product.id:
@@ -238,7 +240,7 @@ def build_payload(session: Session, product: Product, *, external_ref: str, mode
                   "voice_tone": ["direto", "amigável"], "banned_words": BANNED_WORDS,
                   **({"logo": {"asset_id": logo_asset, "placement": LOGO_PLACEMENT}} if logo_asset else {})},
         "audience": {"locale": "BR", "age_range": [20, 50]},
-        "creative": {"objective": "consideration", "angle": angle, "hook_variants": hook_variants,
+        "creative": {"objective": "consideration", **({"brand_assembly": "none"} if pin and pin_clean else {}), "angle": angle, "hook_variants": hook_variants,
                      "presenter": ({"type": "character", "id": CHARACTERS["m" if male else "f"], "voice_sample": False} if short and presenter == "virtual"
                                    else {"type": "virtual" if with_presenter else "none"}),
                      "voice": {"style": ("warm_male" if male else "warm_female") if short else "warm_male"}, "music": {"mood": "upbeat_modern", "enabled": not images_only},
@@ -296,7 +298,8 @@ def best_image_setup(session: Session) -> dict:
     best = max(engines, key=rank)
     ratios = caps.get("image_only_aspect_ratios") or []
     aspect = next((a for a in ASPECT_PREFERENCE if a in ratios), ratios[0] if ratios else "9:16")
-    return {"quality": best["quality"], "aspect": aspect, "engine": best.get("engine"), "resolution": best.get("resolution"), "est_usd": float(best.get("est_usd_per_image") or 0.12)}
+    clean = "none" in (caps.get("image_brand_assembly") or [])  # o estúdio entrega a imagem crua, sem título, botão, endereço nem selo desenhados
+    return {"quality": best["quality"], "aspect": aspect, "clean": clean, "engine": best.get("engine"), "resolution": best.get("resolution"), "est_usd": float(best.get("est_usd_per_image") or 0.12)}
 
 
 def estimate(session: Session, product_id: int, *, quality: str = "economy", angle: str = "problem_solution", hook_variants: int = 2,
@@ -312,7 +315,7 @@ def estimate(session: Session, product_id: int, *, quality: str = "economy", ang
 def create(session: Session, product_id: int, *, mode: str = "sandbox", quality: str = "economy", angle: str = "problem_solution",
            hook_variants: int = 2, budget_usd: float | None = None, actor: str = "agent", formats: str = "video",
            extra_notes: str | None = None, presenter: str = "none", video_style: str = "", direct: bool = False,
-           pin_aspect: str = "9:16") -> CreativeCampaign:
+           pin_aspect: str = "9:16", pin_clean: bool = False) -> CreativeCampaign:
     cfg = _require(session)
     if (mode not in ("sandbox", "live") or (quality not in QUALITIES and not (formats == "pin" and quality)) or angle not in ANGLES or formats not in FORMATS or presenter not in ("none", "virtual")
             or video_style not in ("", *VIDEO_STYLES)):
@@ -333,7 +336,7 @@ def create(session: Session, product_id: int, *, mode: str = "sandbox", quality:
     payload = build_payload(session, product, external_ref=ref, mode=mode, quality=quality, budget_usd=budget, angle=angle,
                             hook_variants=hook_variants, callback_url=cfg.callback_url, logo_asset=None if formats == "pin" else ensure_logo_asset(session, cfg),
                             store_url=_store_url(session, product_id), formats=formats, extra_notes=extra_notes,
-                            presenter=presenter, video_style=video_style, direct=direct, pin_aspect=pin_aspect)
+                            presenter=presenter, video_style=video_style, direct=direct, pin_aspect=pin_aspect, pin_clean=pin_clean)
     record.request = payload
     try:
         body = _call(cfg, "POST", "/campaigns", idempotency_key=ref[:80], json=payload)
