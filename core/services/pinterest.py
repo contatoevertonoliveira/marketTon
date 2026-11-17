@@ -35,7 +35,7 @@ DEFAULT_BASE = "https://api.pinterest.com/v5"
 TIMEOUT = 60
 TITLE_MAX = 100
 DESC_MAX = 800
-MIN_GAP = timedelta(minutes=60)  # entre um pin e outro (o Pinterest não gosta de rajada)
+MIN_GAP = timedelta(minutes=45)  # entre um pin e outro (o Pinterest não gosta de rajada)
 DISCLOSURE = "Divulgação: link de afiliado, posso receber comissão se você comprar."
 STOP = {"para", "com", "sem", "uma", "uns", "umas", "dos", "das", "que", "por", "mais", "kit", "frete", "gratis", "grátis", "original", "novo", "nova", "de", "do", "da", "em"}
 
@@ -49,7 +49,7 @@ class PinterestConfig:
     token: str
     base: str = DEFAULT_BASE
     link_mode: str = "page"  # page | direct
-    max_per_day: int = 3
+    max_per_day: int = 2  # por plataforma (Shopee, Mercado Livre...) a cada 24 h
     default_board: str = ""
 
     @property
@@ -63,11 +63,11 @@ def config_from(values: dict) -> PinterestConfig | None:
         return None
     mode = str(values.get("link_mode") or "page").strip().lower()
     try:
-        cap = int(str(values.get("max_per_day") or "3").strip())
+        cap = int(str(values.get("max_per_day") or "2").strip())
     except ValueError:
-        cap = 3
+        cap = 2
     return PinterestConfig(token, str(values.get("api_base") or DEFAULT_BASE).strip().rstrip("/") or DEFAULT_BASE, mode if mode in ("page", "direct") else "page",
-                           max(1, min(cap, 15)), str(values.get("default_board") or "").strip())
+                           max(1, min(cap, 10)), str(values.get("default_board") or "").strip())
 
 
 def settings(session: Session) -> dict:
@@ -309,7 +309,7 @@ def _link(session: Session, product: Product, mode: str, pin_id: int) -> str:
     return f"{cfg.public_url}/p/p{product.id}?utm_source=pinterest&utm_medium=organic&utm_campaign=pin{pin_id}"
 
 
-def candidates(session: Session, limit: int = 10) -> list[Product]:
+def candidates(session: Session, limit: int = 10, marketplace: str | None = None) -> list[Product]:
     """Produtos da vitrine, com link de afiliado e foto, que ainda não têm pin ativo (rascunho, aprovado ou publicado). Destaques primeiro."""
     busy = {pid for (pid,) in session.execute(select(PinterestPin.product_id).where(PinterestPin.status.in_(("draft", "approved", "published"))))}
     rows = session.execute(select(Product, StorefrontItem).join(StorefrontItem, StorefrontItem.product_id == Product.id)
@@ -317,6 +317,8 @@ def candidates(session: Session, limit: int = 10) -> list[Product]:
                            .order_by(StorefrontItem.highlight.desc(), StorefrontItem.position, Product.id)).all()
     out = []
     for product, _item in rows:
+        if marketplace and product.marketplace.value != marketplace:
+            continue
         if product.id in busy or not any(isinstance(u, str) and u.startswith("https://") for u in (product.images or [])):
             continue
         out.append(product)
@@ -356,16 +358,24 @@ def create_draft(session: Session, product_id: int, *, actor: str, board: str | 
     return pin
 
 
-def create_drafts(session: Session, *, actor: str, count: int = 3, product_ids: list[int] | None = None, board: str | None = None) -> list[PinterestPin]:
-    ids = product_ids or [p.id for p in candidates(session, count)]
+PLATFORMS = ("shopee", "mercado_livre")  # as plataformas com pin por dia (cada uma tem o seu teto)
+
+
+def create_drafts(session: Session, *, actor: str, count: int = 2, product_ids: list[int] | None = None, board: str | None = None) -> list[PinterestPin]:
+    """Rascunhos do dia: `count` por plataforma (Shopee e Mercado Livre), intercalados, ou os produtos que o operador escolher."""
+    if product_ids:
+        ids = product_ids[:20]
+    else:
+        per = {m: [p.id for p in candidates(session, count, m)] for m in PLATFORMS}
+        ids = [i for group in zip(*[per[m] + [None] * (count - len(per[m])) for m in PLATFORMS]) for i in group if i]
     made, errors = [], []
-    for pid in ids[: max(1, min(count if not product_ids else len(product_ids), 20))]:
+    for pid in ids:
         try:
             made.append(create_draft(session, pid, actor=actor, board=board))
         except PinterestError as exc:
             errors.append(f"produto {pid}: {exc}")
-    if not made and errors:
-        raise PinterestError("; ".join(errors)[:480])
+    if not made:
+        raise PinterestError("; ".join(errors)[:480] if errors else "não há produto da vitrine, com link de afiliado e foto, livre para virar pin (no Mercado Livre falta o link de afiliado: cole os links em Produtos).")
     return made
 
 
@@ -422,9 +432,12 @@ def reject(session: Session, pin_id: int) -> PinterestPin:
 # ------------------------------------------------------------------ publicar ---------
 
 
-def published_last_24h(session: Session, now: datetime | None = None) -> int:
+def published_last_24h(session: Session, now: datetime | None = None, marketplace: str | None = None) -> int:
     since = (now or datetime.now(UTC)) - timedelta(hours=24)
-    return session.scalar(select(func.count()).select_from(PinterestPin).where(PinterestPin.status == "published", PinterestPin.published_at >= since)) or 0
+    q = select(func.count()).select_from(PinterestPin).join(Product, Product.id == PinterestPin.product_id).where(PinterestPin.status == "published", PinterestPin.published_at >= since)
+    if marketplace:
+        q = q.where(Product.marketplace == marketplace)
+    return session.scalar(q) or 0
 
 
 def publish(session: Session, pin_id: int, *, actor: str, now: datetime | None = None) -> PinterestPin:
@@ -468,8 +481,9 @@ def publish_due(session: Session, *, now: datetime | None = None, actor: str = "
                                                             (PinterestPin.scheduled_for.is_(None)) | (PinterestPin.scheduled_for <= now))
                                    .order_by(PinterestPin.scheduled_for, PinterestPin.id)))
     for pin in pending:
-        if published_last_24h(session, now) >= cfg.max_per_day:
-            break
+        platform = session.get(Product, pin.product_id).marketplace
+        if published_last_24h(session, now, platform) >= cfg.max_per_day:  # o teto vale para cada plataforma: a Shopee lotada não segura o Mercado Livre
+            continue
         last = session.scalar(select(func.max(PinterestPin.published_at)).where(PinterestPin.status == "published"))
         if last is not None and last.tzinfo is None:
             last = last.replace(tzinfo=UTC)

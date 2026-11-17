@@ -73,7 +73,7 @@ SERVICES: dict[str, dict] = {
             {"name": "access_token", "label": "Token de acesso do Pinterest", "secret": True},
             {"name": "api_base", "label": "Endereço da API (vazio = produção; sandbox: https://api-sandbox.pinterest.com/v5)", "secret": False},
             {"name": "link_mode", "label": "Link do pin: page (padrão) ou direct", "secret": False},
-            {"name": "max_per_day", "label": "Teto de pins por dia (padrão 3)", "secret": False},
+            {"name": "max_per_day", "label": "Teto de pins por dia, POR PLATAFORMA (padrão 2: 2 da Shopee e 2 do Mercado Livre)", "secret": False},
             {"name": "default_board", "label": "Quadro padrão (vazio = pelo departamento do produto)", "secret": False},
         ],
     },

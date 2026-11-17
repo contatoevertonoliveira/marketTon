@@ -29,7 +29,8 @@ def _view(session: Session, pin: PinterestPin) -> dict:
 def status(principal: Principal = Depends(require("portfolio.view")), session: Session = Depends(get_session)) -> dict:
     counts = dict(session.execute(select(PinterestPin.status, func.count()).group_by(PinterestPin.status)).all())
     cfg = pinterest.settings(session)
-    return {**cfg, "counts": counts, "published_last_24h": pinterest.published_last_24h(session), "candidates": len(pinterest.candidates(session, 50))}
+    return {**cfg, "counts": counts, "published_last_24h": pinterest.published_last_24h(session),
+            "by_platform": {m: {"published_last_24h": pinterest.published_last_24h(session, marketplace=m), "candidates": len(pinterest.candidates(session, 50, m))} for m in pinterest.PLATFORMS}}
 
 
 @router.get("/pins", summary="Pins (mais recentes primeiro); `status` filtra")
@@ -40,12 +41,12 @@ def pins(status: str | None = None, limit: int = 60, principal: Principal = Depe
 
 
 class DraftsIn(BaseModel):
-    count: int = Field(3, ge=1, le=20)
+    count: int = Field(2, ge=1, le=10)  # por plataforma
     product_ids: list[int] | None = Field(None, max_length=20)
     board: str | None = Field(None, max_length=120)
 
 
-@router.post("/drafts", summary="Gerar rascunhos de pin (produtos da vitrine ainda sem pin, ou os que você escolher)", status_code=201)
+@router.post("/drafts", summary="Gerar rascunhos de pin: `count` por plataforma (Shopee e Mercado Livre) de produtos da vitrine ainda sem pin, ou os que você escolher", status_code=201)
 def drafts(payload: DraftsIn, principal: Principal = Depends(require("portfolio.manage")), session: Session = Depends(get_session)) -> dict:
     try:
         made = pinterest.create_drafts(session, actor=principal.username, count=payload.count, product_ids=payload.product_ids, board=payload.board)

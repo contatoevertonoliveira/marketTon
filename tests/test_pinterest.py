@@ -55,11 +55,11 @@ def _cards(session, **pinterest_values):
     session.flush()
 
 
-def _product(session, n=1, title="[Frete Grátis] Espelho de Corpo Inteiro 2026 Moldura Preta 150x50cm"):
-    source = SourceRecord(marketplace=Marketplace.SHOPEE, connector="shopee", connector_kind=ConnectorKind.OFFICIAL_API, endpoint="x", external_id=f"p{n}", collected_at=NOW)
+def _product(session, n=1, title="[Frete Grátis] Espelho de Corpo Inteiro 2026 Moldura Preta 150x50cm", marketplace=Marketplace.SHOPEE):
+    source = SourceRecord(marketplace=marketplace, connector="shopee", connector_kind=ConnectorKind.OFFICIAL_API, endpoint="x", external_id=f"p{n}", collected_at=NOW)
     session.add(source)
     session.flush()
-    product = Product(marketplace=Marketplace.SHOPEE, external_id=f"p{n}", title=title, price=189.9, affiliate_url="https://s.shopee.com.br/x", images=["https://cf.shopee.com.br/file/x"],
+    product = Product(marketplace=marketplace, external_id=f"p{n}", title=title, price=189.9, affiliate_url="https://s.shopee.com.br/x", images=["https://cf.shopee.com.br/file/x"],
                       source_record_id=source.id, first_seen_at=NOW, last_seen_at=NOW, category_id="100636")
     session.add(product)
     session.flush()
@@ -273,3 +273,35 @@ def test_without_the_clean_option_no_image_is_requested_and_overlaid_images_are_
     pin.image_ref, pin.creative_campaign_id = f"creative:{old.id}:d9", old.id
     pin_svc.refresh_images(session)
     assert pin.image_ref.startswith("product:") and pin.creative_campaign_id is None and "texto desenhado" in pin.error
+
+
+def test_daily_cap_is_per_platform_and_drafts_alternate_between_shopee_and_mercado_livre(session, api):
+    _cards(session, max_per_day="2")
+    shopee = [_product(session, n) for n in range(1, 4)]
+    ml = [_product(session, n, "Guirlanda de Natal para porta", Marketplace.MERCADO_LIVRE) for n in range(11, 14)]
+    for i, p in enumerate(shopee + ml):
+        _creative(session, p)
+        session.add(StorefrontItem(product_id=p.id, position=i))  # os candidatos saem da vitrine
+    session.flush()
+    made = pin_svc.create_drafts(session, actor="op", count=2)
+    assert [pin_svc.out(p)["product_id"] for p in made] == [shopee[0].id, ml[0].id, shopee[1].id, ml[1].id]  # 2 de cada, intercalados
+    for p in made:
+        pin_svc.approve(session, p.id)
+    t = NOW
+    out = []
+    for step in range(6):  # a cada 50 min o agendador roda
+        out += pin_svc.publish_due(session, now=t + timedelta(minutes=50 * step))
+    assert sorted(out) == sorted(p.id for p in made)  # as 4 saem: o teto de 2 vale para cada plataforma
+    extra = pin_svc.create_draft(session, shopee[2].id, actor="op")
+    pin_svc.approve(session, extra.id)
+    assert pin_svc.publish_due(session, now=t + timedelta(hours=6)) == []  # Shopee já fez 2 nas últimas 24 h
+    assert pin_svc.published_last_24h(session, t + timedelta(hours=6), "mercado_livre") == 2
+
+
+def test_no_ml_pin_without_an_affiliate_link(session):
+    _cards(session)
+    p = _product(session, 21, "Guirlanda", Marketplace.MERCADO_LIVRE)
+    p.affiliate_url = None  # o Mercado Livre não tem API: sem o link colado, não vira pin
+    session.add(StorefrontItem(product_id=p.id))
+    session.flush()
+    assert pin_svc.candidates(session, 10, "mercado_livre") == []

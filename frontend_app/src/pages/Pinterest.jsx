@@ -112,7 +112,7 @@ export default function Pinterest() {
   const [status, setStatus] = useState(null);
   const [pins, setPins] = useState([]);
   const [filter, setFilter] = useState("");
-  const [count, setCount] = useState(3);
+  const [count, setCount] = useState(2);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -145,7 +145,7 @@ export default function Pinterest() {
     <div>
       <div style={card}>
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-          {[["Rascunhos", c.draft], ["Aprovados", c.approved], ["Publicados", c.published], ["Com erro", c.failed], ["Saíram em 24 h", status?.published_last_24h], ["Produtos sem pin", status?.candidates]].map(([l, v]) => (
+          {[["Rascunhos", c.draft], ["Aprovados", c.approved], ["Publicados", c.published], ["Com erro", c.failed], ["Saíram em 24 h", status?.published_last_24h], ["Shopee sem pin", status?.by_platform?.shopee?.candidates], ["Mercado Livre sem pin", status?.by_platform?.mercado_livre?.candidates]].map(([l, v]) => (
             <div key={l}><div style={{ fontSize: 10, color: GRAY, textTransform: "uppercase", letterSpacing: 0.4 }}>{l}</div><div style={{ fontSize: 20, fontWeight: 700, color: INK }}>{num(v || 0)}</div></div>
           ))}
         </div>
@@ -161,9 +161,9 @@ export default function Pinterest() {
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: 13, color: INK }}>Gerar</span>
           <input type="number" min={1} max={20} value={count} onChange={(e) => setCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} style={{ ...input, width: 70 }} />
-          <button style={btn} disabled={busy} onClick={() => act(() => postJSON("/pinterest/drafts", { count }), (r) => `${r.pins.length} rascunho(s) criado(s).`)}>rascunhos de pin</button>
+          <button style={btn} disabled={busy} onClick={() => act(() => postJSON("/pinterest/drafts", { count }), (r) => `${r.pins.length} rascunho(s) criado(s).`)}>rascunhos de pin por plataforma (Shopee e Mercado Livre)</button>
           <button style={{ ...btn, background: "#eef0f6", color: INK }} disabled={busy} onClick={() => act(() => postJSON("/pinterest/sync-metrics", {}), (r) => `${r.updated} pin(s) com métricas atualizadas.`)}>Ler métricas</button>
-          <span style={{ fontSize: 12, color: GRAY }}>teto {status?.max_per_day ?? 3}/dia · link do pin: {status?.link_mode === "direct" ? "direto" : "página do Mural"} (mude em Integrações)</span>
+          <span style={{ fontSize: 12, color: GRAY }}>teto {status?.max_per_day ?? 2}/dia por plataforma · link do pin: {status?.link_mode === "direct" ? "direto" : "página do Mural"} (mude em Integrações)</span>
         </div>
         {msg ? <div style={{ color: "#1a7a54", fontSize: 13, marginTop: 10 }}>{msg}</div> : null}
         {err ? <div style={{ color: RED, fontSize: 13, marginTop: 10 }}>{err}</div> : null}
