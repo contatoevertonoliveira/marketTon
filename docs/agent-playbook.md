@@ -225,6 +225,23 @@ O comprador que clica e compra QUALQUER item na sessão rende comissão (Shopee 
 * **Medir:** impressões, salvamentos, cliques no pin e cliques no link (`/pinterest/sync-metrics`, também lido a cada rodada) e as vendas do canal `pinterest`. Compare por departamento e por tipo de imagem; repita o que deu clique, troque o que ficou parado depois de 2 semanas.
 * **Sem a chave da API ou em sandbox:** o painel entrega o KIT (imagem, texto, link, quadro e interesses) para o operador postar à mão.
 
+### 3.095.1 Tática do vídeo "Como ganhar dinheiro usando o Pinterest" (Jhonatas Silva, 16/11/2026)
+
+O vídeo é de um criador que vende curso/ferramentas; os ganhos que ele cita (R$ 320 em 2 h) são alegação dele, não dado nosso. A parte útil é o método:
+
+1. **O Pinterest é busca, não rede de seguidores:** conta nova aparece para quem pesquisa o assunto. Mais da metade de quem busca tem intenção de compra (afirmação do Pinterest, citada no vídeo). Por isso o texto do pin é SEO, não "legenda".
+2. **Conta business** (grátis, sem CNPJ, "criador de conteúdo"): só para liberar as análises (impressões, cliques por pin). Meça por produto e repita o que vende.
+3. **Sazonalidade primeiro:** abra o Pinterest Trends (trends.pinterest.com), escolha o **Brasil**, filtre por interesse (decoração, casa, moda...) e pegue o termo que está CRESCENDO. A curva sobe semanas antes da data e cai antes dela (entrega!). Natal: sobe em setembro/outubro e perde força no fim de novembro. Respeite o nosso prazo de entrega (evitar mais de 10 dias).
+4. **Termos reais de busca:** digite o assunto na barra do Pinterest; as sugestões do autocompletar são o que as pessoas pesquisam. Use esses termos no título, na descrição e nos **interesses** (até 10) do pin.
+5. **Produto:** o que já vende (muitas vendas, boa nota), é **bonito em foto** e combina com a época. Poste vários itens do mesmo tema na MESMA pasta: quem clica vê os outros e a chance de várias comissões na mesma visita é maior (a comissão vale para qualquer item comprado depois do clique).
+6. **Imagem sempre ORIGINAL:** nunca a foto do vendedor nem a de outro afiliado (o Pinterest entrega pouco para imagem repetida). Gerar a imagem por IA a partir da FOTO ORIGINAL do produto como referência (para a IA não inventar detalhe), proporção vertical (ele usa 3:4; o Pinterest recomenda 2:3), produto no centro e em destaque, ambiente coerente com o uso (guirlanda na parede/porta, não no chão) e com a época.
+7. **Texto:** título de até 100 caracteres com a palavra-chave; descrição de 2 a 3 frases em linguagem natural de busca; tags do produto e do nicho. Gerar pedindo ao modelo com a foto original e o nome do produto.
+8. **Publicar:** link de afiliado direto no pin; pasta PÚBLICA, por tema ("Sala aconchegante", "Natal"); deixar ligados "permitir comentários" e "mostrar produtos semelhantes"; publicar.
+9. **Ritmo:** 2 a 3 pins por dia no começo, com intervalo. Pasta com vários pins do mesmo tema é melhor que pins soltos.
+10. **Outros marketplaces:** o método vale para Shopee, Mercado Livre, Amazon, Magalu e TikTok Shop (Links Share: dá para gerar link de afiliado sem ter seguidores).
+
+**Como isso entra no marketTon:** o agente escolhe o tema em alta (Pinterest Trends, Brasil), busca os itens da Shopee do tema, cria os rascunhos na MESMA pasta, melhora título/descrição/interesses com as sugestões do autocompletar e o operador aprova. A imagem é sempre nova e limpa (regra do operador, seção anterior).
+
 ## 3.1 Pesquisar plataformas e fontes de demanda
 
 Cruze sempre: Google Trends (momento) + Planejador (volume/CPC) + vendas/ranking do marketplace +
